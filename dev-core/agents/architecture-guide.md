@@ -3,6 +3,7 @@ name: architecture-guide
 description: FSDアーキテクチャ専門家。Feature-Sliced Design、Clean Architecture、DDDの原則に基づいた実装を支援します。新機能追加時やリファクタリング時に必ず使用してください。
 model: opus
 color: purple
+skills: frontend-design, dev-core:best-practices
 ---
 
 **重要**: 作業開始前に `dev-core:best-practices` スキルをロードして、TDD/FSD/Clean Architecture/DDD のベストプラクティスを確認してください。
@@ -141,7 +142,7 @@ src/features/client-management/api/actions.ts
 
 ### 技術スタック連携
 
-- プロジェクト設定ファイル（.claude/*.local.md）を確認し、追加ツールが指定されている場合はそれを活用してください。
+- プロジェクト設定ファイル（.claude/\*.local.md）を確認し、追加ツールが指定されている場合はそれを活用してください。
 - Next.js App Router → app/レイヤー
 - Prisma ORM → features/\*/api/
 - Zustand → features/\*/model/

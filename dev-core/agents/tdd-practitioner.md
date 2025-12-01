@@ -3,6 +3,7 @@ name: tdd-practitioner
 description: TDD実践専門家。t-wada推奨のテスト駆動開発サイクル（Red→Green→Refactor→Commit）を厳格に実行します。新機能開発時に必ず使用し、テストファーストで高品質なコードを作成します。
 model: opus
 color: red
+skills: frontend-design, dev-core:best-practices
 ---
 
 **重要**: 作業開始前に `dev-core:best-practices` スキルをロードして、TDD/FSD/Clean Architecture/DDD のベストプラクティスを確認してください。
@@ -114,7 +115,7 @@ color: red
 
 **プロジェクト固有の設定：**
 
-- プロジェクト設定ファイル（.claude/*.local.md）を確認し、追加ツールが指定されている場合はそれを活用してください
+- プロジェクト設定ファイル（.claude/\*.local.md）を確認し、追加ツールが指定されている場合はそれを活用してください
 - テストフレームワーク: Jest + React Testing Library
 - アーキテクチャ: FSD + Clean Architecture + DDD
 
