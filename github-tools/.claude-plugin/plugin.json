@@ -1,0 +1,16 @@
+{
+  "name": "github-tools",
+  "version": "1.0.0",
+  "description": "GitHub連携ワークフローを支援するプラグイン。Issue作成、PR作成、タスク管理、ドキュメント更新を効率化します。",
+  "author": {
+    "name": "GIP Japan",
+    "email": "dev@gip.co.jp"
+  },
+  "keywords": [
+    "github",
+    "pull-request",
+    "issue",
+    "workflow",
+    "documentation"
+  ]
+}
