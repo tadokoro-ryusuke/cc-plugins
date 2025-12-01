@@ -7,7 +7,7 @@ argument-hint: "[GitHub Issue URL または Issue番号]"
 # TDD 計画立案と実装
 
 **重要**: 開始前に `dev-core:best-practices` スキルをロードして、TDD/FSD/Clean Architecture/DDD のベストプラクティスを確認してください。
-フロントエンド実装の際は `frontend-design` スキルをロードしてください。
+フロントエンド実装の際は `frontend-design:frontend-design` スキルをロードしてください。
 
 ## 概要
 
@@ -26,7 +26,7 @@ gh issue view $ARGUMENTS
 
 ### 2. 既存コード・ドキュメントの調査
 
-- プロジェクト設定ファイル（.claude/*.local.md）を確認し、追加ツールが指定されている場合はそれを活用してください
+- プロジェクト設定ファイル（.claude/\*.local.md）を確認し、追加ツールが指定されている場合はそれを活用してください
 - プロジェクト構造の確認
 - 関連モジュールの特定
 - 既存テストの確認

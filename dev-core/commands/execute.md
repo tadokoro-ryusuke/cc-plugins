@@ -7,7 +7,7 @@ argument-hint: "[計画書のパス または Issue番号]"
 # TDD 計画の実行
 
 **重要**: 開始前に `dev-core:best-practices` スキルをロードして、TDD/FSD/Clean Architecture/DDD のベストプラクティスを確認してください。
-フロントエンド実装の際は `frontend-design` スキルをロードしてください。
+フロントエンド実装の際は `frontend-design:frontend-design` スキルをロードしてください。
 
 ## 概要
 
@@ -49,7 +49,7 @@ git checkout -b feature/issue-$ISSUE_NUMBER || git checkout feature/issue-$ISSUE
 
 - 計画書の「Phase 1」セクションのタスクを実行
 - 既存コードのリファクタリング
-  - プロジェクト設定ファイル（.claude/*.local.md）を確認し、追加ツールが指定されている場合はそれを活用してください
+  - プロジェクト設定ファイル（.claude/\*.local.md）を確認し、追加ツールが指定されている場合はそれを活用してください
 - 依存関係の整理
 
 #### Phase 2: TDD 実装
