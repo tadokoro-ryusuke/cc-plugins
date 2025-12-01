@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "description": "TDD開発フロー、コード品質管理、リファクタリング、アーキテクチャガイドを統合的にサポートするプラグイン。t-wada式TDD、FSD、Clean Architecture、DDDのベストプラクティスを提供します。",
   "author": {
-    "name": "GIP Japan",
-    "email": "dev@gip.co.jp"
+    "name": "Ryusuke aTadokoro",
+    "email": "tado56@poshiri.org"
   },
   "keywords": [
     "tdd",

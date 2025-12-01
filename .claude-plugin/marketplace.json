@@ -1,11 +1,11 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "gip-plugins",
+  "name": "cc-plugins",
   "version": "2.0.0",
-  "description": "GIP Hub MVP開発ワークフロー支援プラグイン。t-wada式TDD、FSD、Clean Architecture、DDDに基づいた開発をサポートします。",
+  "description": "開発ワークフロー支援プラグイン。t-wada式TDD、FSD、Clean Architecture、DDDに基づいた開発をサポートします。",
   "owner": {
-    "name": "GIP Japan",
-    "email": "dev@gip.co.jp"
+    "name": "Ryusuke aTadokoro",
+    "email": "tado56@poshiri.org"
   },
   "plugins": [
     {
@@ -13,8 +13,8 @@
       "description": "TDD開発フロー、コード品質管理、リファクタリング、アーキテクチャガイドを統合的にサポート。t-wada式TDD、FSD、Clean Architecture、DDDのベストプラクティスを提供",
       "version": "1.0.0",
       "author": {
-        "name": "GIP Japan",
-        "email": "dev@gip.co.jp"
+        "name": "Ryusuke aTadokoro",
+        "email": "tado56@poshiri.org"
       },
       "source": "./dev-core",
       "category": "development"
@@ -24,8 +24,8 @@
       "description": "GitHub連携ワークフロー支援。Issue作成、PR作成、タスク管理、ドキュメント更新を効率化",
       "version": "1.0.0",
       "author": {
-        "name": "GIP Japan",
-        "email": "dev@gip.co.jp"
+        "name": "Ryusuke aTadokoro",
+        "email": "tado56@poshiri.org"
       },
       "source": "./github-tools",
       "category": "workflow"
