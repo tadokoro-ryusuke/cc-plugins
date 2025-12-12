@@ -1,6 +1,6 @@
-# TDD Best Practices
+このスキルは、ユーザーが「TDD」「テスト駆動開発」「FSD」「Feature-Sliced Design」「Clean Architecture」「DDD」「ドメイン駆動設計」「リファクタリング」「Red-Green-Refactor」「t-wada式」について質問したとき、またはコード実装時にこれらのパターンを適用する必要があるときに使用する。
 
-TDD（テスト駆動開発）、FSD（Feature-Sliced Design）、Clean Architecture、DDDのベストプラクティスを提供するスキルです。開発者がこれらの原則について質問したとき、またはコード実装時にこれらのパターンを適用する必要があるときに使用します。
+# TDD Best Practices
 
 ## TDDサイクル（t-wada式）
 

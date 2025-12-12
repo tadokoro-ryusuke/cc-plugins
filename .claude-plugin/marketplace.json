@@ -10,7 +10,7 @@
   "plugins": [
     {
       "name": "dev-core",
-      "description": "TDD開発フロー、コード品質管理、リファクタリング、アーキテクチャガイドを統合的にサポート。t-wada式TDD、FSD、Clean Architecture、DDDのベストプラクティスを提供",
+      "description": "TDD開発フロー、コード品質管理、リファクタリング、アーキテクチャガイドを統合的にサポート。t-wada式TDD、FSD、Clean Architecture、DDD、Inngestバックグラウンドジョブのベストプラクティスを提供",
       "version": "1.0.0",
       "author": {
         "name": "Ryusuke aTadokoro",

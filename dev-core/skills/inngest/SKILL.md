@@ -1,8 +1,4 @@
----
-name: Inngest開発ガイド
-description: このスキルは、ユーザーが「Inngest関数を作成」「バックグラウンドジョブを実装」「ステップ関数を書く」「Inngestをセットアップ」「イベント駆動処理を実装」「耐久実行を実装」「Cronジョブを作成」「Fan-outパターンを実装」「サガパターン」「ワークフローオーケストレーション」「step.run」「step.waitForEvent」「step.invoke」「Inngestテスト」と言った場合に使用されます。Next.jsでのInngest統合とイベント駆動型バックグラウンド処理の実装を支援します。
-version: 1.0.0
----
+このスキルは、ユーザーが「Inngest関数を作成」「バックグラウンドジョブを実装」「ステップ関数を書く」「Inngestをセットアップ」「イベント駆動処理を実装」「耐久実行を実装」「Cronジョブを作成」「Fan-outパターンを実装」「サガパターン」「ワークフローオーケストレーション」「step.run」「step.waitForEvent」「step.invoke」「Inngestテスト」と言った場合に使用する。
 
 # Inngest開発ガイド
 

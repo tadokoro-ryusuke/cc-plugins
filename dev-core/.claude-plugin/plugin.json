@@ -13,6 +13,9 @@
     "fsd",
     "ddd",
     "code-quality",
-    "security"
+    "security",
+    "inngest",
+    "background-jobs",
+    "event-driven"
   ]
 }

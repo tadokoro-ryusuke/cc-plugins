@@ -23,11 +23,12 @@ TDD開発フロー、コード品質管理、リファクタリング、アー�
 | `/dev-core:execute` | 計画書に基づくTDD実装実行 |
 | `/dev-core:refactor` | 作業中コード/PR/ブランチのリファクタリング |
 
-### スキル（1個）
+### スキル（2個）
 
 | スキル | 説明 |
 |-------|------|
 | best-practices | TDD/FSD/Clean Architecture/DDDのベストプラクティス |
+| inngest | Inngest関数開発ガイド（イベント駆動、ステップ関数、バックグラウンドジョブ）|
 
 ## インストール
 
