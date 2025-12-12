@@ -59,7 +59,7 @@ inngest.createFunction(
   { event: "api/form.submitted" },
   async ({ event, step, attempt }) => {
     // attemptは0から始まる（0=初回、1=1回目の再試行）
-    console.log(`現在の試行: ${attempt}`);
+    console.log("現在の試行: " + attempt);
   }
 );
 ```
@@ -340,7 +340,7 @@ inngest.createFunction(
       await step.run("notify-slack", async () => {
         await slack.postMessage({
           channel: "alerts",
-          text: `Sync failed: ${error.message}`
+          text: "Sync failed: " + error.message
         });
       });
     }

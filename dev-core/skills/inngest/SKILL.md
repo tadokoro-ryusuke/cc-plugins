@@ -89,7 +89,7 @@ export const helloWorld = inngest.createFunction(
   async ({ event, step }) => {
     // ハンドラー
     await step.sleep("wait", "1s");
-    return { message: `Hello ${event.data.email}!` };
+    return { message: "Hello " + event.data.email };
   }
 );
 ```
@@ -228,7 +228,7 @@ inngest.createFunction(
       await step.run("notify-slack", () =>
         slack.postMessage({
           channel: "alerts",
-          text: `Sync failed: ${error.message}`,
+          text: "Sync failed: " + error.message,
         })
       );
     },
@@ -268,7 +268,7 @@ inngest.createFunction(
 
 ```typescript
 await inngest.send({
-  id: `checkout-completed-${cartId}`, // 冪等性キー
+  id: "checkout-completed-" + cartId, // 冪等性キー
   name: "cart/checkout.completed",
   data: { cartId },
 });

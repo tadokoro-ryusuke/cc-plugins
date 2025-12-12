@@ -210,7 +210,7 @@ inngest.createFunction(
     const services = ["api", "database", "cache"];
 
     for (const service of services) {
-      const isHealthy = await step.run(`check-${service}`, () =>
+      const isHealthy = await step.run("check-" + service, () =>
         checkServiceHealth(service)
       );
 
@@ -293,7 +293,7 @@ inngest.createFunction(
 
     for (let i = 0; i < totalItems.length; i += chunkSize) {
       const chunk = totalItems.slice(i, i + chunkSize);
-      await step.run(`process-chunk-${i}`, () => processChunk(chunk));
+      await step.run("process-chunk-" + i, () => processChunk(chunk));
     }
   }
 );

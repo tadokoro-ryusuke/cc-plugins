@@ -54,14 +54,14 @@ export const processPayment = inngest.createFunction(
 
       // 注文が見つからない場合は再試行しない
       if (!orderData) {
-        throw new NonRetriableError(`Order ${orderId} not found`, {
+        throw new NonRetriableError("Order " + orderId + " not found", {
           cause: new Error("NOT_FOUND"),
         });
       }
 
       // すでに処理済みの場合は再試行しない
       if (orderData.status === "completed") {
-        throw new NonRetriableError(`Order ${orderId} already processed`, {
+        throw new NonRetriableError("Order " + orderId + " already processed", {
           cause: new Error("ALREADY_PROCESSED"),
         });
       }
@@ -80,7 +80,7 @@ export const processPayment = inngest.createFunction(
 
       // ユーザーがBANされている場合は再試行しない
       if (userData.status === "banned") {
-        throw new NonRetriableError(`User ${userId} is banned`, {
+        throw new NonRetriableError("User " + userId + " is banned", {
           cause: new Error("USER_BANNED"),
         });
       }
@@ -140,7 +140,7 @@ export const syncUserData = inngest.createFunction(
       if (response.status === 429) {
         const retryAfter = response.headers["retry-after"] || "60";
         throw new RetryAfterError(
-          `Rate limited by ${source}`,
+          "Rate limited by " + source,
           new Date(Date.now() + parseInt(retryAfter) * 1000)
         );
       }
@@ -148,7 +148,7 @@ export const syncUserData = inngest.createFunction(
       // サービス一時停止の場合
       if (response.status === 503) {
         throw new RetryAfterError(
-          `${source} is temporarily unavailable`,
+          source + " is temporarily unavailable",
           "5m" // 5分後に再試行
         );
       }
@@ -159,7 +159,7 @@ export const syncUserData = inngest.createFunction(
     // データを保存
     await step.run("save-data", async () => {
       // 実際にはDBに保存
-      console.log(`Saving data for user ${userId}`, externalData);
+      console.log("Saving data for user " + userId, externalData);
     });
 
     return { success: true, userId };
@@ -185,7 +185,7 @@ export const criticalJob = inngest.createFunction(
               type: "section",
               text: {
                 type: "mrkdwn",
-                text: `*Critical Job Failed*\n\nError: ${error.message}\nEvent: ${event.name}\nData: ${JSON.stringify(event.data)}`,
+                text: "*Critical Job Failed*\n\nError: " + error.message + "\nEvent: " + event.name + "\nData: " + JSON.stringify(event.data),
               },
             },
           ],
@@ -195,7 +195,7 @@ export const criticalJob = inngest.createFunction(
       // PagerDutyにインシデントを作成
       await step.run("create-pagerduty-incident", async () => {
         await createPagerDutyIncident({
-          title: `Critical job failed: ${error.message}`,
+          title: "Critical job failed: " + error.message,
           severity: "high",
           details: {
             eventName: event.name,
@@ -304,7 +304,7 @@ async function processPaymentGateway(
   amount: number,
   method: string
 ): Promise<{ id: string; error?: string }> {
-  return { id: `pay_${Date.now()}` };
+  return { id: "pay_" + Date.now() };
 }
 
 async function fetchExternalAPI(

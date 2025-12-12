@@ -63,9 +63,9 @@ export const sendWelcomeEmail = inngest.createFunction(
     // ステップ3: ウェルカムメールを送信
     const emailResult = await step.run("send-email", async () => {
       // 実際にはメールサービスを呼び出す
-      console.log(`Sending welcome email to ${user.email}`);
+      console.log("Sending welcome email to " + user.email);
       return {
-        messageId: `msg_${Date.now()}`,
+        messageId: "msg_" + Date.now(),
         sentAt: new Date().toISOString(),
       };
     });
@@ -109,7 +109,7 @@ export async function POST(request: Request) {
   const body = await request.json();
 
   // ユーザー作成ロジック（省略）
-  const userId = `user_${Date.now()}`;
+  const userId = "user_" + Date.now();
 
   // Inngestイベントを送信
   await inngest.send({

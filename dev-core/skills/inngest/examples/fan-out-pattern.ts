@@ -54,7 +54,7 @@ export const weeklyDigestLoader = inngest.createFunction(
     });
 
     // キャンペーンIDを生成
-    const campaignId = `campaign_${Date.now()}`;
+    const campaignId = "campaign_" + Date.now();
 
     // Fan-out: 各ユーザーにイベントを送信
     const events = users.map((user) => ({
@@ -70,7 +70,7 @@ export const weeklyDigestLoader = inngest.createFunction(
     // 一括でイベントを送信
     await step.sendEvent("fan-out-emails", events);
 
-    logger.info(`Fan-out complete: ${users.length} emails queued`, {
+    logger.info("Fan-out complete: " + users.length + " emails queued", {
       campaignId,
     });
 
@@ -96,7 +96,7 @@ export const manualDigestLoader = inngest.createFunction(
     let totalQueued = 0;
 
     while (true) {
-      const users = await step.run(`fetch-users-batch-${offset}`, async () => {
+      const users = await step.run("fetch-users-batch-" + offset, async () => {
         // 実際にはDBからバッチで取得
         // return db.users.findMany({ skip: offset, take: batchSize });
         if (offset === 0) {
@@ -120,7 +120,7 @@ export const manualDigestLoader = inngest.createFunction(
         },
       }));
 
-      await step.sendEvent(`fan-out-batch-${offset}`, events);
+      await step.sendEvent("fan-out-batch-" + offset, events);
 
       totalQueued += users.length;
       offset += batchSize;
@@ -170,7 +170,7 @@ export const sendWeeklyDigest = inngest.createFunction(
       // 実際にはメールサービスを呼び出す
       // return await emailService.send({ to: email, template: templateId, data: content });
       return {
-        messageId: `msg_${Date.now()}`,
+        messageId: "msg_" + Date.now(),
         status: "sent",
       };
     });
@@ -179,7 +179,7 @@ export const sendWeeklyDigest = inngest.createFunction(
     await step.run("record-delivery", async () => {
       // 実際にはDBに記録
       // await db.emailLogs.create({ campaignId, userId, messageId: result.messageId });
-      console.log(`Email sent to ${email}`, result);
+      console.log("Email sent to " + email, result);
     });
 
     return {
@@ -227,14 +227,14 @@ export const generateReport = inngest.createFunction(
         users,
         revenue,
         engagement,
-        summary: `Monthly report: ${users.activeUsers} active users, $${revenue.mrr} MRR`,
+        summary: "Monthly report: " + users.activeUsers + " active users, $" + revenue.mrr + " MRR",
       };
     });
 
     // レポートを配信
     await step.sendEvent("distribute-report", {
       name: "report/monthly.generated" as any,
-      data: { reportId: `report_${Date.now()}`, summary: report.summary },
+      data: { reportId: "report_" + Date.now(), summary: report.summary },
     });
 
     return report;

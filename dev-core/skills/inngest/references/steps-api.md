@@ -240,7 +240,7 @@ await step.run("step2", () => sendEmail(email));
 
 ```typescript
 // 注意：userIdが変わると新しいステップとして認識される
-await step.run(`fetch-user-${userId}`, () => fetchUser(userId));
+await step.run("fetch-user-" + userId, () => fetchUser(userId));
 ```
 
 ## ステップ制限
