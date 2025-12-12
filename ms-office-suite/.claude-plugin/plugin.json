@@ -1,0 +1,18 @@
+{
+  "name": "ms-office-suite",
+  "version": "1.0.0",
+  "description": "Microsoft Officeドキュメント操作スキル。PDF処理（テキスト/テーブル抽出、作成、結合、分割、フォーム記入）とWord文書操作（作成、編集、変更履歴管理）を提供します。",
+  "author": {
+    "name": "Ryusuke Tadokoro",
+    "email": "tado56@poshiri.org"
+  },
+  "keywords": [
+    "pdf",
+    "docx",
+    "word",
+    "office",
+    "document",
+    "form",
+    "ooxml"
+  ]
+}
