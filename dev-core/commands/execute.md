@@ -6,12 +6,103 @@ argument-hint: "[計画書のパス または Issue番号]"
 
 # TDD 計画の実行
 
-**重要**: 開始前に `dev-core:best-practices` スキルをロードして、TDD/FSD/Clean Architecture/DDD のベストプラクティスを確認してください。
-フロントエンド実装の際は `frontend-design:frontend-design` スキルをロードしてください。
+**重要**: 開始前に `dev-core:best-practices` スキルをロードして、TDD/FSD/Clean Architecture/DDD のベストプラクティスを確認すること。
+フロントエンド実装の際は `frontend-design:frontend-design` スキルをロードすること。
 
 ## 概要
 
-作成済みの計画書（docs/plans/）に基づいて、TDD 実装を実行します。
+作成済みの計画書（docs/plans/）に基づいて、TDD 実装を実行する。
+
+## サブエージェント使用ガイド（必須）
+
+このコマンドでは以下のサブエージェントを **Task ツール** で必ず呼び出すこと。直接実装せず、専門エージェントに委譲することで品質を確保する。
+
+### 1. tdd-practitioner（TDD実践専門家）
+
+**呼び出しタイミング**: Phase 2 の各イテレーションで Red→Green→Refactor サイクルを実行する時
+
+**Task ツール呼び出しパターン**:
+```
+Task(subagent_type: "tdd-practitioner")
+prompt: |
+  以下のイテレーションを TDD サイクルで実装してください。
+
+  ## コンテキスト
+  計画書: [計画書パス]
+  現在のイテレーション: [イテレーション名]
+
+  ## 実装内容
+  [計画書から該当イテレーションの内容をコピー]
+
+  ## 期待する成果
+  - 失敗するテストの作成（Red）
+  - テストをパスする最小実装（Green）
+  - コード品質の改善（Refactor）
+  - 変更のコミット（Commit）
+```
+
+### 2. refactoring-specialist（リファクタリング専門家）
+
+**呼び出しタイミング**: TDD サイクルの Refactor フェーズ、または tdd-practitioner から呼び出される
+
+**Task ツール呼び出しパターン**:
+```
+Task(subagent_type: "refactoring-specialist")
+prompt: |
+  以下のコードをリファクタリングしてください。
+
+  ## 対象ファイル
+  [リファクタリング対象のファイルパス]
+
+  ## 観点
+  - SOLID原則への準拠
+  - DRY原則の適用
+  - 命名の改善
+  - useEffectの削除（可能な場合）
+
+  ## 制約
+  - テストは必ずグリーンを維持
+  - 外部動作は変更しない
+```
+
+### 3. quality-checker（品質チェック専門家）
+
+**呼び出しタイミング**: 各イテレーション完了後、およびコミット前に必ず実行
+
+**Task ツール呼び出しパターン**:
+```
+Task(subagent_type: "quality-checker")
+prompt: |
+  以下の変更に対して品質チェックを実行してください。
+
+  ## 変更されたファイル
+  [git diff --name-only の結果]
+
+  ## チェック項目
+  - lint実行
+  - typecheck実行
+  - テスト実行
+  - コーディング規約の確認
+```
+
+### 4. security-auditor（セキュリティ監査専門家）
+
+**呼び出しタイミング**: 新規ファイル追加時、API/認証関連のコード変更時
+
+**Task ツール呼び出しパターン**:
+```
+Task(subagent_type: "security-auditor")
+prompt: |
+  以下のコードのセキュリティ監査を実行してください。
+
+  ## 対象ファイル
+  [監査対象のファイルパス]
+
+  ## 重点チェック項目
+  - ハードコーディングの検出
+  - 機密情報の漏洩リスク
+  - 入力検証の適切性
+```
 
 ## 実行フロー
 
@@ -24,6 +115,8 @@ PLAN_FILE="./docs/plans/issue-$ARGUMENTS.md"
 # ファイルパスの場合
 PLAN_FILE="$ARGUMENTS"
 ```
+
+計画書を読み込み、内容を把握すること。
 
 ### 2. 実装前の確認
 
@@ -43,51 +136,34 @@ git checkout -b feature/issue-$ISSUE_NUMBER || git checkout feature/issue-$ISSUE
 
 ### 4. TDD サイクルの実行
 
-計画書に記載された各イテレーションを順番に実行：
+計画書に記載された各イテレーションを順番に実行。
 
 #### Phase 1: Tidy First（事前整理）
 
 - 計画書の「Phase 1」セクションのタスクを実行
 - 既存コードのリファクタリング
-  - プロジェクト設定ファイル（.claude/\*.local.md）を確認し、追加ツールが指定されている場合はそれを活用してください
+  - プロジェクト設定ファイル（.claude/\*.local.md）を確認し、追加ツールが指定されている場合はそれを活用すること
 - 依存関係の整理
 
 #### Phase 2: TDD 実装
 
-**tdd-practitioner エージェントを使用してください。**
+**⚠️ 重要**: 各イテレーションで **必ず tdd-practitioner エージェントを Task ツールで呼び出すこと**。
 
-各イテレーションごとに：
+各イテレーションごとに以下を実行：
 
-1. **Red 🔴**: テストの作成
+1. **tdd-practitioner を呼び出す**
+   - イテレーションの内容を prompt に含める
+   - エージェントが Red→Green→Refactor→Commit を実行
 
-   - 失敗するテストを作成
-   - テスト実行で失敗を確認
+2. **quality-checker を呼び出す**
+   - イテレーション完了後に品質チェック
+   - 問題があれば修正
 
-2. **Green 🟢**: 最小実装
+3. **必要に応じて security-auditor を呼び出す**
+   - 新規ファイル追加時
+   - API/認証関連のコード変更時
 
-   - テストをパスする最小限のコード
-   - テスト実行で成功を確認
-
-3. **Refactor 🔨**: 品質改善
-
-   - コード品質の向上
-   - テストが依然としてパスすることを確認
-
-4. **Commit ✅**: 変更を保存
-   ```bash
-   git add .
-   git commit -m "[コミットメッセージ]"
-   ```
-
-### 5. 品質チェック
-
-各イテレーション後に自動実行：
-
-quality-checker エージェントを使用
-
-プロジェクト設定に従って lint、typecheck、test を実行
-
-### 6. 進捗レポート
+### 5. 進捗レポート
 
 各フェーズ完了時に進捗を報告：
 
@@ -99,15 +175,11 @@ quality-checker エージェントを使用
   ⏸️ Iteration 3: ページネーション - 待機中
 ```
 
-### 7. 最終確認と PR 作成
+### 6. 最終確認と PR 作成
 
 すべての実装が完了したら：
 
-1. **最終テスト実行**
-
-   ```bash
-   # テストとカバレッジ確認
-   ```
+1. **最終テスト実行**（quality-checker を使用）
 
 2. **変更内容の確認**
 
@@ -135,7 +207,7 @@ quality-checker エージェントを使用
 ## エラーハンドリング
 
 - テスト失敗時: 詳細なエラー内容を表示
-- lint/typecheck 失敗時: 自動修正を試みる
+- lint/typecheck 失敗時: quality-checker エージェントで修正
 - コンフリクト発生時: 解決方法を提案
 
-計画に忠実に、着実に TDD 実装を進めます。
+計画に忠実に、サブエージェントを活用して着実に TDD 実装を進めること。
