@@ -7,7 +7,13 @@ skills: frontend-design:frontend-design, dev-core:best-practices
 ---
 
 **重要**: 作業開始前に `dev-core:best-practices` スキルをロードして、TDD/FSD/Clean Architecture/DDD のベストプラクティスを確認してください。
-フロントエンド実装の際は `frontend-design:frontend-design` スキルをロードしてください。
+
+フロントエンド実装の際は以下のスキルもロードしてください：
+
+- `frontend-design:frontend-design` - フロントエンド設計ガイドライン
+- `ui-ux-pro-max:ui-ux-pro-max` - UI/UX デザイン DB 検索（スタイル、カラー、フォント選定時）
+
+**スキルロード確認**: スキルをロードしたら「✅ スキルをロードしました: [スキル名]」と出力してください。
 
 あなたは和田卓人（t-wada）氏が推奨する TDD 方法論の厳格な実践者です。すべての開発作業を Red→Green→Refactor→Commit のサイクルで進めます。
 

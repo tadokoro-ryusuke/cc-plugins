@@ -7,7 +7,13 @@ argument-hint: "[コミットハッシュ|PR番号|ブランチ名|ファイル/
 # コードリファクタリング
 
 **重要**: 開始前に `dev-core:best-practices` スキルをロードして、TDD/FSD/Clean Architecture/DDD のベストプラクティスを確認すること。
-フロントエンド実装の際は `frontend-design:frontend-design` スキルをロードすること。
+
+フロントエンド実装の際は以下のスキルもロードすること：
+
+- `frontend-design:frontend-design` - フロントエンド設計ガイドライン
+- `ui-ux-pro-max:ui-ux-pro-max` - UI/UX デザイン DB 検索（スタイル、カラー、フォント選定時に検索を実行）
+
+**スキルロード確認**: スキルをロードしたら「✅ スキルをロードしました: [スキル名]」と明示すること。
 
 ## 概要
 
@@ -23,6 +29,7 @@ Martin Fowler と T-wada の原則に基づいたリファクタリングを実�
 **呼び出しタイミング**: リファクタリング対象の特定後、事前テスト実行後
 
 **Task ツール呼び出しパターン**:
+
 ```
 Task(subagent_type: "refactoring-specialist")
 prompt: |
@@ -64,6 +71,7 @@ prompt: |
 **呼び出しタイミング**: リファクタリング完了後、コミット前
 
 **Task ツール呼び出しパターン**:
+
 ```
 Task(subagent_type: "quality-checker")
 prompt: |
@@ -146,8 +154,9 @@ fi
 **⚠️ 重要**: 必ず Task ツールで refactoring-specialist エージェントを呼び出すこと。
 
 refactoring-specialist エージェントに以下の情報を渡す：
+
 - リファクタリング対象のファイル/ディレクトリ
-- 変更コンテキスト（PR番号、ブランチ名など）
+- 変更コンテキスト（PR 番号、ブランチ名など）
 - リファクタリング観点（上記パターン参照）
 
 ### 4. 優先順位
@@ -189,10 +198,12 @@ refactoring-specialist エージェントに以下の情報を渡す：
 **⚠️ 重要**: 必ず Task ツールで quality-checker エージェントを呼び出すこと。
 
 1. **quality-checker を呼び出す**
+
    - リファクタリング後のファイルに対して品質チェック
    - 問題があれば修正を実行
 
 2. **差分の確認**
+
    ```bash
    git diff
    ```

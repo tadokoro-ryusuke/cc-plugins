@@ -7,7 +7,13 @@ argument-hint: "[計画書のパス または Issue番号]"
 # TDD 計画の実行
 
 **重要**: 開始前に `dev-core:best-practices` スキルをロードして、TDD/FSD/Clean Architecture/DDD のベストプラクティスを確認すること。
-フロントエンド実装の際は `frontend-design:frontend-design` スキルをロードすること。
+
+フロントエンド実装の際は以下のスキルもロードすること：
+
+- `frontend-design:frontend-design` - フロントエンド設計ガイドライン
+- `ui-ux-pro-max:ui-ux-pro-max` - UI/UX デザイン DB 検索（スタイル、カラー、フォント選定時に検索を実行）
+
+**スキルロード確認**: スキルをロードしたら「✅ スキルをロードしました: [スキル名]」と明示すること。
 
 ## 概要
 
@@ -17,11 +23,12 @@ argument-hint: "[計画書のパス または Issue番号]"
 
 このコマンドでは以下のサブエージェントを **Task ツール** で必ず呼び出すこと。直接実装せず、専門エージェントに委譲することで品質を確保する。
 
-### 1. tdd-practitioner（TDD実践専門家）
+### 1. tdd-practitioner（TDD 実践専門家）
 
 **呼び出しタイミング**: Phase 2 の各イテレーションで Red→Green→Refactor サイクルを実行する時
 
 **Task ツール呼び出しパターン**:
+
 ```
 Task(subagent_type: "tdd-practitioner")
 prompt: |
@@ -46,6 +53,7 @@ prompt: |
 **呼び出しタイミング**: TDD サイクルの Refactor フェーズ、または tdd-practitioner から呼び出される
 
 **Task ツール呼び出しパターン**:
+
 ```
 Task(subagent_type: "refactoring-specialist")
 prompt: |
@@ -70,6 +78,7 @@ prompt: |
 **呼び出しタイミング**: 各イテレーション完了後、およびコミット前に必ず実行
 
 **Task ツール呼び出しパターン**:
+
 ```
 Task(subagent_type: "quality-checker")
 prompt: |
@@ -90,6 +99,7 @@ prompt: |
 **呼び出しタイミング**: 新規ファイル追加時、API/認証関連のコード変更時
 
 **Task ツール呼び出しパターン**:
+
 ```
 Task(subagent_type: "security-auditor")
 prompt: |
@@ -152,10 +162,12 @@ git checkout -b feature/issue-$ISSUE_NUMBER || git checkout feature/issue-$ISSUE
 各イテレーションごとに以下を実行：
 
 1. **tdd-practitioner を呼び出す**
+
    - イテレーションの内容を prompt に含める
    - エージェントが Red→Green→Refactor→Commit を実行
 
 2. **quality-checker を呼び出す**
+
    - イテレーション完了後に品質チェック
    - 問題があれば修正
 

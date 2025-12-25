@@ -4,8 +4,6 @@ description: |
   このスキルは、ユーザーが「TDD」「テスト駆動開発」「FSD」「Feature-Sliced Design」「Clean Architecture」「DDD」「ドメイン駆動設計」「リファクタリング」「Red-Green-Refactor」「t-wada 式」について質問したとき、またはコード実装時にこれらのパターンを適用する必要があるときに使用する。
 ---
 
-このスキルは、ユーザーが「TDD」「テスト駆動開発」「FSD」「Feature-Sliced Design」「Clean Architecture」「DDD」「ドメイン駆動設計」「リファクタリング」「Red-Green-Refactor」「t-wada 式」について質問したとき、またはコード実装時にこれらのパターンを適用する必要があるときに使用する。
-
 # TDD Best Practices
 
 ## TDD サイクル（t-wada 式）
