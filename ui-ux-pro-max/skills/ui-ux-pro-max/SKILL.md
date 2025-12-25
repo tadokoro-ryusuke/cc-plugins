@@ -1,6 +1,6 @@
 ---
 name: ui-ux-pro-max
-version: "1.0.0"
+version: "1.1.0"
 description: |
   UI/UX design intelligence with searchable database: 50 styles, 21 color palettes, 50 font pairings, 20 chart types, 8 framework stacks.
 
