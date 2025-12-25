@@ -1,6 +1,21 @@
 ---
 name: ui-ux-pro-max
-description: "UI/UX design intelligence. 50 styles, 21 palettes, 50 font pairings, 20 charts, 8 stacks (React, Next.js, Vue, Svelte, SwiftUI, React Native, Flutter, Tailwind). Actions: plan, build, create, design, implement, review, fix, improve, optimize, enhance, refactor, check UI/UX code. Projects: website, landing page, dashboard, admin panel, e-commerce, SaaS, portfolio, blog, mobile app, .html, .tsx, .vue, .svelte. Elements: button, modal, navbar, sidebar, card, table, form, chart. Styles: glassmorphism, claymorphism, minimalism, brutalism, neumorphism, bento grid, dark mode, responsive, skeuomorphism, flat design. Topics: color palette, accessibility, animation, layout, typography, font pairing, spacing, hover, shadow, gradient."
+version: "1.0.0"
+description: |
+  UI/UX design intelligence with searchable database: 50 styles, 21 color palettes, 50 font pairings, 20 chart types, 8 framework stacks.
+
+  Trigger phrases (use this skill when user says):
+  - "build a landing page", "create a dashboard", "design a website"
+  - "Reactでコンポーネント作って", "Next.jsでページ作って", "Vueでアプリ作って"
+  - "make it look modern", "use glassmorphism", "add dark mode"
+  - "UIを改善して", "デザインを良くして", "もっとモダンにして"
+  - "choose a color palette", "recommend fonts", "what chart should I use"
+  - "fix accessibility", "improve UX", "optimize for mobile"
+  - "style with Tailwind", "add hover effects", "create responsive layout"
+
+  Supported: React, Next.js, Vue, Svelte, SwiftUI, React Native, Flutter, HTML+Tailwind.
+  Elements: button, modal, navbar, sidebar, card, table, form, chart, hero, footer.
+  Styles: glassmorphism, minimalism, brutalism, neumorphism, bento grid, dark mode, flat design.
 ---
 
 # UI/UX Pro Max - Design Intelligence

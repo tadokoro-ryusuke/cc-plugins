@@ -6,6 +6,7 @@ UI/UX Pro Max Core - BM25 search engine for UI/UX style guides
 
 import csv
 import re
+import sys
 from pathlib import Path
 from math import log
 from collections import defaultdict
@@ -142,30 +143,49 @@ class BM25:
 
 # ============ SEARCH FUNCTIONS ============
 def _load_csv(filepath):
-    """Load CSV and return list of dicts"""
-    with open(filepath, 'r', encoding='utf-8') as f:
-        return list(csv.DictReader(f))
+    """Load CSV and return list of dicts with error handling"""
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            return list(csv.DictReader(f))
+    except FileNotFoundError:
+        return []
+    except (csv.Error, UnicodeDecodeError) as e:
+        print(f"Warning: Error reading {filepath}: {e}", file=sys.stderr)
+        return []
+    except Exception as e:
+        print(f"Warning: Unexpected error reading {filepath}: {e}", file=sys.stderr)
+        return []
 
 
 def _search_csv(filepath, search_cols, output_cols, query, max_results):
-    """Core search function using BM25"""
+    """Core search function using BM25 with comprehensive error handling"""
     if not filepath.exists():
         return []
 
     data = _load_csv(filepath)
+    if not data:
+        return []
 
     # Build documents from search columns
-    documents = [" ".join(str(row.get(col, "")) for col in search_cols) for row in data]
+    try:
+        documents = [" ".join(str(row.get(col, "")) for col in search_cols) for row in data]
+    except Exception as e:
+        print(f"Warning: Error building documents: {e}", file=sys.stderr)
+        return []
 
     # BM25 search
     bm25 = BM25()
     bm25.fit(documents)
+
+    if bm25.N == 0:
+        return []
+
     ranked = bm25.score(query)
 
     # Get top results with score > 0
     results = []
     for idx, score in ranked[:max_results]:
-        if score > 0:
+        if score > 0 and idx < len(data):
             row = data[idx]
             results.append({col: row.get(col, "") for col in output_cols if col in row})
 
