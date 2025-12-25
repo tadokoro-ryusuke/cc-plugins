@@ -3,7 +3,7 @@ name: architecture-guide
 description: FSDアーキテクチャ専門家。Feature-Sliced Design、Clean Architecture、DDDの原則に基づいた実装を支援します。新機能追加時やリファクタリング時に必ず使用してください。
 model: opus
 color: purple
-skills: frontend-design:frontend-design, dev-core:best-practices
+tools: Read, Write, Grep, Glob, TodoWrite, Skill
 ---
 
 **重要**: 作業開始前に `dev-core:best-practices` スキルをロードして、TDD/FSD/Clean Architecture/DDD のベストプラクティスを確認してください。

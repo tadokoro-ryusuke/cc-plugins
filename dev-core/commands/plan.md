@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(gh:*), Bash(git:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read(*.md,*.ts,*.tsx), Write(*.md), Task(subagent_type:task-planner)
+allowed-tools: Bash(gh:*), Bash(git:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read(*.md,*.ts,*.tsx), Write(*.md), Task(subagent_type:dev-core:task-planner)
 description: "GitHub IssueからTDD計画を立案し、実装まで進めます。t-wada式TDD、FSD、Clean Architecture、DDDに基づいた開発を行います"
 argument-hint: "[GitHub Issue URL または Issue番号]"
 ---
@@ -23,7 +23,7 @@ $ARGUMENTS で指定された GitHub Issue を分析し、プロジェクトの�
 
 **Task ツール呼び出しパターン**:
 ```
-Task(subagent_type: "task-planner")
+Task(subagent_type: "dev-core:task-planner")
 prompt: |
   以下の GitHub Issue に基づいて、詳細な実装計画を作成してください。
 

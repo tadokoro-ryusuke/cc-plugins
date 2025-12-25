@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(git:*), Bash(gh:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read(*.md,*.ts,*.tsx), Task(subagent_type:quality-checker)
+allowed-tools: Bash(git:*), Bash(gh:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read(*.md,*.ts,*.tsx), Task(subagent_type:dev-core:quality-checker)
 description: '現在のブランチからPull Requestを作成します。変更内容を分析し、適切なタイトルと説明を生成します'
 argument-hint: '[Issue番号] (省略時は自動検出)'
 ---

@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(gh:*), Bash(git:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read(*.md,*.ts,*.tsx), Write(*.ts,*.tsx), Edit, MultiEdit, Task(subagent_type:tdd-practitioner), Task(subagent_type:refactoring-specialist), Task(subagent_type:quality-checker), Task(subagent_type:security-auditor)
+allowed-tools: Bash(gh:*), Bash(git:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read(*.md,*.ts,*.tsx), Write(*.ts,*.tsx), Edit, MultiEdit, Task(subagent_type:dev-core:tdd-practitioner), Task(subagent_type:dev-core:refactoring-specialist), Task(subagent_type:dev-core:quality-checker), Task(subagent_type:dev-core:security-auditor)
 description: "作成済みの計画書に基づいてTDD実装を実行します"
 argument-hint: "[計画書のパス または Issue番号]"
 ---
@@ -30,7 +30,7 @@ argument-hint: "[計画書のパス または Issue番号]"
 **Task ツール呼び出しパターン**:
 
 ```
-Task(subagent_type: "tdd-practitioner")
+Task(subagent_type: "dev-core:tdd-practitioner")
 prompt: |
   以下のイテレーションを TDD サイクルで実装してください。
 
@@ -55,7 +55,7 @@ prompt: |
 **Task ツール呼び出しパターン**:
 
 ```
-Task(subagent_type: "refactoring-specialist")
+Task(subagent_type: "dev-core:refactoring-specialist")
 prompt: |
   以下のコードをリファクタリングしてください。
 
@@ -80,7 +80,7 @@ prompt: |
 **Task ツール呼び出しパターン**:
 
 ```
-Task(subagent_type: "quality-checker")
+Task(subagent_type: "dev-core:quality-checker")
 prompt: |
   以下の変更に対して品質チェックを実行してください。
 
@@ -101,7 +101,7 @@ prompt: |
 **Task ツール呼び出しパターン**:
 
 ```
-Task(subagent_type: "security-auditor")
+Task(subagent_type: "dev-core:security-auditor")
 prompt: |
   以下のコードのセキュリティ監査を実行してください。
 

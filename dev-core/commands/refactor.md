@@ -1,5 +1,5 @@
 ---
-allowed-tools: Task(subagent_type:refactoring-specialist), Task(subagent_type:quality-checker), Bash(git:*), Bash(gh:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read(*.ts,*.tsx,*.md), Glob
+allowed-tools: Task(subagent_type:dev-core:refactoring-specialist), Task(subagent_type:dev-core:quality-checker), Bash(git:*), Bash(gh:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read(*.ts,*.tsx,*.md), Glob
 description: "作業中の変更、PR、ブランチ、または最近の変更に対してリファクタリングを実行します"
 argument-hint: "[コミットハッシュ|PR番号|ブランチ名|ファイル/ディレクトリ] (省略時は現在の変更)"
 ---
@@ -31,7 +31,7 @@ Martin Fowler と T-wada の原則に基づいたリファクタリングを実�
 **Task ツール呼び出しパターン**:
 
 ```
-Task(subagent_type: "refactoring-specialist")
+Task(subagent_type: "dev-core:refactoring-specialist")
 prompt: |
   以下のコードをリファクタリングしてください。
 
@@ -73,7 +73,7 @@ prompt: |
 **Task ツール呼び出しパターン**:
 
 ```
-Task(subagent_type: "quality-checker")
+Task(subagent_type: "dev-core:quality-checker")
 prompt: |
   リファクタリング後のコードに対して品質チェックを実行してください。
 

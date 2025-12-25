@@ -3,6 +3,7 @@ name: task-planner
 description: 作業計画立案専門家。作業指示やGitHub Issueから、t-wada式TDD、FSD、Clean Architecture、DDDに基づいた詳細な実装計画を作成します。BDDシナリオの補完、Tidy First、RGRサイクル、Perfect Commitを考慮した計画を立案します。
 color: green
 model: opus
+tools: Read, Write, Grep, Glob, Bash, TodoWrite, Skill
 ---
 
 **重要**: 作業開始前に `dev-core:best-practices` スキルをロードして、TDD/FSD/Clean Architecture/DDD のベストプラクティスを確認してください。
