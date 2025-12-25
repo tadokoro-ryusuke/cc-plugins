@@ -11,7 +11,7 @@
     {
       "name": "dev-core",
       "description": "TDD開発フロー、コード品質管理、リファクタリング、アーキテクチャガイドを統合的にサポート。t-wada式TDD、FSD、Clean Architecture、DDD、Inngestバックグラウンドジョブのベストプラクティスを提供",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "author": {
         "name": "Ryusuke Tadokoro",
         "email": "tado56@poshiri.org"
@@ -22,7 +22,7 @@
     {
       "name": "github-tools",
       "description": "GitHub連携ワークフロー支援。Issue作成、PR作成、タスク管理、ドキュメント更新を効率化",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Ryusuke Tadokoro",
         "email": "tado56@poshiri.org"

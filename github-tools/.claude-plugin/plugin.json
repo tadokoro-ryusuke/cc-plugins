@@ -1,6 +1,6 @@
 {
   "name": "github-tools",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "GitHub連携ワークフローを支援するプラグイン。Issue作成、PR作成、タスク管理、ドキュメント更新を効率化します。",
   "author": {
     "name": "Ryusuke Tadokoro",
