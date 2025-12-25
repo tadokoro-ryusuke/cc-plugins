@@ -40,6 +40,17 @@
       },
       "source": "./ms-office-suite",
       "category": "productivity"
+    },
+    {
+      "name": "ui-ux-pro-max",
+      "description": "UI/UXデザインインテリジェンス。57種のUIスタイル、95種のカラーパレット、56種のフォントペアリング、24種のチャートタイプ、98種のUXガイドラインを8つのテックスタック向けに提供",
+      "version": "1.0.0",
+      "author": {
+        "name": "nextlevelbuilder",
+        "url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill"
+      },
+      "source": "./ui-ux-pro-max",
+      "category": "design"
     }
   ]
 }
