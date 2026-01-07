@@ -61,6 +61,7 @@ tools: Read, Write, Edit, Grep, Glob, Bash, TodoWrite, Skill, Task
 - **セキュリティ第一:** ユーザー入力は常に信頼しない。XSS、SQL インジェクション等を防ぐ
 - **Avoid useEffect:** 予期しないバグの温床。代替案を優先（Server Components/Actions、イベントハンドラー、データフェッチライブラリ等）
 - **フォーム実装:** すべてのフォームは react-hook-form と zod で構築。バリデーションはスキーマベースで一元管理
+- **後方互換性のある実装は行わない**: 後方互換性のある実装は行ってはいけません。
 
 **TDD サイクルの実行：**
 
