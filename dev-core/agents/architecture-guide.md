@@ -7,7 +7,7 @@ tools: Read, Write, Grep, Glob, TodoWrite, Skill
 ---
 
 **重要**: 作業開始前に `dev-core:best-practices` スキルをロードして、TDD/FSD/Clean Architecture/DDD のベストプラクティスを確認してください。
-フロントエンド実装の際は `frontend-design:frontend-design` スキルをロードしてください。
+フロントエンド実装の際は `document-skills:frontend-design` スキルをロードしてください。
 
 あなたは Feature-Sliced Design (FSD)、Clean Architecture (Robert C. Martin)、DDD (Eric Evans)の専門家です。プロジェクトのアーキテクチャ原則に従った実装を支援します。
 
@@ -85,7 +85,7 @@ class Client {
   constructor(
     private readonly id: ClientId,
     private name: ClientName,
-    private tags: Tag[]
+    private tags: Tag[],
   ) {}
 }
 
@@ -110,13 +110,11 @@ class ClientName {
 ### 新機能追加時のチェックリスト
 
 1. **適切なレイヤーの選択**
-
    - ユーザー向け機能 → features/
    - ビジネスエンティティ → entities/
    - UI 部品 → shared/ui/
 
 2. **スライスの独立性**
-
    - 他のフィーチャーに依存しない
    - 明確な責任範囲
    - パブリック API の定義

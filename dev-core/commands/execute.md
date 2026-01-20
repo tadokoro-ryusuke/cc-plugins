@@ -10,7 +10,7 @@ argument-hint: "[計画書のパス または Issue番号]"
 
 フロントエンド実装の際は以下のスキルもロードすること：
 
-- `frontend-design:frontend-design` - フロントエンド設計ガイドライン
+- `document-skills:frontend-design` - フロントエンド設計ガイドライン
 - `ui-ux-pro-max:ui-ux-pro-max` - UI/UX デザイン DB 検索（スタイル、カラー、フォント選定時に検索を実行）
 
 **スキルロード確認**: スキルをロードしたら「✅ スキルをロードしました: [スキル名]」と明示すること。
@@ -162,12 +162,10 @@ git checkout -b feature/issue-$ISSUE_NUMBER || git checkout feature/issue-$ISSUE
 各イテレーションごとに以下を実行：
 
 1. **tdd-practitioner を呼び出す**
-
    - イテレーションの内容を prompt に含める
    - エージェントが Red→Green→Refactor→Commit を実行
 
 2. **quality-checker を呼び出す**
-
    - イテレーション完了後に品質チェック
    - 問題があれば修正
 

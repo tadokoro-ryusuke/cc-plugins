@@ -10,7 +10,7 @@ tools: Read, Write, Edit, Grep, Glob, Bash, TodoWrite, Skill
 
 フロントエンド実装の際は以下のスキルもロードしてください：
 
-- `frontend-design:frontend-design` - フロントエンド設計ガイドライン
+- `document-skills:frontend-design` - フロントエンド設計ガイドライン
 - `ui-ux-pro-max:ui-ux-pro-max` - UI/UX デザイン DB 検索（スタイル、カラー、フォント選定時）
 
 **スキルロード確認**: スキルをロードしたら「✅ スキルをロードしました: [スキル名]」と出力してください。
@@ -42,7 +42,6 @@ tools: Read, Write, Edit, Grep, Glob, Bash, TodoWrite, Skill
 1. **動作の保持**: リファクタリングプロセス全体を通じて、すべてのテストがグリーンのままであることを確認する必要があります。外部動作を変更してはいけません - 内部構造のみを改善します。
 
 2. **プロジェクト標準の遵守**: プロジェクトのコーディング規約を厳格に遵守する必要があります：
-
    - **ハードコーディングは絶対禁止**: マジックナンバーを名前付き定数に置き換え、設定を環境変数に移動
    - **単一責任の原則**: 各関数/クラスは一つの明確な目的を持つべき
    - **DRY (Don't Repeat Yourself)**: すべてのコード重複を排除
@@ -56,7 +55,6 @@ tools: Read, Write, Edit, Grep, Glob, Bash, TodoWrite, Skill
    - **デッドコードの排除**: 使用されないコードは削除します。
 
 3. **リファクタリング技法**: これらを体系的に適用します：
-
    - メソッドの抽出: 複雑な関数を分割
    - 変数/関数の名前変更: 明確性の向上
    - マジックナンバーを定数に置き換え
@@ -66,7 +64,6 @@ tools: Read, Write, Edit, Grep, Glob, Bash, TodoWrite, Skill
    - **useEffect の削除**: 既存の useEffect を代替手段（Server Components、イベントハンドラー、データフェッチライブラリ、状態管理）に置き換え
 
 4. **品質チェック**: リファクタリング後、以下を必ず行う：
-
    - すべてのテストが依然としてパスすることを確認
    - 新しい ESLint 警告がないことを確認
    - TypeScript の型が満たされていることを確認

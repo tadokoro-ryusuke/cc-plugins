@@ -7,7 +7,7 @@ argument-hint: "[GitHub Issue URL または Issue番号]"
 # TDD 計画立案と実装
 
 **重要**: 開始前に `dev-core:best-practices` スキルをロードして、TDD/FSD/Clean Architecture/DDD のベストプラクティスを確認すること。
-フロントエンド実装の際は `frontend-design:frontend-design` スキルをロードすること。
+フロントエンド実装の際は `document-skills:frontend-design` スキルをロードすること。
 
 ## 概要
 
@@ -22,6 +22,7 @@ $ARGUMENTS で指定された GitHub Issue を分析し、プロジェクトの�
 **呼び出しタイミング**: Issue 情報と既存コードの調査が完了した後
 
 **Task ツール呼び出しパターン**:
+
 ```
 Task(subagent_type: "dev-core:task-planner")
 prompt: |
@@ -50,6 +51,7 @@ prompt: |
 ```
 
 **エージェントの成果物**:
+
 - BDD シナリオの検証と補完
 - Tidy First: 事前整理タスク
 - TDD サイクル: Red→Green→Refactor→Commit
@@ -81,11 +83,13 @@ Issue の内容を把握し、要件を理解すること。
 **⚠️ 重要**: 必ず Task ツールで task-planner エージェントを呼び出すこと。
 
 task-planner エージェントに以下の情報を渡す：
+
 - Issue 情報（番号、タイトル、本文）
 - コードベース情報（プロジェクト構造、関連モジュール、既存テスト）
 - 計画に含めるべき内容
 
 エージェントが以下を含む詳細な計画を作成：
+
 - BDD シナリオの検証と補完
 - Tidy First: 事前整理タスク
 - TDD サイクル: Red→Green→Refactor→Commit
@@ -121,12 +125,14 @@ git commit -m "docs: Add implementation plan for issue #$ISSUE_NUMBER"
 
 **⚠️ 重要**: 実装フェーズでは `/dev-core:execute` コマンドを使用すること。
 execute コマンドは以下のエージェントを使用して実装を行う：
+
 - tdd-practitioner: TDD サイクルの実行
 - refactoring-specialist: コードのリファクタリング
 - quality-checker: 品質チェック
 - security-auditor: セキュリティ監査
 
 実装を開始する場合：
+
 ```
 /dev-core:execute ./docs/plans/issue-$ISSUE_NUMBER.md
 ```
@@ -143,7 +149,6 @@ execute コマンドは以下のエージェントを使用して実装を行う
 
    **注意**: 以下のエージェントは `/dev-core:execute` コマンドで使用すること。
    このコマンドでは計画立案に集中する。
-
    - tdd-practitioner: TDD サイクル（Red→Green→Refactor→Commit）
    - refactoring-specialist: コード品質改善
    - quality-checker: lint、typecheck、テスト実行

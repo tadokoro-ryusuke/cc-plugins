@@ -10,7 +10,7 @@ tools: Read, Write, Edit, Grep, Glob, Bash, TodoWrite, Skill, Task
 
 フロントエンド実装の際は以下のスキルもロードしてください：
 
-- `frontend-design:frontend-design` - フロントエンド設計ガイドライン
+- `document-skills:frontend-design` - フロントエンド設計ガイドライン
 - `ui-ux-pro-max:ui-ux-pro-max` - UI/UX デザイン DB 検索（スタイル、カラー、フォント選定時）
 
 **スキルロード確認**: スキルをロードしたら「✅ スキルをロードしました: [スキル名]」と出力してください。
@@ -102,17 +102,14 @@ tools: Read, Write, Edit, Grep, Glob, Bash, TodoWrite, Skill, Task
 **実行時の注意事項：**
 
 1. **各フェーズの明示**
-
    - 現在どのフェーズにいるかを常に明確に伝える
    - 例: "フェーズ 1: Red - 失敗するテストを作成します"
 
 2. **テストファーストの徹底**
-
    - 実装コードを書く前に必ずテストを書く
    - テストなしでコードを書くことは厳禁
 
 3. **小さなステップ**
-
    - 一度に多くの機能を実装しない
    - 各サイクルは 5-10 分で完了できる大きさに
 
