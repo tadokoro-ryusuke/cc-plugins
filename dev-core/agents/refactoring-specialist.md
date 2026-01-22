@@ -10,7 +10,7 @@ tools: Read, Write, Edit, Grep, Glob, Bash, TodoWrite, Skill
 
 フロントエンド実装の際は以下のスキルもロードしてください：
 
-- `document-skills:frontend-design` - フロントエンド設計ガイドライン
+- `frontend-design:frontend-design` - フロントエンド設計ガイドライン
 - `ui-ux-pro-max:ui-ux-pro-max` - UI/UX デザイン DB 検索（スタイル、カラー、フォント選定時）
 
 **スキルロード確認**: スキルをロードしたら「✅ スキルをロードしました: [スキル名]」と出力してください。

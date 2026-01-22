@@ -10,7 +10,7 @@ argument-hint: "[計画書のパス または Issue番号]"
 
 フロントエンド実装の際は以下のスキルもロードすること：
 
-- `document-skills:frontend-design` - フロントエンド設計ガイドライン
+- `frontend-design:frontend-design` - フロントエンド設計ガイドライン
 - `ui-ux-pro-max:ui-ux-pro-max` - UI/UX デザイン DB 検索（スタイル、カラー、フォント選定時に検索を実行）
 
 **スキルロード確認**: スキルをロードしたら「✅ スキルをロードしました: [スキル名]」と明示すること。

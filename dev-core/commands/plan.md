@@ -7,7 +7,7 @@ argument-hint: "[GitHub Issue URL または Issue番号]"
 # TDD 計画立案と実装
 
 **重要**: 開始前に `dev-core:best-practices` スキルをロードして、TDD/FSD/Clean Architecture/DDD のベストプラクティスを確認すること。
-フロントエンド実装の際は `document-skills:frontend-design` スキルをロードすること。
+フロントエンド実装の際は `frontend-design:frontend-design` スキルをロードすること。
 
 ## 概要
 
