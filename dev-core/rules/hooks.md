@@ -52,16 +52,21 @@
 
 ```json
 {
-  "PreToolUse": [
-    {
-      "matcher": "Bash",
-      "hooks": [
-        {
-          "type": "prompt",
-          "prompt": "危険なコマンドでないか確認してください"
-        }
-      ]
-    }
-  ]
+  "description": "プラグインのフック設定",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "危険なコマンドでないか確認してください"
+          }
+        ]
+      }
+    ]
+  }
 }
 ```
+
+**重要**: トップレベルに `"hooks"` キーが必須です。
