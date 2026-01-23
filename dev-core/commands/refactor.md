@@ -282,8 +282,18 @@ const { data } = useSWR("/api/data", fetcher);
        ↓
 /dev-core:refactor → 追加リファクタリング（このコマンド）
        ↓
+/dev-core:verify → 6段階検証
+       ↓
+/dev-core:code-review → コードレビュー
+       ↓
 PR 作成・マージ
 ```
+
+## 関連コマンド
+
+- `/dev-core:verify`: リファクタリング後の 6 段階検証
+- `/dev-core:code-review`: コードレビュー実行
+- `/dev-core:checkpoint --create`: 進捗スナップショット作成
 
 プロジェクト設定ファイル（.claude/\*.local.md）を確認し、追加ツールが指定されている場合はそれを活用すること。
 コードの動作を変えずに、refactoring-specialist と quality-checker エージェントを活用して品質と保守性を向上させること。

@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(gh:*), Bash(git:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read(*.md,*.ts,*.tsx), Write(*.ts,*.tsx), Edit, MultiEdit, Task(subagent_type:dev-core:tdd-practitioner), Task(subagent_type:dev-core:refactoring-specialist), Task(subagent_type:dev-core:quality-checker), Task(subagent_type:dev-core:security-auditor)
+allowed-tools: Bash(gh:*), Bash(git:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read(*.md,*.ts,*.tsx), Write(*.ts,*.tsx), Edit, MultiEdit, Task(subagent_type:dev-core:tdd-practitioner), Task(subagent_type:dev-core:refactoring-specialist), Task(subagent_type:dev-core:quality-checker), Task(subagent_type:dev-core:security-auditor), Task(subagent_type:dev-core:build-error-resolver)
 description: "作成済みの計画書に基づいてTDD実装を実行します"
 argument-hint: "[計画書のパス または Issue番号]"
 ---
@@ -211,13 +211,20 @@ git checkout -b feature/issue-$ISSUE_NUMBER || git checkout feature/issue-$ISSUE
 
 実装を中断する場合：
 
-- 現在の進捗を記録
+- 現在の進捗を記録（`/dev-core:checkpoint --create` を推奨）
 - 次回は同じコマンドで続きから再開可能
 
 ## エラーハンドリング
 
 - テスト失敗時: 詳細なエラー内容を表示
 - lint/typecheck 失敗時: quality-checker エージェントで修正
+- ビルドエラー時: build-error-resolver エージェントで自動修復
 - コンフリクト発生時: 解決方法を提案
+
+## 関連コマンド
+
+- `/dev-core:verify`: 実装完了後の 6 段階検証
+- `/dev-core:checkpoint --create`: 進捗スナップショット作成
+- `/dev-core:code-review`: コードレビュー実行
 
 計画に忠実に、サブエージェントを活用して着実に TDD 実装を進めること。

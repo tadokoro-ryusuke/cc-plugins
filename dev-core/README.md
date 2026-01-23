@@ -1,121 +1,239 @@
-# Dev Core Plugin
+# Dev Core Plugin v2.0
 
-TDD開発フロー、コード品質管理、リファクタリング、アーキテクチャガイドを統合的にサポートするClaude Codeプラグインです。
+エンタープライズグレードの TDD 開発フレームワーク。t-wada 式 TDD、FSD、Clean Architecture、DDD のベストプラクティスと、6 段階検証、継続学習、金融システム対応のセキュリティを提供します。
 
-## 機能
+## このプラグインの目的
 
-### エージェント（6個）
+**「品質を犠牲にしない高速開発」** を実現するためのプラグインです。
 
-| エージェント | 説明 |
-|------------|------|
-| task-planner | TDD計画立案（BDD/Tidy First/RGR） |
-| tdd-practitioner | TDD実践（Red→Green→Refactor→Commit） |
-| refactoring-specialist | Martin Fowler/T-wada式リファクタリング |
-| quality-checker | コード品質監視（lint/typecheck/test自動実行） |
-| security-auditor | セキュリティ監査（ハードコーディング検出等） |
-| architecture-guide | FSD+Clean Architecture+DDDガイド |
+- テスト駆動開発（TDD）を強制的に実践
+- コード品質を自動的にチェック・改善
+- セキュリティ脆弱性を早期発見
+- チーム開発での一貫した品質基準を維持
 
-### コマンド（3個）
+## どんな時に使うか
 
-| コマンド | 説明 |
-|--------|------|
-| `/dev-core:plan` | GitHub Issue→TDD計画立案→実装 |
-| `/dev-core:execute` | 計画書に基づくTDD実装実行 |
-| `/dev-core:refactor` | 作業中コード/PR/ブランチのリファクタリング |
+### 新機能を開発するとき
 
-### スキル（2個）
+```bash
+# 1. GitHub Issue から計画を立案
+/dev-core:plan 123
 
-| スキル | 説明 |
-|-------|------|
-| best-practices | TDD/FSD/Clean Architecture/DDDのベストプラクティス |
-| inngest | Inngest関数開発ガイド（イベント駆動、ステップ関数、バックグラウンドジョブ）|
+# 2. TDD で実装（Red→Green→Refactor→Commit を自動実行）
+/dev-core:execute issue-123
+
+# 3. 品質を検証
+/dev-core:verify
+```
+
+### コードレビュー・PR 作成前
+
+```bash
+# 自分のコードをレビュー
+/dev-core:code-review
+
+# リファクタリング
+/dev-core:refactor
+
+# 6段階検証で最終確認
+/dev-core:verify
+```
+
+### バグ修正・ホットフィックス
+
+```bash
+# 単独の TDD サイクルで修正
+/dev-core:tdd "バグ修正: ログイン時のエラー"
+
+# ビルドエラーが出たら自動修復
+/dev-core:build-fix
+```
+
+### チームで開発するとき
+
+```bash
+# 複数エージェントで自動ワークフロー
+/dev-core:orchestrate #123
+
+# 進捗をチェックポイントで記録
+/dev-core:checkpoint --create "Phase 1 完了"
+```
+
+## コマンド早見表
+
+| やりたいこと             | コマンド                        |
+| ------------------------ | ------------------------------- |
+| Issue から計画を立てたい | `/dev-core:plan 123`            |
+| TDD で実装したい         | `/dev-core:execute issue-123`   |
+| 品質をチェックしたい     | `/dev-core:verify`              |
+| コードを改善したい       | `/dev-core:refactor`            |
+| コードレビューしたい     | `/dev-core:code-review`         |
+| ビルドエラーを直したい   | `/dev-core:build-fix`           |
+| E2E テストを実行したい   | `/dev-core:e2e`                 |
+| カバレッジを確認したい   | `/dev-core:test-coverage`       |
+| ドキュメントを更新したい | `/dev-core:update-docs`         |
+| 自動ワークフロー実行     | `/dev-core:orchestrate #123`    |
+| 進捗を記録したい         | `/dev-core:checkpoint --create` |
+| 品質を追跡したい         | `/dev-core:eval`                |
+| セッションから学習       | `/dev-core:learn`               |
+
+## 典型的なワークフロー
+
+### ワークフロー 1: 新機能開発（推奨）
+
+```
+Issue 作成
+    ↓
+/dev-core:plan #123        ← 計画立案（BDD シナリオ、アーキテクチャ設計）
+    ↓
+/dev-core:execute #123     ← TDD 実装（Red→Green→Refactor→Commit）
+    ↓
+/dev-core:verify           ← 6段階検証（build/type/lint/test/security/diff）
+    ↓
+/dev-core:code-review      ← セルフレビュー
+    ↓
+gh pr create               ← PR 作成
+```
+
+### ワークフロー 2: 高速開発（小さな修正）
+
+```
+/dev-core:tdd "機能名"     ← 単独 TDD サイクル
+    ↓
+/dev-core:verify --fix     ← 検証 + 自動修正
+    ↓
+git commit                 ← コミット
+```
+
+### ワークフロー 3: フル自動化
+
+```
+/dev-core:orchestrate #123
+    ↓
+（自動で plan → tdd → quality → security → docs を実行）
+    ↓
+gh pr create
+```
+
+## エージェントの使い分け
+
+| エージェント           | 役割             | 使う場面                             |
+| ---------------------- | ---------------- | ------------------------------------ |
+| task-planner           | 計画立案         | Issue から実装計画を作るとき         |
+| tdd-practitioner       | TDD 実行         | コードを書くとき（テストファースト） |
+| refactoring-specialist | リファクタリング | コード品質を改善するとき             |
+| quality-checker        | 品質チェック     | lint/typecheck/test を実行するとき   |
+| security-auditor       | セキュリティ監査 | 脆弱性をチェックするとき             |
+| architecture-guide     | 設計ガイド       | FSD/Clean Architecture の相談        |
+| build-error-resolver   | エラー修復       | ビルドエラーを自動修復               |
+| code-reviewer          | コードレビュー   | PR 前のセルフレビュー                |
+| doc-updater            | ドキュメント更新 | 自動ドキュメント生成                 |
+| e2e-runner             | E2E テスト       | Playwright テスト実行                |
+
+## スキルの使い方
+
+スキルは自動的に読み込まれますが、明示的に呼び出すこともできます。
+
+```
+「TDD のベストプラクティスを教えて」
+→ dev-core:best-practices スキルが自動読み込み
+
+「OWASP Top 10 について確認したい」
+→ dev-core:security-review スキルが自動読み込み
+
+「React のパターンを教えて」
+→ dev-core:frontend-patterns スキルが自動読み込み
+```
+
+### スキル一覧
+
+| スキル              | 内容                                  |
+| ------------------- | ------------------------------------- |
+| best-practices      | TDD/FSD/Clean Architecture/DDD の基本 |
+| inngest             | Inngest 関数開発ガイド                |
+| coding-standards    | 命名規約、コードスタイル              |
+| security-review     | OWASP Top 10、セキュリティチェック    |
+| verification-loop   | 6 段階検証フロー                      |
+| continuous-learning | セッション学習パターン                |
+| strategic-compact   | コンテキスト最適化                    |
+| eval-harness        | Eval 駆動開発                         |
+| backend-patterns    | API 設計、Repository パターン         |
+| frontend-patterns   | React パターン、カスタムフック        |
+| project-guidelines  | プロジェクト固有設定                  |
+
+## フック（自動実行）
+
+以下の処理が自動的に実行されます：
+
+| タイミング         | 処理内容                                       |
+| ------------------ | ---------------------------------------------- |
+| ファイル保存後     | Prettier 自動フォーマット、TypeScript チェック |
+| ファイル保存後     | console.log 残存警告                           |
+| セッション終了時   | 最終監査（未コミット変更、TODO 確認）          |
+| コンテキスト圧縮前 | 作業状態の自動保存                             |
 
 ## インストール
 
 ```bash
-# Claude Codeでプラグインを有効化
+# Claude Code でプラグインを有効化
 cc --plugin-dir /path/to/dev-core
 ```
 
-## 設定
+## プロジェクト設定
 
-プロジェクトの `.claude/dev-core.local.md` ファイルを作成して、プロジェクト固有の設定を行えます：
+`.claude/dev-core.local.md` を作成してプロジェクト固有の設定を行います：
 
 ```markdown
-# Dev Core Settings
+---
+package-manager: pnpm
+test-command: pnpm test
+lint-command: pnpm lint
+build-command: pnpm build
+typecheck-command: pnpm typecheck
+---
 
-## パッケージマネージャー
-pnpm
+# プロジェクト固有の設定
 
-## テストコマンド
-pnpm test
+## 技術スタック
 
-## Lintコマンド
-pnpm lint
+- Framework: Next.js 14 (App Router)
+- UI: shadcn/ui + Tailwind CSS
+- State: Zustand
+- Database: PostgreSQL + Prisma
 
-## 型チェックコマンド
-pnpm typecheck
+## 追加の規約
 
-## フォーマットコマンド
-pnpm format
-
-## 追加ツール
-- Serena（コードベース探索）
-
-## プロジェクト固有の規約ファイル
-CLAUDE.md
-```
-
-### 設定項目
-
-| 項目 | デフォルト | 説明 |
-|-----|----------|------|
-| パッケージマネージャー | `pnpm` | npm, yarn, bunも使用可能 |
-| テストコマンド | `pnpm test` | テスト実行コマンド |
-| Lintコマンド | `pnpm lint` | Lintチェックコマンド |
-| 型チェックコマンド | `pnpm typecheck` | TypeScript型チェック |
-| 追加ツール | なし | Serena等の追加ツールを指定 |
-
-## 使用例
-
-### TDD開発フロー
-
-```bash
-# 1. GitHub Issueから計画を立案
-/dev-core:plan 123
-
-# 2. 計画に基づいてTDD実装を実行
-/dev-core:execute issue-123
-
-# 3. リファクタリング
-/dev-core:refactor
-
-# 4. Pull Request作成（github-toolsプラグイン使用）
-/github-tools:pr 123
-```
-
-### コード品質管理
-
-```bash
-# 変更コードのリファクタリング
-/dev-core:refactor src/features/client/
-
-# PR全体をリファクタリング
-/dev-core:refactor #123
-
-# 作業中の変更をリファクタリング
-/dev-core:refactor
+- コンポーネントは FSD の features/ または entities/ に配置
+- API は /api ディレクトリに配置
 ```
 
 ## 開発原則
 
 このプラグインは以下の原則に基づいています：
 
-- **t-wada式TDD**: Red→Green→Refactor→Commitサイクル
+- **t-wada 式 TDD**: Red → Green → Refactor → Commit サイクル
 - **Feature-Sliced Design (FSD)**: 機能ごとの分離、層構造での整理
 - **Clean Architecture**: ビジネスロジックのフレームワーク独立性
 - **DDD**: エンティティ、バリューオブジェクト、リポジトリパターン
-- **SOLID原則**: 単一責任、開放閉鎖、リスコフ置換、インターフェース分離、依存性逆転
+- **SOLID 原則**: 単一責任、開放閉鎖、リスコフ置換、インターフェース分離、依存性逆転
+
+## よくある質問
+
+### Q: TDD を強制されるのが面倒
+
+A: `/dev-core:tdd` の `--green` オプションで実装のみ実行できます。ただし、テストファーストを強く推奨します。
+
+### Q: 小さな修正でも plan が必要？
+
+A: 不要です。`/dev-core:tdd "修正内容"` で直接 TDD サイクルを実行できます。
+
+### Q: 複数のエージェントを手動で呼び出すのが面倒
+
+A: `/dev-core:orchestrate` で自動的に複数エージェントを順序実行できます。
+
+### Q: セキュリティチェックを厳しくしたい
+
+A: security-auditor エージェントは OWASP Top 10 と金融システム向けのチェックを行います。
 
 ## ライセンス
 

@@ -139,3 +139,14 @@ class ClientName {
 - マジックナンバーを定数に置き換え
 - 条件式の簡略化
 - 適切な場合はクラス/モジュールの抽出
+
+## 関連スキル
+
+詳細なガイダンスについては以下のスキルを参照：
+
+- `dev-core:coding-standards` - 命名規約、ファイル構成、コードスタイル
+- `dev-core:security-review` - OWASP Top 10、セキュリティチェック
+- `dev-core:verification-loop` - 6 段階検証フロー
+- `dev-core:backend-patterns` - API 設計、Repository パターン
+- `dev-core:frontend-patterns` - React パターン、カスタムフック
+- `dev-core:project-guidelines` - プロジェクト固有の設定
