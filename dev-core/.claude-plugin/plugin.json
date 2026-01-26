@@ -1,6 +1,6 @@
 {
   "name": "dev-core",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "エンタープライズグレードのTDD開発フレームワーク。t-wada式TDD、FSD、Clean Architecture、DDDのベストプラクティスと、6段階検証、継続学習、金融システム対応のセキュリティを提供。",
   "author": {
     "name": "Ryusuke Tadokoro",
@@ -22,6 +22,9 @@
     "evaluation",
     "continuous-learning",
     "enterprise",
-    "financial-systems"
+    "financial-systems",
+    "task",
+    "issue",
+    "requirements"
   ]
 }

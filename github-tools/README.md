@@ -4,13 +4,11 @@ GitHub連携ワークフローを支援するClaude Codeプラグインです。
 
 ## 機能
 
-### コマンド（4個）
+### コマンド（2個）
 
 | コマンド | 説明 |
 |--------|------|
 | `/github-tools:pr` | 現在のブランチからPull Requestを作成 |
-| `/github-tools:issue` | 作業指示からGitHub Issue作成 |
-| `/github-tools:task` | 対話型作業指示作成 |
 | `/github-tools:docs` | ドキュメント更新 |
 
 ## インストール
@@ -22,25 +20,17 @@ cc --plugin-dir /path/to/github-tools
 
 ## 使用例
 
-### Issue作成フロー
+### 新機能開発フロー（dev-coreプラグインと連携）
 
 ```bash
-# 1. 対話的にタスク仕様を作成
-/github-tools:task クライアント検索機能の追加
+# 1. 要件整理 → 計画 → Issue作成
+/dev-core:task ユーザー認証機能を追加
 
-# 2. 作成した仕様からIssueを作成
-/github-tools:issue ./docs/tasks/add-client-search.md
-```
+# 2. TDD実装
+/dev-core:execute docs/plans/task-user-auth.md
 
-### Pull Request作成フロー
-
-```bash
-# 1. 機能開発（dev-coreプラグイン使用）
-/dev-core:plan 123
-/dev-core:execute issue-123
-
-# 2. Pull Request作成
-/github-tools:pr 123
+# 3. Pull Request作成
+/github-tools:pr
 ```
 
 ### ドキュメント更新
@@ -60,18 +50,6 @@ cc --plugin-dir /path/to/github-tools
 - **変更分析**: 変更内容から適切なタイプ（feat/fix/test/docs）を判定
 - **ドラフト対応**: 作業中のPRはドラフトとして作成可能
 
-### `/github-tools:issue`
-
-- **構造化テンプレート**: BDDシナリオ、技術要件を含むIssue作成
-- **自動ラベル付け**: 優先度とタイプを自動判定
-- **ドキュメント連携**: 作業指示ドキュメントからの自動生成
-
-### `/github-tools:task`
-
-- **対話型作成**: 質問形式で仕様を整理
-- **BDD形式**: Given/When/Then形式のシナリオ作成
-- **構造化出力**: 再利用可能なMarkdownドキュメント生成
-
 ## 前提条件
 
 - GitHub CLI (`gh`) がインストールされていること
@@ -79,7 +57,7 @@ cc --plugin-dir /path/to/github-tools
 
 ## 関連プラグイン
 
-- **dev-core**: TDD開発フロー、リファクタリング
+- **dev-core**: TDD開発フロー、要件整理、Issue作成
 
 ## ライセンス
 

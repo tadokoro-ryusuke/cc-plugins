@@ -51,7 +51,7 @@ Closes #123
 
 ## 4 段階実装フロー
 
-1. **Plan**: 計画立案（/dev-core:plan）
+1. **Task**: 要件整理・計画・Issue作成（/dev-core:task）
 2. **Implement**: TDD 実装（/dev-core:execute）
 3. **Verify**: 検証（/dev-core:verify）
 4. **Refactor**: 改善（/dev-core:refactor）

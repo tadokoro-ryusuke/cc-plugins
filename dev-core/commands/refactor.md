@@ -276,7 +276,7 @@ const { data } = useSWR("/api/data", fetcher);
 ## ワークフロー全体像
 
 ```
-/dev-core:plan → 計画立案
+/dev-core:task → 要件整理・計画・Issue作成
        ↓
 /dev-core:execute → TDD 実装
        ↓

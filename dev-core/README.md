@@ -16,11 +16,11 @@
 ### 新機能を開発するとき
 
 ```bash
-# 1. GitHub Issue から計画を立案
-/dev-core:plan 123
+# 1. 対話型で要件整理 → 計画 → Issue 作成
+/dev-core:task ユーザー認証機能を追加
 
 # 2. TDD で実装（Red→Green→Refactor→Commit を自動実行）
-/dev-core:execute issue-123
+/dev-core:execute docs/plans/task-user-auth.md
 
 # 3. 品質を検証
 /dev-core:verify
@@ -63,8 +63,8 @@
 
 | やりたいこと             | コマンド                        |
 | ------------------------ | ------------------------------- |
-| Issue から計画を立てたい | `/dev-core:plan 123`            |
-| TDD で実装したい         | `/dev-core:execute issue-123`   |
+| 要件整理→計画→Issue作成  | `/dev-core:task 概要`           |
+| TDD で実装したい         | `/dev-core:execute plan.md`     |
 | 品質をチェックしたい     | `/dev-core:verify`              |
 | コードを改善したい       | `/dev-core:refactor`            |
 | コードレビューしたい     | `/dev-core:code-review`         |
@@ -82,11 +82,9 @@
 ### ワークフロー 1: 新機能開発（推奨）
 
 ```
-Issue 作成
+/dev-core:task "機能概要"  ← 対話で要件整理 → 計画立案 → Issue 作成
     ↓
-/dev-core:plan #123        ← 計画立案（BDD シナリオ、アーキテクチャ設計）
-    ↓
-/dev-core:execute #123     ← TDD 実装（Red→Green→Refactor→Commit）
+/dev-core:execute plan.md  ← TDD 実装（Red→Green→Refactor→Commit）
     ↓
 /dev-core:verify           ← 6段階検証（build/type/lint/test/security/diff）
     ↓
@@ -119,7 +117,8 @@ gh pr create
 
 | エージェント           | 役割             | 使う場面                             |
 | ---------------------- | ---------------- | ------------------------------------ |
-| task-planner           | 計画立案         | Issue から実装計画を作るとき         |
+| task-planner           | 計画立案         | 要件から実装計画を作るとき           |
+| issue-creator          | Issue 作成       | 計画書から GitHub Issue を作成       |
 | tdd-practitioner       | TDD 実行         | コードを書くとき（テストファースト） |
 | refactoring-specialist | リファクタリング | コード品質を改善するとき             |
 | quality-checker        | 品質チェック     | lint/typecheck/test を実行するとき   |
@@ -165,12 +164,9 @@ gh pr create
 
 以下の処理が自動的に実行されます：
 
-| タイミング         | 処理内容                                       |
-| ------------------ | ---------------------------------------------- |
-| ファイル保存後     | Prettier 自動フォーマット、TypeScript チェック |
-| ファイル保存後     | console.log 残存警告                           |
-| セッション終了時   | 最終監査（未コミット変更、TODO 確認）          |
-| コンテキスト圧縮前 | 作業状態の自動保存                             |
+| タイミング         | 処理内容                   |
+| ------------------ | -------------------------- |
+| コンテキスト圧縮前 | 作業状態の自動保存         |
 
 ## インストール
 

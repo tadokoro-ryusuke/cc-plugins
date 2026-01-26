@@ -1,10 +1,10 @@
 {
   "name": "github-tools",
-  "version": "1.0.1",
-  "description": "GitHub連携ワークフローを支援するプラグイン。Issue作成、PR作成、タスク管理、ドキュメント更新を効率化します。",
+  "version": "1.1.0",
+  "description": "GitHub連携ワークフローを支援するプラグイン。PR作成とドキュメント更新を効率化します。",
   "author": {
     "name": "Ryusuke Tadokoro",
     "email": "tado56@poshiri.org"
   },
-  "keywords": ["github", "pull-request", "issue", "workflow", "documentation"]
+  "keywords": ["github", "pull-request", "workflow", "documentation"]
 }

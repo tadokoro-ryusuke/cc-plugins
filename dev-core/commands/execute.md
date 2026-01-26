@@ -1,7 +1,7 @@
 ---
 allowed-tools: Bash(gh:*), Bash(git:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read(*.md,*.ts,*.tsx), Write(*.ts,*.tsx), Edit, MultiEdit, Task(subagent_type:dev-core:tdd-practitioner), Task(subagent_type:dev-core:refactoring-specialist), Task(subagent_type:dev-core:quality-checker), Task(subagent_type:dev-core:security-auditor), Task(subagent_type:dev-core:build-error-resolver)
 description: "作成済みの計画書に基づいてTDD実装を実行します"
-argument-hint: "[計画書のパス または Issue番号]"
+argument-hint: "[計画書のパス] (例: docs/plans/task-user-auth.md)"
 ---
 
 # TDD 計画の実行
@@ -119,11 +119,10 @@ prompt: |
 ### 1. 計画書の読み込み
 
 ```bash
-# Issue番号の場合
-PLAN_FILE="./docs/plans/issue-$ARGUMENTS.md"
-
 # ファイルパスの場合
 PLAN_FILE="$ARGUMENTS"
+
+# 例: docs/plans/task-user-auth.md
 ```
 
 計画書を読み込み、内容を把握すること。
@@ -137,11 +136,11 @@ PLAN_FILE="$ARGUMENTS"
 ### 3. ブランチの準備
 
 ```bash
-# Issue番号を抽出
-ISSUE_NUMBER=$(basename "$PLAN_FILE" .md | sed 's/issue-//')
+# 計画書名からブランチ名を生成（例: task-user-auth → feature/user-auth）
+BRANCH_NAME=$(basename "$PLAN_FILE" .md | sed 's/^task-//' | sed 's/^issue-//')
 
 # ブランチが存在しない場合は作成
-git checkout -b feature/issue-$ISSUE_NUMBER || git checkout feature/issue-$ISSUE_NUMBER
+git checkout -b feature/$BRANCH_NAME || git checkout feature/$BRANCH_NAME
 ```
 
 ### 4. TDD サイクルの実行
