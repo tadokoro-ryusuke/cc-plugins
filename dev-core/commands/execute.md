@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(gh:*), Bash(git:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read(*.md,*.ts,*.tsx), Write(*.ts,*.tsx), Edit, MultiEdit, Task(subagent_type:dev-core:tdd-practitioner), Task(subagent_type:dev-core:refactoring-specialist), Task(subagent_type:dev-core:quality-checker), Task(subagent_type:dev-core:security-auditor), Task(subagent_type:dev-core:build-error-resolver)
+allowed-tools: Bash(gh:*), Bash(git:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read(*.md,*.ts,*.tsx), Write(*.ts,*.tsx), Edit, MultiEdit, Task(subagent_type:dev-core:tdd-practitioner), Task(subagent_type:dev-core:refactoring-specialist), Task(subagent_type:dev-core:quality-checker), Task(subagent_type:dev-core:security-auditor), Task(subagent_type:dev-core:build-error-resolver), Task(subagent_type:dev-core:code-reviewer)
 description: "作成済みの計画書に基づいてTDD実装を実行します"
 argument-hint: "[計画書のパス] (例: docs/plans/task-user-auth.md)"
 ---
@@ -45,7 +45,6 @@ prompt: |
   - 失敗するテストの作成（Red）
   - テストをパスする最小実装（Green）
   - コード品質の改善（Refactor）
-  - 変更のコミット（Commit）
 ```
 
 ### 2. refactoring-specialist（リファクタリング専門家）
@@ -114,6 +113,46 @@ prompt: |
   - 入力検証の適切性
 ```
 
+### 5. code-reviewer（コードレビュー専門家）
+
+**呼び出しタイミング**: 各イテレーションの実装完了後、フィードバックループ内で使用
+
+**Task ツール呼び出しパターン**:
+
+```
+Task(subagent_type: "dev-core:code-reviewer")
+prompt: |
+  以下の変更をレビューしてください。
+
+  ## 変更されたファイル
+  [git diff --name-only の結果]
+
+  ## diff 内容
+  [git diff の結果]
+
+  ## レビュー観点
+  1. セキュリティ 🔒（A-F）
+  2. 品質 ⭐（A-F）
+  3. 慣例 📋（A-F）
+
+  ## 出力形式（必ずこの形式で出力すること）
+  REVIEW_RESULT:
+    security: [A-F]
+    quality: [A-F]
+    convention: [A-F]
+    approved: [true/false]
+    issues:
+      - file: [ファイルパス]
+        line: [行番号]
+        severity: [HIGH/MEDIUM/LOW]
+        problem: [問題の説明]
+        suggestion: [具体的な修正方法]
+
+  ## 承認基準
+  - 全カテゴリ B+ 以上 → approved: true
+  - いずれかが B 未満 → approved: false（issues に具体的な修正指示を含める）
+```
+
 ## 実行フロー
 
 ### 1. 計画書の読み込み
@@ -154,33 +193,118 @@ git checkout -b feature/$BRANCH_NAME || git checkout feature/$BRANCH_NAME
   - プロジェクト設定ファイル（.claude/\*.local.md）を確認し、追加ツールが指定されている場合はそれを活用すること
 - 依存関係の整理
 
-#### Phase 2: TDD 実装
+#### Phase 2: TDD 実装 + レビューループ
 
 **⚠️ 重要**: 各イテレーションで **必ず tdd-practitioner エージェントを Task ツールで呼び出すこと**。
 
-各イテレーションごとに以下を実行：
+各イテレーションごとに以下のフィードバックループを実行：
 
-1. **tdd-practitioner を呼び出す**
-   - イテレーションの内容を prompt に含める
-   - エージェントが Red→Green→Refactor→Commit を実行
+##### Step 1: 実装
 
-2. **quality-checker を呼び出す**
-   - イテレーション完了後に品質チェック
-   - 問題があれば修正
+**tdd-practitioner を呼び出す**
+- イテレーションの内容を prompt に含める
+- エージェントが Red→Green→Refactor を実行
+- **この時点ではコミットしない**（レビュー承認後にコミットする）
+- prompt に以下を必ず含めること:
+  `【重要】このイテレーションではコミット（Phase 4）を実行しないでください。コミットは別途レビュー承認後に行います。`
 
-3. **必要に応じて security-auditor を呼び出す**
-   - 新規ファイル追加時
-   - API/認証関連のコード変更時
+##### Step 2: 自動チェック
+
+**quality-checker を呼び出す**
+- lint, typecheck, test を実行
+- 失敗した場合: tdd-practitioner に修正を依頼して Step 2 を再実行
+
+##### Step 3: コードレビュー
+
+**code-reviewer を呼び出す**
+- Step 2 パス後、変更内容のレビューを依頼
+- 出力から `approved` と `issues` を取得
+
+##### Step 4: 判定と分岐
+
+```
+approved: true の場合:
+  → Step 5（コミット）へ進む
+
+approved: false の場合:
+  → Step 4a（改善）へ進む
+```
+
+##### Step 4a: 改善（最大3ラウンド）
+
+**tdd-practitioner を再度呼び出す**。prompt にレビューのフィードバックを含める：
+
+```
+Task(subagent_type: "dev-core:tdd-practitioner")
+prompt: |
+  コードレビューで以下の指摘を受けました。すべて修正してください。
+
+  ## レビュー指摘事項（Round [N]/3）
+  [code-reviewer の issues をここに貼る]
+
+  ## 修正ルール
+  - 指摘された問題をすべて解決すること
+  - テストがグリーンのままであることを確認すること
+  - 新たな問題を生まないこと
+```
+
+修正後、**Step 2 に戻る**（自動チェック → レビュー → 判定）。
+
+**ラウンド上限**: 最大3ラウンド。3ラウンド目でもレビュー不合格の場合:
+- 残課題をユーザーに報告し、判断を仰ぐ
+- ユーザーが承認すればコミット、却下すれば手動対応
+
+##### Step 5: コミット
+
+レビュー承認後にコミットを実行：
+
+```bash
+# 変更されたファイルを個別にステージング（git add . は使わない）
+git add [変更されたファイルを列挙]
+git commit -m "feat([スコープ]): [イテレーション名の具体的な内容]"
+```
+
+- `git add .` ではなく、変更されたファイルを `git diff --name-only` で確認して個別に add する
+- コミットメッセージはイテレーションの内容を具体的に記述する（例: `feat(auth): add JWT token validation`）
+- `.env`、credentials 等の機密ファイルが含まれていないことを確認する
+
+##### Step 6: セキュリティ監査（必要に応じて）
+
+- 新規ファイル追加時
+- API/認証関連のコード変更時
+- security-auditor を呼び出して監査
+
+##### フィードバックループの全体フロー
+
+```
+実装(tdd-practitioner)
+  ↓
+自動チェック(quality-checker) ←────┐
+  ↓ パス                          │ 失敗時
+レビュー(code-reviewer)            │
+  ↓                               │
+approved? ──NO──→ 改善(tdd-practitioner) ──→ 戻る
+  │                    ↑
+  │               最大3ラウンド
+  ↓ YES
+コミット
+  ↓
+次のイテレーションへ
+```
 
 ### 5. 進捗レポート
 
-各フェーズ完了時に進捗を報告：
+各イテレーション完了時に進捗を報告：
 
 ```text
 ✅ Phase 1: Tidy First - 完了
-⏳ Phase 2: TDD実装
-  ✅ Iteration 1: ユーザー検索機能 - 完了
-  🔄 Iteration 2: フィルタリング機能 - 実行中
+⏳ Phase 2: TDD実装 + レビューループ
+  ✅ Iteration 1: ユーザー検索機能
+     🔨 実装 → ✅ 自動チェック → 📝 レビュー Round 1: B（品質）
+     🔨 改善 → ✅ 自動チェック → 📝 レビュー Round 2: A（承認）
+     ✅ コミット完了
+  🔄 Iteration 2: フィルタリング機能
+     🔨 実装 → ✅ 自動チェック → 📝 レビュー Round 1: 実行中
   ⏸️ Iteration 3: ページネーション - 待機中
 ```
 
