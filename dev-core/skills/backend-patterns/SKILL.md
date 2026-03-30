@@ -1,17 +1,17 @@
 ---
 name: backend-patterns
-description: |
-  このスキルは、ユーザーが「API設計」「Repository」「サービス層」「キャッシュ」「バックエンド」「サーバーサイド」について質問したとき、またはバックエンドパターンを実装する必要があるときに使用する。
+description: "API設計、Repository、サービス層、キャッシュ、エラーハンドリングのパターンガイド"
 ---
 
 # Backend Patterns
 
+フレームワーク非依存のバックエンド設計パターン。ORM固有のAPI（Eloquent, Prisma等）は context7 MCP や .claude/*.local.md を参照してください。
+
 ## API 設計
 
-### RESTful API
+### RESTful エンドポイント
 
-```typescript
-// エンドポイント設計
+```
 GET    /api/users          # 一覧取得
 GET    /api/users/:id      # 詳細取得
 POST   /api/users          # 作成
@@ -22,41 +22,16 @@ DELETE /api/users/:id      # 削除
 ### レスポンス形式
 
 ```typescript
-// 成功レスポンス
-type SuccessResponse<T> = {
-  success: true;
-  data: T;
-};
-
-// エラーレスポンス
-type ErrorResponse = {
-  success: false;
-  error: {
-    code: string;
-    message: string;
-    details?: unknown;
-  };
-};
-
-type ApiResponse<T> = SuccessResponse<T> | ErrorResponse;
+type ApiResponse<T> =
+  | { success: true; data: T }
+  | { success: false; error: { code: string; message: string } };
 ```
 
-### エラーハンドリング
+### HTTP ステータスコード
 
-```typescript
-// HTTP ステータスコード
-200: 成功
-201: 作成成功
-400: バリデーションエラー
-401: 認証エラー
-403: 認可エラー
-404: リソース未発見
-500: サーバーエラー
-```
+200: 成功 | 201: 作成 | 400: バリデーションエラー | 401: 認証 | 403: 認可 | 404: 未発見 | 500: サーバーエラー
 
 ## Repository パターン
-
-### インターフェース定義
 
 ```typescript
 interface Repository<T, ID> {
@@ -67,29 +42,9 @@ interface Repository<T, ID> {
 }
 ```
 
-### 実装例（Prisma）
+具象実装はORM/フレームワークに依存（Eloquent, Prisma, TypeORM等）。インターフェースで抽象化し、依存性逆転を実現。
 
-```typescript
-class PrismaUserRepository implements UserRepository {
-  constructor(private prisma: PrismaClient) {}
-
-  async findById(id: string): Promise<User | null> {
-    return this.prisma.user.findUnique({ where: { id } });
-  }
-
-  async save(user: User): Promise<User> {
-    return this.prisma.user.upsert({
-      where: { id: user.id },
-      create: user,
-      update: user,
-    });
-  }
-}
-```
-
-## サービス層
-
-### ユースケース実装
+## サービス層（ユースケース）
 
 ```typescript
 class CreateUserUseCase {
@@ -98,62 +53,17 @@ class CreateUserUseCase {
     private emailService: EmailService
   ) {}
 
-  async execute(input: CreateUserInput): Promise<User> {
-    // バリデーション
+  async execute(input: CreateUserInput): Promise<Result<User>> {
     const validated = CreateUserSchema.parse(input);
-
-    // ビジネスロジック
     const user = User.create(validated);
-
-    // 永続化
     const saved = await this.userRepository.save(user);
-
-    // 副作用
     await this.emailService.sendWelcome(saved.email);
-
-    return saved;
+    return ok(saved);
   }
 }
 ```
 
-## キャッシュ戦略
-
-### キャッシュパターン
-
-```typescript
-// Cache-Aside パターン
-async function getUser(id: string): Promise<User> {
-  // 1. キャッシュ確認
-  const cached = await cache.get(`user:${id}`);
-  if (cached) return cached;
-
-  // 2. DB から取得
-  const user = await userRepository.findById(id);
-
-  // 3. キャッシュに保存
-  await cache.set(`user:${id}`, user, { ttl: 3600 });
-
-  return user;
-}
-```
-
-### キャッシュ無効化
-
-```typescript
-// 更新時のキャッシュ無効化
-async function updateUser(id: string, data: UpdateUserInput): Promise<User> {
-  const updated = await userRepository.update(id, data);
-
-  // キャッシュ無効化
-  await cache.delete(`user:${id}`);
-
-  return updated;
-}
-```
-
-## エラーハンドリング
-
-### Result パターン
+## Result パターン
 
 ```typescript
 type Result<T, E = Error> =
@@ -169,23 +79,17 @@ function err<E>(error: E): Result<never, E> {
 }
 ```
 
+## キャッシュ戦略
+
+### Cache-Aside パターン
+
+1. キャッシュ確認 → 2. ヒットしなければDB取得 → 3. キャッシュに保存
+- 更新時はキャッシュを無効化
+- TTL を適切に設定（ユースケースに応じて）
+
 ## トランザクション
 
-```typescript
-// Prisma でのトランザクション
-async function transferFunds(from: string, to: string, amount: number) {
-  return prisma.$transaction(async (tx) => {
-    const sender = await tx.account.update({
-      where: { id: from },
-      data: { balance: { decrement: amount } },
-    });
-
-    const receiver = await tx.account.update({
-      where: { id: to },
-      data: { balance: { increment: amount } },
-    });
-
-    return { sender, receiver };
-  });
-}
-```
+- 複数の書き込み操作は必ずトランザクションで囲む
+- 原子性（ACID）の保証
+- デッドロック防止（一貫したロック順序）
+- 具体的なAPI はORM/フレームワークに依存（`DB::transaction()`, `prisma.$transaction()`等）

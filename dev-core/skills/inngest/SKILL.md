@@ -1,7 +1,6 @@
 ---
 name: inngest
-description: |
-  このスキルは、ユーザーが「Inngest 関数を作成」「バックグラウンドジョブを実装」「ステップ関数を書く」「Inngest をセットアップ」「イベント駆動処理を実装」「耐久実行を実装」「Cron ジョブを作成」「Fan-out パターンを実装」「サガパターン」「ワークフローオーケストレーション」「step.run」「step.waitForEvent」「step.invoke」「Inngest テスト」と言った場合に使用する。
+description: "Inngestバックグラウンドジョブ、ステップ関数、イベント駆動処理、耐久実行の実装ガイド"
 ---
 
 # Inngest 開発ガイド

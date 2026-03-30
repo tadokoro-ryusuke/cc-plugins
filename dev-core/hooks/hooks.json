@@ -1,12 +1,58 @@
 {
   "description": "Dev Core Plugin の自動化フック",
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "セッション開始時のプロジェクト状態確認:\n\n1. `git status` で作業状態を確認\n2. `git log --oneline -5` で直近の変更を確認\n3. 未完了の計画書（docs/plans/task-*.md）があれば内容を確認\n4. .claude/*.local.md があればプロジェクト固有設定を読み込む\n\n把握した状態を簡潔に報告し、中断された作業があれば再開を提案してください。"
+          }
+        ]
+      }
+    ],
+
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "TOOL_INPUT=$(cat /dev/stdin); CMD=$(echo \"$TOOL_INPUT\" | jq -r '.tool_input.command // empty' 2>/dev/null); if echo \"$CMD\" | grep -qEi '(rm\\s+-rf\\s+[/~]|drop\\s+(table|database)|truncate\\s+table|git\\s+push\\s+--force\\s+(origin\\s+)?(main|master)|git\\s+reset\\s+--hard)'; then echo 'BLOCKED: 危険なコマンドを検出しました' >&2; exit 2; fi"
+          }
+        ]
+      }
+    ],
+
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "TOOL_INPUT=$(cat /dev/stdin); FILE=$(echo \"$TOOL_INPUT\" | jq -r '.tool_input.file_path // empty' 2>/dev/null); if [ -n \"$FILE\" ] && echo \"$FILE\" | grep -qE '\\.(ts|tsx|js|jsx|json|css|md|vue|php)$'; then npx prettier --write \"$FILE\" 2>/dev/null; fi; exit 0"
+          }
+        ]
+      }
+    ],
+
     "PreCompact": [
       {
         "hooks": [
           {
             "type": "prompt",
-            "prompt": "コンテキスト圧縮前の状態保存：\n\n現在の作業状態を要約し、以下を明確に記録してください：\n1. 現在取り組んでいるタスク\n2. 完了したステップ\n3. 次に実行すべきアクション\n4. 重要なコンテキスト（ファイルパス、設定等）"
+            "prompt": "コンテキスト圧縮前の状態保存:\n\n以下を構造化して記録してください:\n1. 現在のタスク名と計画書パス\n2. 完了したイテレーション/ステップ\n3. 次に実行すべきアクション（具体的なコマンドやファイル）\n4. 発見した問題や保留事項\n5. 重要な判断とその理由"
+          }
+        ]
+      }
+    ],
+
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "セッション終了前チェック:\n\n1. 未コミットの変更がないか `git status` で確認\n2. console.log/debugger/dd() が残っていないか直近の変更ファイルを確認\n3. 新規追加された TODO/FIXME コメントがあれば報告\n\n問題があればユーザーに警告してください。"
           }
         ]
       }

@@ -1,7 +1,6 @@
 ---
 name: verification-loop
-description: |
-  このスキルは、ユーザーが「検証」「verify」「品質チェック」「lint」「typecheck」「テスト」「セキュリティチェック」について質問したとき、または6段階検証を実行する必要があるときに使用する。
+description: "6段階検証フロー（build→type→lint→test→security→diff）"
 ---
 
 # Verification Loop
