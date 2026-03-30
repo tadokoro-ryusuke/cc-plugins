@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(gh:*), Bash(git:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read(*.md,*.ts,*.tsx), Write(*.ts,*.tsx), Edit, MultiEdit, Task(subagent_type:dev-core:tdd-practitioner), Task(subagent_type:dev-core:refactoring-specialist), Task(subagent_type:dev-core:quality-checker), Task(subagent_type:dev-core:security-auditor), Task(subagent_type:dev-core:build-error-resolver), Task(subagent_type:dev-core:code-reviewer)
+allowed-tools: Bash(gh:*), Bash(git:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read(*.md,*.ts,*.tsx), Write(*.ts,*.tsx), Edit, MultiEdit, Task(subagent_type:dev-core:tdd-practitioner), Task(subagent_type:dev-core:quality-checker), Task(subagent_type:dev-core:security-auditor), Task(subagent_type:dev-core:build-error-resolver), Task(subagent_type:dev-core:code-reviewer)
 description: "作成済みの計画書に基づいてTDD実装を実行します"
 argument-hint: "[計画書のパス] (例: docs/plans/task-user-auth.md)"
 ---
@@ -47,32 +47,7 @@ prompt: |
   - コード品質の改善（Refactor）
 ```
 
-### 2. refactoring-specialist（リファクタリング専門家）
-
-**呼び出しタイミング**: TDD サイクルの Refactor フェーズ、または tdd-practitioner から呼び出される
-
-**Task ツール呼び出しパターン**:
-
-```
-Task(subagent_type: "dev-core:refactoring-specialist")
-prompt: |
-  以下のコードをリファクタリングしてください。
-
-  ## 対象ファイル
-  [リファクタリング対象のファイルパス]
-
-  ## 観点
-  - SOLID原則への準拠
-  - DRY原則の適用
-  - 命名の改善
-  - useEffectの削除（可能な場合）
-
-  ## 制約
-  - テストは必ずグリーンを維持
-  - 外部動作は変更しない
-```
-
-### 3. quality-checker（品質チェック専門家）
+### 2. quality-checker（品質チェック専門家）
 
 **呼び出しタイミング**: 各イテレーション完了後、およびコミット前に必ず実行
 

@@ -1,5 +1,5 @@
 ---
-allowed-tools: Task(subagent_type:dev-core:refactoring-specialist), Task(subagent_type:dev-core:quality-checker), Bash(git:*), Bash(gh:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read(*.ts,*.tsx,*.md), Glob
+allowed-tools: Task(subagent_type:dev-core:tdd-practitioner), Task(subagent_type:dev-core:quality-checker), Bash(git:*), Bash(gh:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read(*.ts,*.tsx,*.md), Glob
 description: "作業中の変更、PR、ブランチ、または最近の変更に対してリファクタリングを実行します"
 argument-hint: "[コミットハッシュ|PR番号|ブランチ名|ファイル/ディレクトリ] (省略時は現在の変更)"
 ---
@@ -24,14 +24,14 @@ Martin Fowler と T-wada の原則に基づいたリファクタリングを実�
 
 このコマンドでは以下のサブエージェントを **Task ツール** で必ず呼び出すこと。直接リファクタリングせず、専門エージェントに委譲することで品質を確保する。
 
-### 1. refactoring-specialist（リファクタリング専門家）
+### 1. tdd-practitioner（リファクタリング専門家）
 
 **呼び出しタイミング**: リファクタリング対象の特定後、事前テスト実行後
 
 **Task ツール呼び出しパターン**:
 
 ```
-Task(subagent_type: "dev-core:refactoring-specialist")
+Task(subagent_type: "dev-core:tdd-practitioner")
 prompt: |
   以下のコードをリファクタリングしてください。
 
@@ -151,9 +151,9 @@ fi
 
 ### 3. リファクタリング実行
 
-**⚠️ 重要**: 必ず Task ツールで refactoring-specialist エージェントを呼び出すこと。
+**⚠️ 重要**: 必ず Task ツールで tdd-practitioner エージェントを呼び出すこと。
 
-refactoring-specialist エージェントに以下の情報を渡す：
+tdd-practitioner エージェントに以下の情報を渡す：
 
 - リファクタリング対象のファイル/ディレクトリ
 - 変更コンテキスト（PR 番号、ブランチ名など）
@@ -296,4 +296,4 @@ PR 作成・マージ
 - `/dev-core:checkpoint --create`: 進捗スナップショット作成
 
 プロジェクト設定ファイル（.claude/\*.local.md）を確認し、追加ツールが指定されている場合はそれを活用すること。
-コードの動作を変えずに、refactoring-specialist と quality-checker エージェントを活用して品質と保守性を向上させること。
+コードの動作を変えずに、tdd-practitioner と quality-checker エージェントを活用して品質と保守性を向上させること。

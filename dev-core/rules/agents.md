@@ -4,7 +4,7 @@
 |--------|-------------|
 | 計画立案 | task-planner |
 | TDD 実装 | tdd-practitioner |
-| リファクタリング | refactoring-specialist |
+| リファクタリング | tdd-practitioner（Refactorフェーズ） |
 | 品質チェック | quality-checker |
 | セキュリティ監査 | security-auditor |
 | コードレビュー | code-reviewer |
