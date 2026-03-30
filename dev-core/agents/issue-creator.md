@@ -1,4 +1,6 @@
 ---
+name: issue-creator
+description: GitHub Issue作成専門家。計画書や作業指示ドキュメントからGitHub Issueを作成します。
 model: sonnet[1m]
 tools: Bash(gh:*), Read(*.md), Write(*.md)
 color: blue
