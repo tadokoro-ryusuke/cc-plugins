@@ -47,15 +47,6 @@
       }
     ],
 
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "prompt",
-            "prompt": "セッション終了前チェック:\n\n1. 未コミットの変更がないか `git status` で確認\n2. console.log/debugger/dd() が残っていないか直近の変更ファイルを確認\n3. 新規追加された TODO/FIXME コメントがあれば報告\n\n問題があればユーザーに警告してください。"
-          }
-        ]
-      }
-    ]
+    "Stop": []
   }
 }
