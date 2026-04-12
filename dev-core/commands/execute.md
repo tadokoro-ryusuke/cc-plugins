@@ -29,6 +29,9 @@ argument-hint: "[計画書のパス] (例: docs/plans/task-user-auth.md)"
 ```
 tdd-practitioner（実装: Red→Green→Refactor）
   ↓
+ステータス確認 ──BLOCKED──→ ユーザーに報告、判断を仰ぐ
+  │              └─COMPLETED_WITH_CONCERNS──→ 懸念を表示、続行可否を確認
+  ↓ COMPLETED
 quality-checker（lint/typecheck/test）←── 失敗時: 修正して再実行
   ↓ パス
 code-reviewer（3軸レビュー: セキュリティ/品質/慣例）
@@ -39,6 +42,18 @@ approved? ──NO──→ tdd-practitioner（改善、最大3ラウンド）�
   ↓
 次のイテレーションへ
 ```
+
+#### tdd-practitioner のエスカレーション対応
+
+tdd-practitioner は各イテレーション完了時に3種のステータスを返す。オーケストレータは必ずステータスを確認し、以下のように分岐する:
+
+| ステータス | 対応 |
+|-----------|------|
+| **COMPLETED** | 正常完了。quality-checker に進む |
+| **COMPLETED_WITH_CONCERNS** | 懸念事項をユーザーに提示し、続行するか判断を仰ぐ。ユーザーが続行を選択した場合のみ quality-checker に進む |
+| **BLOCKED** | 実装を中断。ブロック理由・試行内容・必要な判断をユーザーに報告し、指示を待つ。推測で次のイテレーションに進んではならない |
+
+**重要**: ステータスを無視して次に進むことは禁止。特に BLOCKED を受けたまま実装を続行すると、手戻りコストが増大する。
 
 #### サブエージェント呼び出しルール
 
