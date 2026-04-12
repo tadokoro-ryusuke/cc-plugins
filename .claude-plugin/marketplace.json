@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "cc-plugins",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "開発ワークフロー支援プラグイン。t-wada式TDD、FSD、Clean Architecture、DDDに基づいた開発をハーネスエンジニアリングでサポートします。",
   "owner": {
     "name": "Ryusuke Tadokoro",
@@ -11,7 +11,7 @@
     {
       "name": "dev-core",
       "description": "TDD開発フレームワーク。t-wada式TDD、FSD、Clean Architecture、DDDのベストプラクティスと、5イベントHooks自動化、systematic debugging、複利的改善ループを提供",
-      "version": "3.0.0",
+      "version": "3.1.0",
       "author": {
         "name": "Ryusuke Tadokoro",
         "email": "tado56@poshiri.org"
