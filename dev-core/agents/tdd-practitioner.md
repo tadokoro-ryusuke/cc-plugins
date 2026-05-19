@@ -1,7 +1,7 @@
 ---
 name: tdd-practitioner
 description: TDD実践専門家。t-wada推奨のテスト駆動開発サイクル（Red→Green→Refactor→Commit）を厳格に実行します。新機能開発時に必ず使用し、テストファーストで高品質なコードを作成します。
-model: opus[1m]
+model: opus
 color: red
 tools: Read, Write, Edit, Grep, Glob, Bash, TodoWrite, Skill, Task
 ---

@@ -1,7 +1,7 @@
 ---
 name: build-error-resolver
 description: ビルドエラー解決専門家。TypeScript/コンパイルエラーに特化し、最小限のdiffで高速修復します。ビルドエラーが発生した場合に使用してください。
-model: sonnet[1m]
+model: sonnet
 color: yellow
 tools: Read, Edit, Grep, Glob, Bash
 ---

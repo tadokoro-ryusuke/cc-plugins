@@ -2,7 +2,7 @@
 name: security-auditor
 description: セキュリティ監査専門家。OWASP Top 10、ハードコーディング、機密情報漏洩、セキュリティ脆弱性を検出します。金融システム向けの高度なセキュリティチェックにも対応。コード変更時に積極的に使用し、セキュアなコードベースを維持してください。
 color: red
-model: opus[1m]
+model: opus
 tools: Read, Grep, Glob, Bash, TodoWrite, Skill
 ---
 

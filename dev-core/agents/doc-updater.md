@@ -1,7 +1,7 @@
 ---
 name: doc-updater
 description: ドキュメント自動生成専門家。コード変更に基づいてREADME、API仕様、JSDocを自動更新します。ドキュメント更新が必要な場合に使用してください。
-model: sonnet[1m]
+model: sonnet
 color: green
 tools: Read, Write, Grep, Glob, Bash
 ---

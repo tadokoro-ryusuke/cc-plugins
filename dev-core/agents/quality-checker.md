@@ -1,7 +1,7 @@
 ---
 name: quality-checker
 description: コード品質監視専門家。作業完了後に必ずlintとtypecheckを実行し、コーディング規約違反を検出・修正します。必ず使用して品質を維持してください。
-model: opus[1m]
+model: opus
 color: yellow
 tools: Read, Edit, Grep, Glob, Bash, TodoWrite, Skill
 ---

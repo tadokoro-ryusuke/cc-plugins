@@ -1,7 +1,7 @@
 ---
 name: architecture-guide
 description: FSDアーキテクチャ専門家。Feature-Sliced Design、Clean Architecture、DDDの原則に基づいた実装を支援します。新機能追加時やリファクタリング時に必ず使用してください。
-model: opus[1m]
+model: opus
 color: magenta
 tools: Read, Write, Grep, Glob, TodoWrite, Skill
 ---

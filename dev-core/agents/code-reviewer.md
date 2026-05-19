@@ -1,7 +1,7 @@
 ---
 name: code-reviewer
 description: 包括的コードレビュー専門家。セキュリティ、品質、慣例の3段階評価を行い、改善提案を提供します。コードレビューやPRレビュー時に使用してください。
-model: opus[1m]
+model: opus
 color: cyan
 tools: Read, Grep, Glob, Bash
 ---

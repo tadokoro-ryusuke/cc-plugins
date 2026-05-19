@@ -1,7 +1,7 @@
 ---
 name: e2e-runner
 description: E2Eテスト実行専門家。Playwrightを使用したE2Eテストの実行、デバッグ、Page Object Modelパターンの実装を支援します。E2Eテストが必要な場合に使用してください。
-model: sonnet[1m]
+model: sonnet
 color: magenta
 tools: Read, Write, Bash, Grep, Glob
 ---
