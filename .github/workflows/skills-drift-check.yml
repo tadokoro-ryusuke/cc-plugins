@@ -1,0 +1,38 @@
+name: skills drift check
+
+# dev-core のスキル構成とマニフェストの「ずれ（drift）」を静的に検証する。
+# 検証本体は scripts/check-skills-drift.mjs（Node 標準モジュールのみ・追加依存なし）。
+# 注意: これは静的検証であり「Codex が実際に skill を認識するか」は検証しない
+#       （CI に Codex CLI は無い）。実認識は docs/codex-interop/shared-skills-setup.md
+#       の手動確認ログで受け入れる。
+
+on:
+  push:
+    paths: &drift_paths
+      - "dev-core/skills/**"
+      - "dev-core/.claude-plugin/plugin.json"
+      - "dev-core/.codex-plugin/plugin.json"
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - "scripts/**"
+      - "docs/codex-interop/**"
+      - ".github/workflows/skills-drift-check.yml"
+  pull_request:
+    paths: *drift_paths
+
+# 同一 ref の実行が重なったら古い方をキャンセルする。
+concurrency:
+  group: skills-drift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # 追加依存なし（Node 標準モジュールのみ）のため npm install は不要。
+      - name: Run skills drift check
+        run: node scripts/check-skills-drift.mjs

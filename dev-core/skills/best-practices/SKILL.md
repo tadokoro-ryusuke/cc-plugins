@@ -1,6 +1,9 @@
 ---
 name: best-practices
 description: "TDD, FSD, Clean Architecture, DDD, コーディング規約, セキュリティのベストプラクティスガイド"
+metadata:
+  version: "3.1.0"
+  author: "Ryusuke Tadokoro"
 ---
 
 # Dev Core Best Practices

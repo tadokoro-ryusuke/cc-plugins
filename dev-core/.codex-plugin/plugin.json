@@ -1,0 +1,27 @@
+{
+  "name": "dev-core",
+  "version": "3.1.0",
+  "description": "TDD開発フレームワーク。t-wada式TDD、FSD、Clean Architecture、DDDのベストプラクティスと、5イベントHooks自動化、systematic debugging、複利的改善ループを提供。",
+  "author": {
+    "name": "Ryusuke Tadokoro",
+    "email": "tado56@poshiri.org"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Dev Core",
+    "shortDescription": "TDD, Clean Architecture, DDD, and verification skills for coding agents.",
+    "longDescription": "Dev Core provides shared agent skills for test-driven development, frontend and backend architecture patterns, verification loops, continuous learning, and Claude Code to Codex collaboration workflows.",
+    "developerName": "Ryusuke Tadokoro",
+    "category": "Development",
+    "capabilities": [
+      "Skills",
+      "Code Review",
+      "Collaboration"
+    ],
+    "defaultPrompt": [
+      "Use dev-core to plan and verify this coding task.",
+      "Review this change with the dev-core verification loop.",
+      "Use codex-collab for a second-opinion review."
+    ]
+  }
+}

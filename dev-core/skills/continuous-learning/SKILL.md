@@ -1,6 +1,9 @@
 ---
 name: continuous-learning
 description: "セッションからの学習パターン抽出。ミスを二度と起こさないメカニズムを構築する"
+metadata:
+  version: "3.1.0"
+  author: "Ryusuke Tadokoro"
 ---
 
 # Continuous Learning

@@ -1,6 +1,9 @@
 ---
 name: verification-loop
 description: "6段階検証フロー（build→type→lint→test→security→diff）"
+metadata:
+  version: "3.1.0"
+  author: "Ryusuke Tadokoro"
 ---
 
 # Verification Loop

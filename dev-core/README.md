@@ -66,6 +66,7 @@ TDD 開発フレームワーク。t-wada 式 TDD、FSD、Clean Architecture、DD
 | backend-patterns | API設計、Repository、サービス層パターン |
 | verification-loop | 6段階検証フロー |
 | continuous-learning | Mitchell Hashimoto式の複利的改善ループ |
+| codex-collab | Claude Code ⟷ Codex 協働（セカンドオピニオン/レスキュー）の駆動 |
 
 ## フック（自動実行）
 
@@ -76,6 +77,22 @@ TDD 開発フレームワーク。t-wada 式 TDD、FSD、Clean Architecture、DD
 | PostToolUse:Write\|Edit | Prettier自動フォーマット |
 | PreCompact | 構造化状態保存 |
 | Stop | 未コミット変更・console.log残存検出 |
+
+## Codex 互換・協働
+
+dev-core のスキル（知識）は Agent Skills 標準準拠で、Claude Code と Codex の双方から利用できます。
+
+- **Codex から使う（2経路）**:
+  - 経路A: `.codex-plugin/plugin.json` を持つ dev-core を Codex の plugin として install（bundled skills）
+  - 経路B: `scripts/setup-shared-skills.sh` で利用者プロジェクトの `.agents/skills/<skill>` を SSoT（`dev-core/skills`）へ symlink
+- **Codex 権限設定**: Claude Code の `permissions.allow/deny` は、Codex では permission profiles（filesystem/network）と rules（command allow/prompt/forbidden）へ分けて移行。
+- **協働ワークフロー**: `codex-collab` スキルが Claude 実装 → Codex レビュー（`/codex:review`）/ レスキュー（`/codex:rescue`）を駆動。Three Strikes Rule・Zero Trust Review と統合。前提に codex-plugin-cc（OpenAI 公式）。
+- **構成検証**: `scripts/check-skills-drift.mjs`（CI: `.github/workflows/skills-drift-check.yml`）が frontmatter 標準準拠・マニフェスト整合・インデックス整合を静的検証。
+
+詳細・移行手順:
+
+- [`docs/codex-interop/shared-skills-setup.md`](../docs/codex-interop/shared-skills-setup.md)
+- [`docs/codex-interop/codex-permissions.md`](../docs/codex-interop/codex-permissions.md)
 
 ## プロジェクト設定
 
