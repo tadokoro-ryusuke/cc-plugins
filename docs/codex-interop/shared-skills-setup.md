@@ -61,10 +61,10 @@ Codex から使えるようになる。
 
 ```bash
 # 1) まず dry-run で、張られる symlink を確認する（何も作らない）
-bash setup-shared-skills.sh /path/to/dev-core/skills --dry-run
+bash /path/to/cc-plugins/scripts/setup-shared-skills.sh /path/to/cc-plugins/dev-core/skills --dry-run
 
 # 2) 問題なければ本実行する
-bash setup-shared-skills.sh /path/to/dev-core/skills
+bash /path/to/cc-plugins/scripts/setup-shared-skills.sh /path/to/cc-plugins/dev-core/skills
 ```
 
 SSoT の場所は次の優先順位で解決される（ハードコードしない）:
@@ -75,7 +75,8 @@ SSoT の場所は次の優先順位で解決される（ハードコードしな
 
 ```bash
 # 環境変数で SSoT を指定する例
-SHARED_SKILLS_SSOT=/path/to/dev-core/skills bash setup-shared-skills.sh --dry-run
+SHARED_SKILLS_SSOT=/path/to/cc-plugins/dev-core/skills \
+  bash /path/to/cc-plugins/scripts/setup-shared-skills.sh --dry-run
 ```
 
 ### 冪等性
@@ -109,6 +110,16 @@ symlink 経路（経路B）が使えない。その場合は **`@AGENTS.md` impo
 
 `setup-shared-skills.sh` は symlink 作成に失敗した場合、このフォールバックを案内する
 メッセージを出力する。
+
+---
+
+## Codex 権限設定
+
+Claude Code の `settings.json` にある `permissions.allow` / `permissions.deny` を
+Codex へ寄せる場合は、`config.toml` の permission profiles と `.rules` の
+`prefix_rule()` に分けて設定する。
+
+詳細: [`codex-permissions.md`](./codex-permissions.md)
 
 ---
 

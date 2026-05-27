@@ -85,10 +85,14 @@ dev-core のスキル（知識）は Agent Skills 標準準拠で、Claude Code 
 - **Codex から使う（2経路）**:
   - 経路A: `.codex-plugin/plugin.json` を持つ dev-core を Codex の plugin として install（bundled skills）
   - 経路B: `scripts/setup-shared-skills.sh` で利用者プロジェクトの `.agents/skills/<skill>` を SSoT（`dev-core/skills`）へ symlink
+- **Codex 権限設定**: Claude Code の `permissions.allow/deny` は、Codex では permission profiles（filesystem/network）と rules（command allow/prompt/forbidden）へ分けて移行。
 - **協働ワークフロー**: `codex-collab` スキルが Claude 実装 → Codex レビュー（`/codex:review`）/ レスキュー（`/codex:rescue`）を駆動。Three Strikes Rule・Zero Trust Review と統合。前提に codex-plugin-cc（OpenAI 公式）。
 - **構成検証**: `scripts/check-skills-drift.mjs`（CI: `.github/workflows/skills-drift-check.yml`）が frontmatter 標準準拠・マニフェスト整合・インデックス整合を静的検証。
 
-詳細・移行手順: [`docs/codex-interop/shared-skills-setup.md`](../docs/codex-interop/shared-skills-setup.md)
+詳細・移行手順:
+
+- [`docs/codex-interop/shared-skills-setup.md`](../docs/codex-interop/shared-skills-setup.md)
+- [`docs/codex-interop/codex-permissions.md`](../docs/codex-interop/codex-permissions.md)
 
 ## プロジェクト設定
 

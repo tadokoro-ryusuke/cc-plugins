@@ -75,6 +75,7 @@ done
 
 # スクリプト自身の絶対ディレクトリ。デフォルト SSoT の起点に使う。
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SHARED_SKILLS_DOC="${SCRIPT_DIR}/../docs/codex-interop/shared-skills-setup.md"
 
 # 優先順位: 引数 > 環境変数 > スクリプト位置からの相対デフォルト。
 if [ -n "$SSOT_FROM_ARG" ]; then
@@ -110,7 +111,7 @@ echo ""
 
 # symlink が使えない環境向けの案内を出力する。
 print_symlink_fallback() {
-  cat >&2 <<'FALLBACK'
+  cat >&2 <<FALLBACK
 
 ----------------------------------------------------------------------
 symlink を作成できませんでした（Windows で Developer Mode/管理者権限が
@@ -119,8 +120,8 @@ symlink を作成できませんでした（Windows で Developer Mode/管理者
 フォールバック: @AGENTS.md import 方式を使ってください。
   利用者プロジェクトの CLAUDE.md / AGENTS.md から dev-core の AGENTS.md を
   import することで、symlink 無しでも知識インデックスを共有できます。
-  詳細は docs/codex-interop/shared-skills-setup.md の
-  「Windows フォールバック」を参照してください。
+  詳細は次のドキュメントの「Windows フォールバック」を参照してください。
+  ${SHARED_SKILLS_DOC}
 ----------------------------------------------------------------------
 FALLBACK
 }
