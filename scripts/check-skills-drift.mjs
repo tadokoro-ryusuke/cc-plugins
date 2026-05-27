@@ -367,6 +367,24 @@ function loadManifest(relPath) {
 }
 
 /**
+ * JSON object として扱える非 null オブジェクトか判定する。
+ * @param {unknown} value 判定対象。
+ * @returns {value is Record<string, unknown>} JSON object なら true。
+ */
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * 非空文字列か判定する。
+ * @param {unknown} value 判定対象。
+ * @returns {value is string} trim 後に空でない文字列なら true。
+ */
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+/**
  * `.claude-plugin/plugin.json` から version を読み取る。
  * version の正本はこのマニフェストであり、マジックストリングを排除するため一箇所に集約する。
  * @returns {{ version: string | null, error: string | null }}
@@ -429,7 +447,8 @@ function collectFrontmatterViolations() {
 
 /**
  * Codex マニフェスト（.codex-plugin/plugin.json）の内容を検証する。
- * 検証項目: name(kebab) / version(semver) / description(非空) / skills("./skills/")。
+ * 検証項目: name(kebab) / version(semver) / description(非空) / author /
+ * skills("./skills/") / interface（Codex plugin ingestion で必須）。
  * @param {Record<string, unknown>} codex パース済み Codex マニフェスト。
  * @returns {string[]} このマニフェストに対する違反内容の配列（ファイル名は含まない）。
  */
@@ -456,11 +475,57 @@ function validateCodexManifestContent(codex) {
     issues.push("description が無いか空文字列である");
   }
 
+  const author = codex.author;
+  if (!isRecord(author)) {
+    issues.push("author が無いか object でない");
+  } else if (!isNonEmptyString(author.name)) {
+    issues.push("author.name が無いか空文字列である");
+  }
+
   const skills = codex.skills;
   if (skills !== EXPECTED_CODEX_SKILLS) {
     issues.push(
       `skills が "${EXPECTED_CODEX_SKILLS}" でない（実際: ${JSON.stringify(skills)}）`,
     );
+  }
+
+  const interfaceBlock = codex.interface;
+  if (!isRecord(interfaceBlock)) {
+    issues.push("interface が無いか object でない");
+  } else {
+    for (const field of [
+      "displayName",
+      "shortDescription",
+      "longDescription",
+      "developerName",
+      "category",
+    ]) {
+      if (!isNonEmptyString(interfaceBlock[field])) {
+        issues.push(`interface.${field} が無いか空文字列である`);
+      }
+    }
+
+    const capabilities = interfaceBlock.capabilities;
+    if (
+      !Array.isArray(capabilities) ||
+      capabilities.some((value) => !isNonEmptyString(value))
+    ) {
+      issues.push("interface.capabilities が非空文字列の配列でない");
+    }
+
+    const defaultPrompt = interfaceBlock.defaultPrompt ?? interfaceBlock.default_prompt;
+    if (
+      !isNonEmptyString(defaultPrompt) &&
+      !(
+        Array.isArray(defaultPrompt) &&
+        defaultPrompt.length > 0 &&
+        defaultPrompt.every((value) => isNonEmptyString(value))
+      )
+    ) {
+      issues.push(
+        "interface.defaultPrompt または interface.default_prompt が無いか有効でない",
+      );
+    }
   }
 
   return issues;
