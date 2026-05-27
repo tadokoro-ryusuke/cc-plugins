@@ -19,6 +19,10 @@
  * Iteration 5: AGENTS.md のスキルインデックス（マーカで囲んだテーブル）の skill 名集合が
  *              skills/ の実ディレクトリ集合と完全一致することと、CLAUDE.md の最初の
  *              実質的な行が `@AGENTS.md`（import）であることを検証する。
+ * Iteration 6: 共有スキルの symlink セットアップ成果物（scripts/setup-shared-skills.sh と
+ *              docs/codex-interop/shared-skills-setup.md）が存在し、現行パス `.agents/skills`
+ *              （複数形）を参照し、旧パス（`.codex/skills` / `.agent/skills` 単数）を
+ *              literal として含まないことを検証する（誤誘導防止）。
  */
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -54,6 +58,30 @@ const AGENTS_DOC_REL = "AGENTS.md";
 
 /** Claude 固有のラッパ（@AGENTS.md import）のリポジトリルートからの相対パス。 */
 const CLAUDE_DOC_REL = "CLAUDE.md";
+
+/** 共有スキルの symlink セットアップスクリプトのリポジトリルートからの相対パス。 */
+const SETUP_SCRIPT_REL = join("scripts", "setup-shared-skills.sh");
+
+/** 共有スキルセットアップの移行ドキュメントのリポジトリルートからの相対パス。 */
+const SHARED_SKILLS_DOC_REL = join(
+  "docs",
+  "codex-interop",
+  "shared-skills-setup.md",
+);
+
+/**
+ * 共有スキルのセットアップ成果物が参照すべき現行パス（複数形）。
+ * Codex の repo-local skill discovery が走査する `.agents/skills` を指す。
+ */
+const REQUIRED_SHARED_SKILLS_PATH = ".agents/skills";
+
+/**
+ * 共有スキルのセットアップ成果物に literal として含めてはならない旧パス群。
+ * 誤誘導防止のため、誤検知しない literal 部分文字列で判定する。
+ * 注: `.agents/skills`（複数形）は `.agent/skills`（単数）を部分文字列として含まないため、
+ * 現行パスを含むだけで旧パス deny に引っかかることはない。
+ */
+const DENIED_SHARED_SKILLS_PATHS = [".codex/skills", ".agent/skills"];
 
 /** AGENTS.md のスキルインデックス領域を囲む開始マーカ（HTML コメント）。 */
 const SKILLS_INDEX_START_MARKER = "<!-- skills:start -->";
@@ -680,6 +708,60 @@ function collectClaudeImportViolations() {
 }
 
 /**
+ * 共有スキルセットアップの単一成果物（スクリプト or ドキュメント）の内容を検証する。
+ * 検証項目:
+ *  - ファイルが存在すること。
+ *  - 現行パス `.agents/skills`（複数形）を literal として参照していること。
+ *  - 旧パス（`.codex/skills` / `.agent/skills` 単数）を literal として含まないこと（誤誘導防止）。
+ * @param {string} relPath リポジトリルートからの成果物の相対パス。
+ * @returns {string[]} 「相対パス: 違反内容」形式の違反メッセージ配列。
+ */
+function validateSharedSkillsArtifact(relPath) {
+  /** @type {string[]} */
+  const violations = [];
+
+  const artifactPath = join(REPO_ROOT, relPath);
+  if (!existsSync(artifactPath)) {
+    violations.push(`missing ${relPath}`);
+    return violations;
+  }
+
+  const content = readFileSync(artifactPath, "utf8");
+
+  if (!content.includes(REQUIRED_SHARED_SKILLS_PATH)) {
+    violations.push(
+      `${relPath}: 現行パス "${REQUIRED_SHARED_SKILLS_PATH}"（複数形）を参照していない`,
+    );
+  }
+
+  for (const deniedPath of DENIED_SHARED_SKILLS_PATHS) {
+    if (content.includes(deniedPath)) {
+      violations.push(
+        `${relPath}: 旧パス "${deniedPath}" を含めてはならない（誤誘導防止）`,
+      );
+    }
+  }
+
+  return violations;
+}
+
+/**
+ * 共有スキルの symlink セットアップ成果物（スクリプト + 移行ドキュメント）を検証し、違反を集約する。
+ * スクリプトとドキュメントの双方に同一の path 方針（現行パス参照・旧パス deny）を適用し、
+ * チェッカと生成物を整合させる。
+ * @returns {string[]} 違反メッセージの配列。
+ */
+function collectSharedSkillsViolations() {
+  /** @type {string[]} */
+  const violations = [];
+
+  violations.push(...validateSharedSkillsArtifact(SETUP_SCRIPT_REL));
+  violations.push(...validateSharedSkillsArtifact(SHARED_SKILLS_DOC_REL));
+
+  return violations;
+}
+
+/**
  * 検出した違反メッセージを集約する。
  * @returns {string[]} 違反メッセージの配列。空なら drift なし。
  */
@@ -691,6 +773,7 @@ function collectViolations() {
   violations.push(...collectFrontmatterViolations());
   violations.push(...collectAgentsIndexViolations());
   violations.push(...collectClaudeImportViolations());
+  violations.push(...collectSharedSkillsViolations());
 
   return violations;
 }
