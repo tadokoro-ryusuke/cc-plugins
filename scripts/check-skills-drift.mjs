@@ -16,6 +16,9 @@
  * Iteration 3: .codex-plugin/plugin.json の内容（name=kebab / version=semver /
  *              description=非空 / skills="./skills/"）と、.claude-plugin/plugin.json
  *              との name/version 一致（cross-manifest）を検証する。
+ * Iteration 5: AGENTS.md のスキルインデックス（マーカで囲んだテーブル）の skill 名集合が
+ *              skills/ の実ディレクトリ集合と完全一致することと、CLAUDE.md の最初の
+ *              実質的な行が `@AGENTS.md`（import）であることを検証する。
  */
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -45,6 +48,21 @@ const CLAUDE_PLUGIN_MANIFEST_REL = join(
 
 /** dev-core のスキルを格納するディレクトリのリポジトリルートからの相対パス。 */
 const SKILLS_DIR_REL = join("dev-core", "skills");
+
+/** 知識の正本（スキルインデックス）のリポジトリルートからの相対パス。 */
+const AGENTS_DOC_REL = "AGENTS.md";
+
+/** Claude 固有のラッパ（@AGENTS.md import）のリポジトリルートからの相対パス。 */
+const CLAUDE_DOC_REL = "CLAUDE.md";
+
+/** AGENTS.md のスキルインデックス領域を囲む開始マーカ（HTML コメント）。 */
+const SKILLS_INDEX_START_MARKER = "<!-- skills:start -->";
+
+/** AGENTS.md のスキルインデックス領域を囲む終了マーカ（HTML コメント）。 */
+const SKILLS_INDEX_END_MARKER = "<!-- skills:end -->";
+
+/** CLAUDE.md の最初の実質的な行に期待する import 表記。 */
+const EXPECTED_CLAUDE_IMPORT = "@AGENTS.md";
 
 /** 各スキルディレクトリ内のスキル定義ファイル名。 */
 const SKILL_FILE_NAME = "SKILL.md";
@@ -365,13 +383,7 @@ function collectFrontmatterViolations() {
     return violations;
   }
 
-  const dirEntries = readdirSync(skillsDir, { withFileTypes: true });
-  const skillDirNames = dirEntries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort();
-
-  for (const dirName of skillDirNames) {
+  for (const dirName of readSkillDirNames()) {
     const skillFileRel = join(SKILLS_DIR_REL, dirName, SKILL_FILE_NAME);
     const skillFilePath = join(REPO_ROOT, skillFileRel);
     const issues = validateSkillFrontmatter(
@@ -486,6 +498,188 @@ function collectManifestViolations() {
 }
 
 /**
+ * dev-core/skills/ 直下の実ディレクトリ名一覧（ソート済み）を返す。
+ * スキル名の正本は実ディレクトリ名であり、推測せず readdir して取得する。
+ * @returns {string[]} スキルディレクトリ名の昇順配列。skills/ が無ければ空配列。
+ */
+function readSkillDirNames() {
+  const skillsDir = join(REPO_ROOT, SKILLS_DIR_REL);
+  if (!existsSync(skillsDir)) {
+    return [];
+  }
+  return readdirSync(skillsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+}
+
+/**
+ * AGENTS.md 本文から、マーカで囲まれたスキルインデックス領域内のテーブル行先頭セルを
+ * skill 名として抽出する。仕様:
+ *  - `<!-- skills:start -->` 〜 `<!-- skills:end -->` の HTML コメントで囲まれた領域のみ対象。
+ *  - 領域内の `| name | ... |` 形式テーブル行の先頭セル（1列目）を skill 名とみなす。
+ *  - ヘッダ行（先頭セルが `skill`）と区切り行（`---` のみ）は除外する。
+ * @param {string} content AGENTS.md の全文。
+ * @returns {{ names: string[] | null, error: string | null }}
+ *   names: 抽出した skill 名配列（マーカ不在時 null）。error: 抽出不能時の理由。
+ */
+function extractIndexedSkillNames(content) {
+  const startIndex = content.indexOf(SKILLS_INDEX_START_MARKER);
+  if (startIndex === -1) {
+    return {
+      names: null,
+      error: `スキルインデックスの開始マーカ ${SKILLS_INDEX_START_MARKER} が無い`,
+    };
+  }
+  const endIndex = content.indexOf(SKILLS_INDEX_END_MARKER, startIndex);
+  if (endIndex === -1) {
+    return {
+      names: null,
+      error: `スキルインデックスの終了マーカ ${SKILLS_INDEX_END_MARKER} が無い`,
+    };
+  }
+
+  const region = content.slice(
+    startIndex + SKILLS_INDEX_START_MARKER.length,
+    endIndex,
+  );
+
+  /** @type {string[]} */
+  const names = [];
+  for (const rawLine of region.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    // テーブル行（先頭が `|`）のみ対象。
+    if (!line.startsWith("|")) {
+      continue;
+    }
+    // `| a | b |` を分割し前後の空セルを除去 → 1列目を取り出す。
+    const cells = line
+      .split("|")
+      .slice(1, -1)
+      .map((cell) => cell.trim());
+    if (cells.length === 0) {
+      continue;
+    }
+    const firstCell = cells[0];
+    if (firstCell.length === 0) {
+      continue;
+    }
+    // ヘッダ行・区切り行を除外する。
+    if (firstCell.toLowerCase() === "skill") {
+      continue;
+    }
+    if (/^:?-{1,}:?$/.test(firstCell)) {
+      continue;
+    }
+    names.push(firstCell);
+  }
+
+  return { names, error: null };
+}
+
+/**
+ * AGENTS.md のスキルインデックス集合が skills/ の実ディレクトリ集合と完全一致するか検証する。
+ * インデックス漏れ（実在するが未掲載）と幽霊エントリ（掲載されているが実在しない）の双方を検出する。
+ * @returns {string[]} 「AGENTS.md: 違反内容」形式の違反メッセージ配列。
+ */
+function collectAgentsIndexViolations() {
+  /** @type {string[]} */
+  const violations = [];
+
+  const agentsPath = join(REPO_ROOT, AGENTS_DOC_REL);
+  if (!existsSync(agentsPath)) {
+    violations.push(`missing ${AGENTS_DOC_REL}`);
+    return violations;
+  }
+
+  const content = readFileSync(agentsPath, "utf8");
+  const { names, error } = extractIndexedSkillNames(content);
+  if (names === null) {
+    violations.push(`${AGENTS_DOC_REL}: ${error}`);
+    return violations;
+  }
+
+  const actualSkills = new Set(readSkillDirNames());
+  const indexedSkills = new Set(names);
+
+  // 重複掲載の検出（Set 化で潰れるため件数で判定）。
+  if (names.length !== indexedSkills.size) {
+    violations.push(
+      `${AGENTS_DOC_REL}: スキルインデックスに重複したエントリがある`,
+    );
+  }
+
+  // インデックス漏れ: 実在するが掲載されていない。
+  for (const dirName of [...actualSkills].sort()) {
+    if (!indexedSkills.has(dirName)) {
+      violations.push(
+        `${AGENTS_DOC_REL}: スキル "${dirName}" がインデックスに掲載されていない`,
+      );
+    }
+  }
+
+  // 幽霊エントリ: 掲載されているが実在しない。
+  for (const indexedName of [...indexedSkills].sort()) {
+    if (!actualSkills.has(indexedName)) {
+      violations.push(
+        `${AGENTS_DOC_REL}: インデックスの "${indexedName}" は skills/ に存在しない（幽霊エントリ）`,
+      );
+    }
+  }
+
+  return violations;
+}
+
+/**
+ * 文書本文から「最初の実質的な行」を返す。空行と HTML コメント行を読み飛ばす。
+ * @param {string} content 文書の全文。
+ * @returns {string | null} 最初の実質的な行（trim 済み）。実質行が無ければ null。
+ */
+function firstSignificantLine(content) {
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (line.length === 0) {
+      continue;
+    }
+    // HTML コメント行（単一行で完結するもの）はスキップする。
+    if (line.startsWith("<!--") && line.endsWith("-->")) {
+      continue;
+    }
+    return line;
+  }
+  return null;
+}
+
+/**
+ * CLAUDE.md の最初の実質的な行が `@AGENTS.md` import であることを検証する。
+ * @returns {string[]} 「CLAUDE.md: 違反内容」形式の違反メッセージ配列。
+ */
+function collectClaudeImportViolations() {
+  /** @type {string[]} */
+  const violations = [];
+
+  const claudePath = join(REPO_ROOT, CLAUDE_DOC_REL);
+  if (!existsSync(claudePath)) {
+    violations.push(`missing ${CLAUDE_DOC_REL}`);
+    return violations;
+  }
+
+  const content = readFileSync(claudePath, "utf8");
+  const firstLine = firstSignificantLine(content);
+  if (firstLine === null) {
+    violations.push(`${CLAUDE_DOC_REL}: 実質的な行が存在しない`);
+    return violations;
+  }
+  if (firstLine !== EXPECTED_CLAUDE_IMPORT) {
+    violations.push(
+      `${CLAUDE_DOC_REL}: 最初の実質的な行が "${EXPECTED_CLAUDE_IMPORT}" でない（実際: "${firstLine}"）`,
+    );
+  }
+
+  return violations;
+}
+
+/**
  * 検出した違反メッセージを集約する。
  * @returns {string[]} 違反メッセージの配列。空なら drift なし。
  */
@@ -495,6 +689,8 @@ function collectViolations() {
 
   violations.push(...collectManifestViolations());
   violations.push(...collectFrontmatterViolations());
+  violations.push(...collectAgentsIndexViolations());
+  violations.push(...collectClaudeImportViolations());
 
   return violations;
 }
