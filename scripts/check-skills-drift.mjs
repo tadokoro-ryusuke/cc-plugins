@@ -13,6 +13,9 @@
  * Iteration 1: 全 SKILL.md の frontmatter スキーマを検証する。
  * Iteration 2: 全 SKILL.md が metadata.version を持ち、.claude-plugin/plugin.json の
  *              version と一致することを検証する（運用要件として必須化）。
+ * Iteration 3: .codex-plugin/plugin.json の内容（name=kebab / version=semver /
+ *              description=非空 / skills="./skills/"）と、.claude-plugin/plugin.json
+ *              との name/version 一致（cross-manifest）を検証する。
  */
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -54,6 +57,18 @@ const DESCRIPTION_MAX_LENGTH = 1024;
 
 /** frontmatter の `name` に許可される形式。小文字英数とハイフンのみ。 */
 const NAME_PATTERN = /^[a-z0-9-]+$/;
+
+/**
+ * プラグインマニフェストの `name` に許可される形式（kebab-case）。
+ * SKILL.md の name と同じく小文字英数とハイフンのみ。
+ */
+const PLUGIN_NAME_PATTERN = /^[a-z0-9-]+$/;
+
+/** プラグインマニフェストの `version` に許可される形式（semver の major.minor.patch）。 */
+const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
+
+/** Codex マニフェストの `skills` フィールドが指すべき値（同一 skills/ ディレクトリ参照）。 */
+const EXPECTED_CODEX_SKILLS = "./skills/";
 
 /**
  * frontmatter のトップレベルに存在してはならないフィールド（Claude 独自拡張）。
@@ -284,29 +299,40 @@ function validateSkillFrontmatter(dirName, skillFilePath, expectedVersion) {
 }
 
 /**
+ * プラグインマニフェスト（plugin.json）を読み込みパースする共通関数。
+ * 存在チェックと JSON パースエラー処理を一箇所に集約する。
+ * @param {string} relPath リポジトリルートからのマニフェスト相対パス。
+ * @returns {{ data: Record<string, unknown> | null, error: string | null }}
+ *   data: パース済みオブジェクト（失敗時 null）。error: 失敗理由（成功時 null）。
+ */
+function loadManifest(relPath) {
+  const manifestPath = join(REPO_ROOT, relPath);
+  if (!existsSync(manifestPath)) {
+    return { data: null, error: `missing ${relPath}` };
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(manifestPath, "utf8"));
+    return { data: parsed, error: null };
+  } catch (cause) {
+    const reason = cause instanceof Error ? cause.message : String(cause);
+    return { data: null, error: `${relPath} の JSON 解析に失敗した: ${reason}` };
+  }
+}
+
+/**
  * `.claude-plugin/plugin.json` から version を読み取る。
  * version の正本はこのマニフェストであり、マジックストリングを排除するため一箇所に集約する。
  * @returns {{ version: string | null, error: string | null }}
  *   version 取得結果。読み取り失敗時は version=null・error にメッセージを格納する。
  */
 function loadPluginVersion() {
-  const manifestPath = join(REPO_ROOT, CLAUDE_PLUGIN_MANIFEST_REL);
-  if (!existsSync(manifestPath)) {
-    return { version: null, error: `missing ${CLAUDE_PLUGIN_MANIFEST_REL}` };
+  const { data, error } = loadManifest(CLAUDE_PLUGIN_MANIFEST_REL);
+  if (data === null) {
+    return { version: null, error };
   }
 
-  let parsed;
-  try {
-    parsed = JSON.parse(readFileSync(manifestPath, "utf8"));
-  } catch (cause) {
-    const reason = cause instanceof Error ? cause.message : String(cause);
-    return {
-      version: null,
-      error: `${CLAUDE_PLUGIN_MANIFEST_REL} の JSON 解析に失敗した: ${reason}`,
-    };
-  }
-
-  const version = parsed?.version;
+  const version = data.version;
   if (typeof version !== "string" || version.length === 0) {
     return {
       version: null,
@@ -362,6 +388,104 @@ function collectFrontmatterViolations() {
 }
 
 /**
+ * Codex マニフェスト（.codex-plugin/plugin.json）の内容を検証する。
+ * 検証項目: name(kebab) / version(semver) / description(非空) / skills("./skills/")。
+ * @param {Record<string, unknown>} codex パース済み Codex マニフェスト。
+ * @returns {string[]} このマニフェストに対する違反内容の配列（ファイル名は含まない）。
+ */
+function validateCodexManifestContent(codex) {
+  /** @type {string[]} */
+  const issues = [];
+
+  const name = codex.name;
+  if (typeof name !== "string" || name.length === 0) {
+    issues.push("name が無いか文字列でない");
+  } else if (!PLUGIN_NAME_PATTERN.test(name)) {
+    issues.push(`name "${name}" が kebab-case（小文字英数とハイフンのみ）でない`);
+  }
+
+  const version = codex.version;
+  if (typeof version !== "string" || version.length === 0) {
+    issues.push("version が無いか文字列でない");
+  } else if (!SEMVER_PATTERN.test(version)) {
+    issues.push(`version "${version}" が semver（major.minor.patch）でない`);
+  }
+
+  const description = codex.description;
+  if (typeof description !== "string" || description.length === 0) {
+    issues.push("description が無いか空文字列である");
+  }
+
+  const skills = codex.skills;
+  if (skills !== EXPECTED_CODEX_SKILLS) {
+    issues.push(
+      `skills が "${EXPECTED_CODEX_SKILLS}" でない（実際: ${JSON.stringify(skills)}）`,
+    );
+  }
+
+  return issues;
+}
+
+/**
+ * Codex マニフェストと Claude マニフェストの name/version 一致（cross-manifest）を検証する。
+ * @param {Record<string, unknown>} codex パース済み Codex マニフェスト。
+ * @param {Record<string, unknown>} claude パース済み Claude マニフェスト。
+ * @returns {string[]} 不一致の違反内容の配列。
+ */
+function validateCrossManifestConsistency(codex, claude) {
+  /** @type {string[]} */
+  const issues = [];
+
+  if (codex.name !== claude.name) {
+    issues.push(
+      `name が .claude-plugin と一致しない（codex: ${JSON.stringify(codex.name)} / claude: ${JSON.stringify(claude.name)}）`,
+    );
+  }
+  if (codex.version !== claude.version) {
+    issues.push(
+      `version が .claude-plugin と一致しない（codex: ${JSON.stringify(codex.version)} / claude: ${JSON.stringify(claude.version)}）`,
+    );
+  }
+
+  return issues;
+}
+
+/**
+ * Codex マニフェストの存在・内容・cross-manifest 整合を検証し、違反を集約する。
+ * @returns {string[]} 「相対パス: 違反内容」形式の違反メッセージ配列。
+ */
+function collectManifestViolations() {
+  /** @type {string[]} */
+  const violations = [];
+
+  const { data: codex, error: codexError } = loadManifest(
+    CODEX_PLUGIN_MANIFEST_REL,
+  );
+  if (codex === null) {
+    violations.push(codexError ?? `missing ${CODEX_PLUGIN_MANIFEST_REL}`);
+    return violations;
+  }
+
+  for (const issue of validateCodexManifestContent(codex)) {
+    violations.push(`${CODEX_PLUGIN_MANIFEST_REL}: ${issue}`);
+  }
+
+  const { data: claude, error: claudeError } = loadManifest(
+    CLAUDE_PLUGIN_MANIFEST_REL,
+  );
+  if (claude === null) {
+    violations.push(claudeError ?? `missing ${CLAUDE_PLUGIN_MANIFEST_REL}`);
+    return violations;
+  }
+
+  for (const issue of validateCrossManifestConsistency(codex, claude)) {
+    violations.push(`${CODEX_PLUGIN_MANIFEST_REL}: ${issue}`);
+  }
+
+  return violations;
+}
+
+/**
  * 検出した違反メッセージを集約する。
  * @returns {string[]} 違反メッセージの配列。空なら drift なし。
  */
@@ -369,11 +493,7 @@ function collectViolations() {
   /** @type {string[]} */
   const violations = [];
 
-  const codexManifestPath = join(REPO_ROOT, CODEX_PLUGIN_MANIFEST_REL);
-  if (!existsSync(codexManifestPath)) {
-    violations.push(`missing ${CODEX_PLUGIN_MANIFEST_REL}`);
-  }
-
+  violations.push(...collectManifestViolations());
   violations.push(...collectFrontmatterViolations());
 
   return violations;
