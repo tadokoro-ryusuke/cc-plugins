@@ -38,14 +38,28 @@ codex-plugin-cc が未導入の状態で Codex レビューを要求された場
 
 ## 提供コマンドと使い分け
 
-| コマンド | 用途 | 使いどころ |
-|---------|------|-----------|
-| `/codex:review` | 標準のコードレビュー（読み取り専用で git diff をレビュー） | 実装後のセカンドオピニオン |
-| `/codex:adversarial-review` | 設計 / 実装を疑う敵対的レビュー | マージ前のリスクが高い変更 |
-| `/codex:rescue` | 行き詰まったタスクを Codex に委譲 | 自力で解決できないとき |
-| `/codex:status` | バックグラウンドジョブの状態確認 | 実行中ジョブの確認 |
-| `/codex:result` | バックグラウンドジョブの結果取得 | 完了ジョブの結果回収 |
-| `/codex:cancel` | バックグラウンドジョブのキャンセル | 不要になったジョブの停止 |
+codex-plugin-cc（OpenAI 公式）が提供するスラッシュコマンド。レビュー/レスキュー系は `--wait`（前景・結果を待つ）と `--background`（非同期実行）を選べる。
+
+| コマンド | 用途 | 主な引数 |
+|---------|------|---------|
+| `/codex:review` | ローカル git 状態に対する標準コードレビュー（実装後のセカンドオピニオン） | `[--wait\|--background] [--base <ref>] [--scope auto\|working-tree\|branch]` |
+| `/codex:adversarial-review` | 実装方針・設計判断を疑う敵対的レビュー（リスクの高い変更・マージ前） | `[--wait\|--background] [--base <ref>] [--scope ...] [focus ...]` |
+| `/codex:rescue` | 調査・修正・継続作業を Codex rescue サブエージェントへ委譲（行き詰まり時） | `[--background\|--wait] [--fresh\|--resume] [--model <model\|spark>] [--effort <none..xhigh>]` |
+| `/codex:status` | このリポジトリの実行中/最近の Codex ジョブと **review-gate 状態** を表示 | `[job-id] [--wait] [--all]` |
+| `/codex:result` | 完了ジョブの保存済み最終出力を取得 | `[job-id]` |
+| `/codex:cancel` | 実行中のバックグラウンドジョブをキャンセル | `[job-id]` |
+| `/codex:setup` | Codex CLI の準備状態確認・**停止前 review gate の有効/無効切替** | `[--enable-review-gate\|--disable-review-gate]` |
+
+- **background ジョブ運用**: `--background` で投げたレビュー/レスキューは `/codex:status` で進捗確認 → `/codex:result` で結果回収 → 不要なら `/codex:cancel`。長い作業を並行させたいときに使う。
+- **前景で待つ**: `--wait` を付ければ結果が返るまでブロックして即レビューを受け取る。
+
+## Review gate（停止前レビューの自動化）
+
+`/codex:setup --enable-review-gate` で「**stop-time review gate**」を有効化すると、Claude が応答を終える前に Codex の新規レビューを通すことが必須になる。手動で毎回 `/codex:review` を頼まなくても「実装 → 必ず Codex のセカンドオピニオン → 完了」が自動で強制される。
+
+- 状態確認: `/codex:status`（review-gate 状態も表示される）
+- 無効化: `/codex:setup --disable-review-gate`
+- 協働を常用するなら有効化が有力。ただしゲートを通すぶん停止が一手間増えるので、頻度に応じて使い分ける。
 
 ## dev-core 既存原則との統合
 
