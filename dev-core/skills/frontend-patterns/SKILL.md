@@ -1,6 +1,9 @@
 ---
 name: frontend-patterns
 description: "フロントエンドのコンポーネント設計、状態管理、フォーム実装のパターンガイド"
+metadata:
+  version: "3.1.0"
+  author: "Ryusuke Tadokoro"
 ---
 
 # Frontend Patterns
