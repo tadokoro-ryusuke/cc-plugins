@@ -1,6 +1,6 @@
 {
   "name": "cc-plugins",
-  "version": "3.1.0",
+  "version": "4.0.0",
   "description": "開発ワークフロー支援プラグイン。t-wada式TDD、FSD、Clean Architecture、DDDに基づいた開発をハーネスエンジニアリングでサポートします。",
   "owner": {
     "name": "Ryusuke Tadokoro",

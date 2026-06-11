@@ -4,7 +4,12 @@
 開発原則・パターン・協働ワークフローの本体は dev-core の各 SKILL.md にあり、本ファイルはそれらを **横断的にインデックス** します。
 
 - **cc-plugins**: Claude Code プラグインのマーケットプレイス・ソースリポジトリ。
-- **dev-core**: TDD / FSD / Clean Architecture / DDD などの開発原則と、それを駆動するスキル・コマンド・エージェントを束ねたプラグイン。
+- **dev-core**: TDD / FSD / Clean Architecture / DDD などの開発原則と、それを駆動するスキル・ワークフロー・エージェントを束ねたプラグイン。
+
+dev-core のスキルは2層に分かれます:
+
+- `dev-core/skills/` — **知識スキル**（ツール非依存・Codex と共有・本ファイルのインデックス対象）
+- `dev-core/workflows/` — **ワークフロースキル**（Claude Code 専用。サブエージェント/Agent Teams のオーケストレーション。Codex には共有しない）
 
 知識本体はスキルに、インデックスは本ファイルに、ツール固有の薄い補足は各ツールのラッパ（Claude なら `CLAUDE.md`）に置き、**二重管理しない**ことを設計原則とします。
 
@@ -29,8 +34,8 @@
 
 同一の `dev-core/skills/` を、ツールごとに別経路で参照します（実体は1箇所・コピーしない）。
 
-- **Claude Code**: plugin root の `skills/` を **自動検出**で読み込む（`.claude-plugin/plugin.json` は skills フィールドを持たない）。
-- **Codex**: `.codex-plugin/plugin.json` の `skills: "./skills/"` で同一 `skills/` を参照する。
+- **Claude Code**: `.claude-plugin/plugin.json` の `skills: ["./skills", "./workflows"]` で知識スキルとワークフロースキルの両方を読み込む。
+- **Codex**: `.codex-plugin/plugin.json` の `skills: "./skills/"` で**知識スキルのみ**を参照する（workflows は Claude 固有機能に依存するため共有しない）。
 
 name / version は `.claude-plugin/plugin.json` を正とし、`.codex-plugin/plugin.json` は同期します。
 両者のずれは `scripts/check-skills-drift.mjs`（CI）で継続的に検証されます。
