@@ -1,14 +1,16 @@
 ---
-allowed-tools: Bash(gh:*), Bash(git:*), Read(*.md,*.ts,*.tsx), Write(*.md), Task(subagent_type:dev-core:task-planner), Task(subagent_type:dev-core:issue-creator)
-description: "Agent Teamで複数の視点から設計・要件を議論し、TDD計画を立案します"
+name: task-team
+description: "Agent Teamで複数の視点（要件分析・設計・批評）から設計を議論し、TDD計画を立案する。アーキテクチャの選択肢が複数ある・要件が曖昧・影響範囲が大きいタスクで /dev-core:task-team で起動する。"
 argument-hint: "[タスクの概要]"
+disable-model-invocation: true
+allowed-tools: Bash(gh:*), Bash(git:*), Read, Write(*.md), Task(subagent_type:dev-core:task-planner), Task(subagent_type:dev-core:issue-creator)
 ---
 
 # チーム設計 → TDD 計画 → Issue 化
 
 **重要**: 開始前に `dev-core:best-practices` スキルをロードすること。
 
-**前提**: Agent Teams が有効であること（`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1"`）。無効な場合はユーザーに設定を案内し、代わりに `/dev-core:task` の使用を提案する。
+**前提**: Agent Teams が利用可能であること（環境によっては設定での有効化が必要）。利用できない場合は代わりに `/dev-core:task` の使用を提案する。
 
 ## 概要
 

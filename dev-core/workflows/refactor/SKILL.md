@@ -1,7 +1,9 @@
 ---
-allowed-tools: Task(subagent_type:dev-core:tdd-practitioner), Task(subagent_type:dev-core:quality-checker), Bash(git:*), Bash(gh:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read(*.ts,*.tsx,*.md), Glob
-description: "作業中の変更、PR、ブランチ、または最近の変更に対してリファクタリングを実行します"
+name: refactor
+description: "作業中の変更・PR・ブランチ・最近の変更に対して Martin Fowler / t-wada の原則でリファクタリングを実行する。テストグリーン維持・外部動作不変が制約。/dev-core:refactor で起動する。"
 argument-hint: "[コミットハッシュ|PR番号|ブランチ名|ファイル/ディレクトリ] (省略時は現在の変更)"
+disable-model-invocation: true
+allowed-tools: Task(subagent_type:dev-core:tdd-practitioner), Task(subagent_type:dev-core:quality-checker), Bash(git:*), Bash(gh:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read, Glob
 ---
 
 # コードリファクタリング
@@ -293,7 +295,6 @@ PR 作成・マージ
 
 - `/dev-core:verify`: リファクタリング後の 6 段階検証
 - `/dev-core:code-review`: コードレビュー実行
-- `/dev-core:checkpoint --create`: 進捗スナップショット作成
 
 プロジェクト設定ファイル（.claude/\*.local.md）を確認し、追加ツールが指定されている場合はそれを活用すること。
 コードの動作を変えずに、tdd-practitioner と quality-checker エージェントを活用して品質と保守性を向上させること。

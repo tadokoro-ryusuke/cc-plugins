@@ -1,7 +1,9 @@
 ---
-allowed-tools: Bash(gh:*), Bash(git:*), Read(*.md,*.ts,*.tsx), Write(*.md), Task(subagent_type:dev-core:task-planner), Task(subagent_type:dev-core:issue-creator)
-description: "対話型で要件を整理し、TDD計画を立案、GitHub Issueを作成します"
+name: task
+description: "対話型で要件を整理し、BDDシナリオとTDD計画を立案して GitHub Issue を作成する。新機能・改修タスクの開始時に /dev-core:task で起動する。"
 argument-hint: "[タスクの概要]"
+disable-model-invocation: true
+allowed-tools: Bash(gh:*), Bash(git:*), Read, Write(*.md), Task(subagent_type:dev-core:task-planner), Task(subagent_type:dev-core:issue-creator)
 ---
 
 # 対話型タスク作成 → TDD 計画 → Issue 化

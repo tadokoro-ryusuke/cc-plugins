@@ -1,7 +1,9 @@
 ---
-allowed-tools: Bash(git:*), Bash(gh:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read(*.md,*.ts,*.tsx), Task(subagent_type:dev-core:quality-checker)
-description: '現在のブランチからPull Requestを作成します。変更内容を分析し、適切なタイトルと説明を生成します'
-argument-hint: '[Issue番号] (省略時は自動検出)'
+name: pr
+description: "現在のブランチから Pull Request を作成する。変更内容を分析して適切なタイトルと説明を生成し、Issue 番号を自動検出して紐付ける。/github-tools:pr で起動する。"
+argument-hint: "[Issue番号] (省略時は自動検出)"
+disable-model-invocation: true
+allowed-tools: Bash(git:*), Bash(gh:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read, Task(subagent_type:dev-core:quality-checker)
 ---
 
 # Pull Request 作成

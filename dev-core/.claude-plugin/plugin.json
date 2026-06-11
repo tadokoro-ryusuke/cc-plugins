@@ -24,5 +24,9 @@
     "continuous-learning",
     "agent-teams",
     "code-review"
+  ],
+  "skills": [
+    "./skills",
+    "./workflows"
   ]
 }

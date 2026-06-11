@@ -1,12 +1,14 @@
 ---
-allowed-tools: Bash(git:*), Bash(gh:*), Read(*.md,*.ts,*.tsx,*.js,*.jsx,*.py,*.log,*.json), Grep, Glob, Write(*.md)
-description: "Agent Teamで複数の仮説を並行検証し、バグの根本原因を特定します"
+name: debug-team
+description: "Agent Teamで複数の仮説を並行検証し、バグの根本原因を特定する。単独調査でアンカリングバイアスが懸念される複雑なバグで /dev-core:debug-team で起動する。軽量版は debug スキル。"
 argument-hint: "[バグの症状/Issue番号/エラーメッセージ]"
+disable-model-invocation: true
+allowed-tools: Bash(git:*), Bash(gh:*), Read, Grep, Glob, Write(*.md)
 ---
 
 # デバッグ調査チーム
 
-**前提**: Agent Teams が有効であること（`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1"`）。無効な場合はユーザーに設定を案内する。
+**前提**: Agent Teams が利用可能であること（環境によっては設定での有効化が必要。利用できない場合は軽量版の `debug` スキル＝4フェーズ根本原因分析を案内する）。
 
 ## 概要
 

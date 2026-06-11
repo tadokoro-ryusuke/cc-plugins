@@ -1,7 +1,9 @@
 ---
-allowed-tools: Bash(gh:*), Bash(git:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read(*.md,*.ts,*.tsx,*.vue,*.php), Write, Edit, MultiEdit, Task(subagent_type:dev-core:tdd-practitioner), Task(subagent_type:dev-core:quality-checker), Task(subagent_type:dev-core:security-auditor), Task(subagent_type:dev-core:build-error-resolver), Task(subagent_type:dev-core:code-reviewer)
-description: "作成済みの計画書に基づいてTDD実装を実行します"
+name: execute
+description: "作成済みの計画書（docs/plans/task-*.md）に基づいてTDD実装を実行する。/dev-core:task で計画を立てた後の実装フェーズで /dev-core:execute で起動する。"
 argument-hint: "[計画書のパス] (例: docs/plans/task-user-auth.md)"
+disable-model-invocation: true
+allowed-tools: Bash(gh:*), Bash(git:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read, Write, Edit, Task(subagent_type:dev-core:tdd-practitioner), Task(subagent_type:dev-core:quality-checker), Task(subagent_type:dev-core:security-auditor), Task(subagent_type:dev-core:build-error-resolver), Task(subagent_type:dev-core:code-reviewer)
 ---
 
 # TDD 計画の実行
@@ -86,8 +88,8 @@ tdd-practitioner は各イテレーション完了時に3種のステータス�
 
 ## 中断と再開
 
-- 中断時は `/dev-core:checkpoint --create` で進捗保存
-- 同じコマンドで続きから再開可能
+- 中断時は完了済みイテレーションをコミットし、残タスクと次のアクションを計画書（docs/plans/task-*.md）に追記して保存する
+- 再開時は同じコマンドで計画書を読み込めば続きから実行できる
 
 ## エラーハンドリング
 
