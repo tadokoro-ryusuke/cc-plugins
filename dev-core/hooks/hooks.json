@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "TOOL_INPUT=$(cat /dev/stdin); CMD=$(echo \"$TOOL_INPUT\" | jq -r '.tool_input.command // empty' 2>/dev/null); if echo \"$CMD\" | grep -qEi '(rm\\s+-rf\\s+[/~]|drop\\s+(table|database)|truncate\\s+table|git\\s+push\\s+--force\\s+(origin\\s+)?(main|master)|git\\s+reset\\s+--hard)'; then echo 'BLOCKED: 危険なコマンドを検出しました' >&2; exit 2; fi"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/block-dangerous-commands.sh\""
           }
         ]
       }
@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "TOOL_INPUT=$(cat /dev/stdin); FILE=$(echo \"$TOOL_INPUT\" | jq -r '.tool_input.file_path // empty' 2>/dev/null); if [ -n \"$FILE\" ] && echo \"$FILE\" | grep -qE '\\.(ts|tsx|js|jsx|json|css|md|vue|php)$'; then npx prettier --write \"$FILE\" 2>/dev/null; fi; exit 0"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/format-changed-file.sh\""
           }
         ]
       }
@@ -47,6 +47,15 @@
       }
     ],
 
-    "Stop": []
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/stop-quality-gate.sh\""
+          }
+        ]
+      }
+    ]
   }
 }
