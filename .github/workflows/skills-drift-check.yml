@@ -2,6 +2,8 @@ name: skills drift check
 
 # dev-core のスキル構成とマニフェストの「ずれ（drift）」を静的に検証する。
 # 検証本体は scripts/check-skills-drift.mjs（Node 標準モジュールのみ・追加依存なし）。
+# 加えて公式バリデータ（claude plugin validate --strict）で marketplace と
+# 各プラグインのマニフェスト・構成を検証する。
 # 注意: これは静的検証であり「Codex が実際に skill を認識するか」は検証しない
 #       （CI に Codex CLI は無い）。実認識は docs/codex-interop/shared-skills-setup.md
 #       の手動確認ログで受け入れる。
@@ -9,9 +11,10 @@ name: skills drift check
 on:
   push:
     paths: &drift_paths
-      - "dev-core/skills/**"
-      - "dev-core/.claude-plugin/plugin.json"
-      - "dev-core/.codex-plugin/plugin.json"
+      - "dev-core/**"
+      - "github-tools/**"
+      - "ui-ux-pro-max/**"
+      - ".claude-plugin/**"
       - "AGENTS.md"
       - "CLAUDE.md"
       - "scripts/**"
@@ -36,3 +39,22 @@ jobs:
       # 追加依存なし（Node 標準モジュールのみ）のため npm install は不要。
       - name: Run skills drift check
         run: node scripts/check-skills-drift.mjs
+
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+      - name: Validate marketplace manifest (strict)
+        run: claude plugin validate . --strict
+      - name: Validate plugin manifests (strict)
+        run: |
+          for plugin in dev-core github-tools ui-ux-pro-max; do
+            echo "::group::$plugin"
+            claude plugin validate "$plugin" --strict
+            echo "::endgroup::"
+          done
