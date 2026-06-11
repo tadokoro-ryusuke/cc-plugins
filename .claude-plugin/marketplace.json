@@ -1,5 +1,4 @@
 {
-  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "cc-plugins",
   "version": "3.1.0",
   "description": "開発ワークフロー支援プラグイン。t-wada式TDD、FSD、Clean Architecture、DDDに基づいた開発をハーネスエンジニアリングでサポートします。",
@@ -10,45 +9,19 @@
   "plugins": [
     {
       "name": "dev-core",
-      "description": "TDD開発フレームワーク。t-wada式TDD、FSD、Clean Architecture、DDDのベストプラクティスと、5イベントHooks自動化、systematic debugging、複利的改善ループを提供",
-      "version": "3.1.0",
-      "author": {
-        "name": "Ryusuke Tadokoro",
-        "email": "tado56@poshiri.org"
-      },
+      "description": "TDD開発フレームワーク。t-wada式TDD、FSD、Clean Architecture、DDDのベストプラクティスと、Hooks自動化、systematic debugging、複利的改善ループを提供",
       "source": "./dev-core",
       "category": "development"
     },
     {
       "name": "github-tools",
-      "description": "GitHub連携ワークフロー支援。Issue作成、PR作成、タスク管理、ドキュメント更新を効率化",
-      "version": "1.0.1",
-      "author": {
-        "name": "Ryusuke Tadokoro",
-        "email": "tado56@poshiri.org"
-      },
+      "description": "GitHub連携ワークフロー支援。PR作成とドキュメント更新を効率化",
       "source": "./github-tools",
       "category": "workflow"
     },
     {
-      "name": "ms-office-suite",
-      "description": "Microsoft Officeドキュメント操作スキル。PDF処理（テキスト/テーブル抽出、作成、結合、分割、フォーム記入）とWord文書操作（作成、編集、変更履歴管理）を提供",
-      "version": "1.0.0",
-      "author": {
-        "name": "Ryusuke Tadokoro",
-        "email": "tado56@poshiri.org"
-      },
-      "source": "./ms-office-suite",
-      "category": "productivity"
-    },
-    {
       "name": "ui-ux-pro-max",
-      "description": "UI/UXデザインインテリジェンス。57種のUIスタイル、95種のカラーパレット、56種のフォントペアリング、24種のチャートタイプ、98種のUXガイドラインを8つのテックスタック向けに提供",
-      "version": "1.0.0",
-      "author": {
-        "name": "nextlevelbuilder",
-        "url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill"
-      },
+      "description": "UI/UXデザインインテリジェンス。UIスタイル、カラーパレット、フォントペアリング、チャートタイプ、UXガイドラインの検索可能データベースを8つのテックスタック向けに提供",
       "source": "./ui-ux-pro-max",
       "category": "design"
     }
