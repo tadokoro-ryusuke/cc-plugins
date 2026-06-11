@@ -16,12 +16,13 @@
 <!-- skills:start -->
 | skill | 説明 |
 |-------|------|
-| backend-patterns | API設計、Repository、サービス層、キャッシュ、エラーハンドリングのパターンガイド |
-| best-practices | TDD, FSD, Clean Architecture, DDD, コーディング規約, セキュリティのベストプラクティスガイド |
+| backend-patterns | API設計、Repository、サービス層、Result パターン、キャッシュ、トランザクションのパターンガイド（フレームワーク非依存） |
+| best-practices | TDD、SOLID、コーディング規約、FSD/Clean Architecture/DDD、セキュリティの開発原則ガイド（詳細は references/ に progressive disclosure） |
 | codex-collab | Claude Code と Codex の協働を駆動するスキル。Claude が実装し Codex に独立レビュー/セカンドオピニオン/レスキューを依頼する |
 | continuous-learning | セッションからの学習パターン抽出。ミスを二度と起こさないメカニズムを構築する |
-| frontend-patterns | フロントエンドのコンポーネント設計、状態管理、フォーム実装のパターンガイド |
-| verification-loop | 6段階検証フロー（build→type→lint→test→security→diff） |
+| debug | 4フェーズ根本原因分析（収集→仮説→検証→修正）。Three Strikes Rule（3回失敗で STOP）の正本 |
+| frontend-patterns | フロントエンドのコンポーネント設計、状態管理、フォーム、データフェッチのパターンガイド（フレームワーク非依存） |
+| verify | 6段階検証フロー（build→type→lint→test→security→diff）。証拠ベース完了判定（Iron Law）の正本 |
 <!-- skills:end -->
 
 ## スキルの参照経路（2経路）

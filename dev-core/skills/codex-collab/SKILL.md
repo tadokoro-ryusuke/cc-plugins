@@ -1,9 +1,6 @@
 ---
 name: codex-collab
 description: "Claude Code と Codex の協働を駆動するスキル。Claude が実装し Codex に独立レビュー/セカンドオピニオン/レスキューを依頼する。「Codexにレビューさせて」「セカンドオピニオン」「Codexに委譲」等でトリガー。"
-metadata:
-  version: "3.1.0"
-  author: "Ryusuke Tadokoro"
 compatibility: "Claude Code + codex-plugin-cc"
 ---
 
@@ -75,7 +72,7 @@ Codex レビューを「前段（自分）の自己申告を信用しない独�
 
 同一バグの修正試行が **3 回連続で失敗したら STOP**。4 回目を試みず、`/codex:rescue` で Codex へ委譲する。3 回失敗は「修正方法」ではなく「問題の理解」が間違っている兆候であり、別モデルの視点に切り替える。
 
-- 正本: `dev-core/commands/debug.md`（3回失敗ルール / Three Strikes Rule）
+- 正本: `dev-core/skills/debug/SKILL.md`（3回失敗ルール / Three Strikes Rule）
 
 ## 協働ワークフローのパターン
 

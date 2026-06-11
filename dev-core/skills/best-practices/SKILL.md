@@ -1,23 +1,28 @@
 ---
 name: best-practices
-description: "TDD, FSD, Clean Architecture, DDD, コーディング規約, セキュリティのベストプラクティスガイド"
-metadata:
-  version: "3.1.0"
-  author: "Ryusuke Tadokoro"
+description: "TDD、SOLID、コーディング規約、FSD/Clean Architecture/DDD、セキュリティの開発原則ガイド。実装計画の立案時・新規コード作成時・リファクタリング時・レビュー時に使用する。詳細は references/ 配下を必要時にのみ読み込む（progressive disclosure）。"
 ---
 
 # Dev Core Best Practices
 
 全エージェントの共通基盤。コーディング規約・原則・パターンの **Single Source of Truth**。
 
-## 1. TDD サイクル（t-wada 式）
+このファイルにはコア原則のみを置く。詳細が必要になったら、該当する references/ のファイルを読むこと。**不要な参照ファイルを先読みしない。**
 
-### Red→Green→Refactor→Commit
+| 参照ファイル | 内容 | 読むタイミング |
+|-------------|------|---------------|
+| [references/coding-standards.md](references/coding-standards.md) | 命名規約、コードスタイル、TypeScript 規約、Git 規約、リファクタリング技法 | コードを書く・直す・コミットする前 |
+| [references/architecture.md](references/architecture.md) | FSD レイヤー構造、Clean Architecture、DDD（エンティティ/VO/集約） | 設計判断・ファイル配置・ドメインモデリング時 |
+| [references/security.md](references/security.md) | OWASP Top 10 チェックリスト、入力検証、機密情報保護、金融システム要件 | セキュリティレビュー・API/認証実装時 |
+
+## 1. TDD サイクル（t-wada 式）— Red→Green→Refactor→Commit
 
 1. **Red 🔴**: 単一機能の失敗するテストを1つ作成。実装は存在しないため必ず失敗する
 2. **Green 🟢**: テストをパスさせる**最小限のコード**を記述。余分な機能は追加しない
 3. **Refactor 🔨**: テストをグリーンに保ちながら品質向上。重複排除、命名改善、複雑さの解消
 4. **Commit ✅**: 意味のあるまとまりとしてコミット
+
+**Iron Law: テストなしのプロダクションコードは存在してはならない。** 検証コマンドを実行せずに「パス」を宣言することも禁止（証拠ベース完了判定の詳細は `verify` スキル参照）。
 
 ## 2. SOLID 原則
 
@@ -27,156 +32,14 @@ metadata:
 - **ISP**: 使わないメソッドへの依存を強制しない
 - **DIP**: 高レベルモジュールは低レベルに依存しない。抽象に依存する
 
-## 3. コーディング規約
+## 3. 普遍のコア規約
 
-### ハードコーディング禁止
-
-- **マジックナンバー**: `const MAX_RETRY = 3;` — 数値リテラル直接記述禁止
-- **設定値**: 環境変数または設定ファイル（API Key, URL, パス）
-- **UI文字列**: 定数や言語ファイルで管理
-
-### 命名規約
-
-- **camelCase**: 変数、関数、メソッド（`getUserById`, `isActive`）
-- **PascalCase**: クラス、型、インターフェース、コンポーネント（`UserService`, `ButtonProps`）
-- **UPPER_SNAKE_CASE**: 定数（`MAX_RETRY_COUNT`, `API_BASE_URL`）
-- **kebab-case**: ファイル名、ディレクトリ名（`user-service.ts`）
-
-### コードスタイル
-
+- **ハードコーディング禁止**: マジックナンバーは定数化、設定値は環境変数/設定ファイル、UI 文字列は定数/言語ファイル
 - **DRY**: コード重複は即座に排除
 - **早期リターン/ガード節**: 深いネストを避ける
-- **イミュータビリティ**: `[...array, item]`, `{ ...obj, key: val }` — 直接変更しない
-- **ファイルサイズ**: 200-400行推奨、500行超で分割検討。関数は50行以下
-- **三項演算子**: 単純な場合のみ。ネストした三項演算子は使用禁止
+- **イミュータビリティ**: 直接変更ではなくコピーで更新
+- **サイズ上限**: ファイル 200-400 行推奨（500 行超で分割検討）、関数 50 行以下
 
-### TypeScript
+## 4. プロジェクト固有設定
 
-- **strict mode** 有効
-- **any 禁止**: `unknown` + 型ガードを使用
-- **明示的な戻り値の型**: 公開関数には必ず型を指定
-- **インポート順序**: 外部ライブラリ → 内部モジュール（絶対パス）→ 相対パス
-
-## 4. Feature-Sliced Design (FSD)
-
-### レイヤー構造（上から下へ依存）
-
-```
-src/
-├── app/       # アプリケーション層（ページ、グローバル設定）
-├── widgets/   # ウィジェット層（ページ構成要素）
-├── features/  # フィーチャー層（ユーザー向け機能）
-├── entities/  # エンティティ層（ビジネスエンティティ）
-└── shared/    # 共有層（UI、ユーティリティ、設定）
-```
-
-### 依存関係ルール
-
-- 上位層は下位層のみに依存可能
-- 同一層内での相互依存は禁止
-- shared 層はどこからでも使用可能
-
-### スライス構成
-
-```
-features/[feature-name]/
-├── api/      # APIクライアント、サーバーアクション
-├── model/    # ストア、型、ビジネスロジック
-├── ui/       # UIコンポーネント
-└── index.ts  # パブリックAPI
-```
-
-## 5. Clean Architecture
-
-### 依存性の逆転
-
-- ビジネスロジックは外部依存を持たない
-- インターフェースを通じた疎結合
-- 詳細（UI、DB）はビジネスルールに依存
-
-```typescript
-// Domain層（entities）— インターフェース定義
-interface ClientRepository {
-  findById(id: string): Promise<Client>;
-}
-
-// Application層（features）— ユースケース
-class GetClientUseCase {
-  constructor(private repo: ClientRepository) {}
-  async execute(id: string) { return this.repo.findById(id); }
-}
-
-// Infrastructure層（features/api）— 具象実装
-class DBClientRepository implements ClientRepository {
-  async findById(id: string) { /* DB操作 */ }
-}
-```
-
-## 6. DDD（ドメイン駆動設計）
-
-### エンティティとバリューオブジェクト
-
-```typescript
-// エンティティ（識別子を持つ）
-class Client {
-  constructor(
-    private readonly id: ClientId,
-    private name: ClientName,
-    private tags: Tag[],
-  ) {}
-}
-
-// バリューオブジェクト（不変、自己検証）
-class ClientName {
-  constructor(private readonly value: string) {
-    if (value.length < 2) throw new Error("クライアント名は2文字以上必要です");
-  }
-}
-```
-
-### 集約とリポジトリ
-
-- 集約ルートを通じたアクセス
-- トランザクション境界の明確化
-- リポジトリパターンの実装
-
-## 7. セキュリティ（OWASP Top 10）
-
-### チェックリスト
-
-- **A01 Access Control**: 認可チェックが全エンドポイントに実装、水平権限昇格防止、CORS設定
-- **A02 Cryptographic**: 機密データ暗号化、HTTPS強制、安全な暗号アルゴリズム
-- **A03 Injection**: SQL/XSS/コマンドインジェクション対策（ORM使用、自動エスケープ）
-- **A04 Insecure Design**: 脅威モデリング、防御の深さ
-- **A05 Misconfiguration**: デフォルト資格情報変更、不要機能無効化
-- **A06 Vulnerable Components**: 依存関係最新、`npm audit` クリーン
-- **A07 Authentication**: 強力なパスワードポリシー、MFA、安全なセッション管理
-- **A08 Integrity**: CI/CD安全性、依存関係整合性チェック
-- **A09 Logging**: セキュリティイベントのログ記録、改ざん防止
-- **A10 SSRF**: URL検証、内部ネットワークアクセス制限
-
-### 入力検証
-
-- スキーマベースのバリデーション（zod, Laravel Validation等）
-- サーバーサイドバリデーション必須（クライアントのみに頼らない）
-
-### 機密情報保護
-
-- 環境変数の使用（.env.local / .env、.gitignore に追加）
-- コミット前の機密情報チェック
-- .env.example をコミット可能なテンプレートとして管理
-
-### 金融システム追加チェック
-
-- トランザクション原子性（ACID）、二重支払い防止
-- 監査ログ、レート制限
-- Web3: ウォレット署名検証、MEV保護
-
-## 8. リファクタリング技法
-
-- メソッドの抽出: 複雑な関数を分割
-- 変数/関数の名前変更: 明確性の向上
-- マジックナンバーを定数に置き換え
-- 条件式の簡略化
-- クラス/モジュールの抽出
-- デッドコードの排除
+技術スタック・コマンド・閾値（カバレッジ等）はプロジェクトの `.claude/dev-core.local.md` を正とする。このスキルの原則と矛盾する場合はプロジェクト設定が優先。

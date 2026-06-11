@@ -11,8 +11,8 @@
  *
  * Iteration 0: 「dev-core/.codex-plugin/plugin.json が存在すること」だけを検証する骨格。
  * Iteration 1: 全 SKILL.md の frontmatter スキーマを検証する。
- * Iteration 2: 全 SKILL.md が metadata.version を持ち、.claude-plugin/plugin.json の
- *              version と一致することを検証する（運用要件として必須化）。
+ * Iteration 2: （廃止）SKILL.md の metadata.version 必須化はバージョン一本化
+ *              （正本: .claude-plugin/plugin.json）に伴い撤廃した。
  * Iteration 3: .codex-plugin/plugin.json の内容（name=kebab / version=semver /
  *              description=非空 / skills="./skills/"）と、.claude-plugin/plugin.json
  *              との name/version 一致（cross-manifest）を検証する。
@@ -271,10 +271,9 @@ function validateNameFormat(name) {
  * 単一スキルの SKILL.md frontmatter を検証し、違反内容を返す。
  * @param {string} dirName スキルディレクトリ名（= 期待される name）。
  * @param {string} skillFilePath SKILL.md の絶対パス。
- * @param {string} expectedVersion plugin.json の version（metadata.version の期待値）。
  * @returns {string[]} このスキルに対する違反内容の配列（ファイル名は含まない）。
  */
-function validateSkillFrontmatter(dirName, skillFilePath, expectedVersion) {
+function validateSkillFrontmatter(dirName, skillFilePath) {
   /** @type {string[]} */
   const issues = [];
 
@@ -330,14 +329,13 @@ function validateSkillFrontmatter(dirName, skillFilePath, expectedVersion) {
     }
   }
 
-  // ルール7（Iteration 2）: metadata.version が存在し plugin.json の version と一致する。
+  // ルール7（Iteration 2 の置き換え）: metadata.version を持たないこと。
+  // バージョンの正本は .claude-plugin/plugin.json に一本化したため、
+  // スキル個別のバージョン記載はバンプ漏れ drift の温床として禁止する。
   const metadata = parseMetadataBlock(block);
-  const metadataVersion = metadata.get("version");
-  if (metadataVersion === undefined) {
-    issues.push("frontmatter に metadata.version が無い");
-  } else if (metadataVersion !== expectedVersion) {
+  if (metadata.has("version")) {
     issues.push(
-      `metadata.version "${metadataVersion}" が plugin.json の version "${expectedVersion}" と一致しない`,
+      "metadata.version は廃止された（バージョンの正本は .claude-plugin/plugin.json）",
     );
   }
 
@@ -385,43 +383,12 @@ function isNonEmptyString(value) {
 }
 
 /**
- * `.claude-plugin/plugin.json` から version を読み取る。
- * version の正本はこのマニフェストであり、マジックストリングを排除するため一箇所に集約する。
- * @returns {{ version: string | null, error: string | null }}
- *   version 取得結果。読み取り失敗時は version=null・error にメッセージを格納する。
- */
-function loadPluginVersion() {
-  const { data, error } = loadManifest(CLAUDE_PLUGIN_MANIFEST_REL);
-  if (data === null) {
-    return { version: null, error };
-  }
-
-  const version = data.version;
-  if (typeof version !== "string" || version.length === 0) {
-    return {
-      version: null,
-      error: `${CLAUDE_PLUGIN_MANIFEST_REL} に version フィールドが無い`,
-    };
-  }
-
-  return { version, error: null };
-}
-
-/**
  * 全 dev-core スキルの SKILL.md frontmatter を走査し、違反を集約する。
  * @returns {string[]} 「ファイル名: 違反内容」形式の違反メッセージ配列。
  */
 function collectFrontmatterViolations() {
   /** @type {string[]} */
   const violations = [];
-
-  const { version: expectedVersion, error: versionError } = loadPluginVersion();
-  if (expectedVersion === null) {
-    violations.push(
-      versionError ?? `cannot read version from ${CLAUDE_PLUGIN_MANIFEST_REL}`,
-    );
-    return violations;
-  }
 
   const skillsDir = join(REPO_ROOT, SKILLS_DIR_REL);
   if (!existsSync(skillsDir)) {
@@ -432,11 +399,7 @@ function collectFrontmatterViolations() {
   for (const dirName of readSkillDirNames()) {
     const skillFileRel = join(SKILLS_DIR_REL, dirName, SKILL_FILE_NAME);
     const skillFilePath = join(REPO_ROOT, skillFileRel);
-    const issues = validateSkillFrontmatter(
-      dirName,
-      skillFilePath,
-      expectedVersion,
-    );
+    const issues = validateSkillFrontmatter(dirName, skillFilePath);
     for (const issue of issues) {
       violations.push(`${skillFileRel}: ${issue}`);
     }
