@@ -1,9 +1,6 @@
 ---
 name: continuous-learning
-description: "セッションからの学習パターン抽出。ミスを二度と起こさないメカニズムを構築する"
-metadata:
-  version: "3.1.0"
-  author: "Ryusuke Tadokoro"
+description: "セッションからの学習パターン抽出。ミスを二度と起こさないメカニズムを構築する。同じミスが繰り返されたとき・レビュー指摘やビルド/テスト失敗の振り返り時・セッション終了時の改善活動で使用する。"
 ---
 
 # Continuous Learning
@@ -33,10 +30,12 @@ Mitchell Hashimotoの原則: **「エージェントがミスを犯すたびに�
 
 | 原因 | 対策 | 保存先 |
 |------|------|--------|
-| ルール不足 | ルール/スキルに追記 | rules/*.md or skills/*/SKILL.md |
-| ルール無視 | Hook化（100%強制） | hooks/hooks.json |
+| ルール不足 | スキルに追記 | skills/*/SKILL.md（必要なら references/ に分割） |
+| ルール無視 | Hook化（100%強制） | hooks/hooks.json + scripts/ |
 | 知識不足 | プロジェクト固有設定に記録 | .claude/*.local.md |
 | ツール不足 | lint ルール/テスト追加 | eslintrc, テストファイル |
+
+**「祈りベースの指示」を「仕組み」に変える**のが原則。プロンプトに「必ず〜すること」と書いても破られるなら、frontmatter（エージェントの `skills` プリロード等）や Hook（強制ブロック）へ昇格させる。
 
 ### 4. 検証
 
@@ -57,9 +56,8 @@ Mitchell Hashimotoの原則: **「エージェントがミスを犯すたびに�
 
 ## Stopフックとの連携
 
-セッション終了時のStopフックが以下を自動検出:
-- 未コミットの変更
-- console.log/debugger残存
-- 新規TODO/FIXMEコメント
+dev-core の Stop フック（`scripts/stop-quality-gate.sh`）がセッション終了時に以下を自動検出する:
 
-これらの検出パターンに新しいチェック項目を追加し続けることで、Stopフック自体が学習する。
+- 変更ファイルに残った `console.log` / `debugger` 等のデバッグ残骸
+
+このスクリプトの検出パターンに新しいチェック項目を追加し続けることで、Stopフック自体が学習する。

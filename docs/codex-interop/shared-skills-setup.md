@@ -151,7 +151,7 @@ drift が緑でも「Codex が実際に skill を認識するか」は経路ご�
 - install 方式:             bash setup-shared-skills.sh /path/to/dev-core/skills
 - Codex restart 有無:       なし
 - 確認方法:                 /skills 一覧
-- 認識できた skill 名一覧:  best-practices, verification-loop, codex-collab, ...
+- 認識できた skill 名一覧:  best-practices, verify, codex-collab, ...
 - 結果:                     OK
 - 備考:                     WSL2 上で確認。relative symlink が正しく解決された。
 ```

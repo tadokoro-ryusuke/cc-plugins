@@ -1,11 +1,15 @@
 {
   "name": "dev-core",
-  "version": "3.1.0",
-  "description": "TDD開発フレームワーク。t-wada式TDD、FSD、Clean Architecture、DDDのベストプラクティスと、5イベントHooks自動化、systematic debugging、複利的改善ループを提供。",
+  "displayName": "Dev Core",
+  "version": "4.0.0",
+  "description": "TDD開発フレームワーク。t-wada式TDD、FSD、Clean Architecture、DDDのベストプラクティスと、Hooks自動化、systematic debugging、複利的改善ループを提供。",
   "author": {
     "name": "Ryusuke Tadokoro",
     "email": "tado56@poshiri.org"
   },
+  "homepage": "https://github.com/tadokoro-ryusuke/cc-plugins",
+  "repository": "https://github.com/tadokoro-ryusuke/cc-plugins",
+  "license": "MIT",
   "keywords": [
     "tdd",
     "refactoring",
@@ -20,5 +24,9 @@
     "continuous-learning",
     "agent-teams",
     "code-review"
+  ],
+  "skills": [
+    "./skills",
+    "./workflows"
   ]
 }

@@ -1,9 +1,6 @@
 ---
 name: backend-patterns
-description: "API設計、Repository、サービス層、キャッシュ、エラーハンドリングのパターンガイド"
-metadata:
-  version: "3.1.0"
-  author: "Ryusuke Tadokoro"
+description: "API設計、Repository、サービス層、Resultパターン、キャッシュ、トランザクションのパターンガイド（フレームワーク非依存）。APIエンドポイント・ビジネスロジック・データアクセス層の実装/設計/レビュー時に使用する。"
 ---
 
 # Backend Patterns
