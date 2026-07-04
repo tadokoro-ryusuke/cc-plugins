@@ -128,12 +128,7 @@ prompt: |
 
 ### Phase 4: 計画書の保存
 
-```bash
-# タイトルから slug を生成（例: "ユーザー認証機能" → "user-auth"）
-mkdir -p ./docs/plans
-# 計画書を保存
-echo "[計画内容]" > ./docs/plans/task-[slug].md
-```
+タイトルから slug を生成し（例: 「ユーザー認証機能」→ `user-auth`）、**Write ツール**で `docs/plans/task-[slug].md` に計画書を保存する（シェルの `echo` リダイレクトは使わない）。
 
 計画書には以下を含める:
 - 要件情報（タイトル、概要、背景）

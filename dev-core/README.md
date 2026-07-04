@@ -115,6 +115,7 @@ build-command: pnpm build
 typecheck-command: pnpm typecheck
 lint-command: pnpm lint
 test-command: pnpm test
+audit-command: npm audit --audit-level=moderate
 ---
 
 ## 技術スタック

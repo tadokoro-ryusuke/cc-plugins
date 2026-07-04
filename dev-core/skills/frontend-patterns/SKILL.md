@@ -84,6 +84,31 @@ const UserSchema = z.object({
 - データフェッチはサーバーサイドで実行（SEO、初期表示速度）
 - クライアントサイドでの再フェッチはキャッシュライブラリに委任
 
+### データフェッチ用 useEffect を避ける（React）
+
+`useEffect` でのデータフェッチは、レースコンディション・二重フェッチ・クリーンアップ漏れの温床。以下の代替を優先する:
+
+```typescript
+// ❌ 悪い例：useEffect でのデータフェッチ
+useEffect(() => {
+  fetchData().then(setData);
+}, []);
+
+// ✅ 良い例1：Server Component（サーバーサイドでフェッチ）
+async function Component() {
+  const data = await fetchData();
+  return <div>{data}</div>;
+}
+
+// ✅ 良い例2：ユーザー操作起点ならイベントハンドラー
+function handleClick() {
+  fetchData().then(setData);
+}
+
+// ✅ 良い例3：データフェッチライブラリ（キャッシュ + 再検証込み）
+const { data } = useSWR("/api/data", fetcher);
+```
+
 ## パフォーマンス最適化
 
 - **メモ化**: 計算コストの高い処理のみ（過剰なメモ化は避ける）

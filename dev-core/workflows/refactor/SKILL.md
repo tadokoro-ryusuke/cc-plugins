@@ -12,10 +12,9 @@ allowed-tools: Task(subagent_type:dev-core:tdd-practitioner), Task(subagent_type
 
 フロントエンド実装の際は以下のスキルもロードすること：
 
-- `frontend-design:frontend-design` - フロントエンド設計ガイドライン
-- `ui-ux-pro-max:ui-ux-pro-max` - UI/UX デザイン DB 検索（スタイル、カラー、フォント選定時に検索を実行）
-
-**スキルロード確認**: スキルをロードしたら「✅ スキルをロードしました: [スキル名]」と明示すること。
+- `dev-core:frontend-patterns` - コンポーネント設計・データフェッチのパターン（useEffect 回避の正本）
+- `frontend-design:frontend-design`（インストールされていれば） - フロントエンド設計ガイドライン
+- `ui-ux-pro-max:ui-ux-pro-max`（インストールされていれば） - UI/UX デザイン DB 検索
 
 ## 概要
 
@@ -50,11 +49,8 @@ prompt: |
   4. 早期リターン/ガード節の活用
   5. 明確で意図が伝わる命名への改善
   6. マジックナンバーの定数化
-  7. useEffectの削除と代替実装への置き換え
-     - Server Components/Server Actions
-     - イベントハンドラー
-     - useSWR/Tanstack Query
-     - Zustand
+  7. （React の場合）データフェッチ用 useEffect の削除と代替実装への置き換え
+     （正本: frontend-patterns スキルの「データフェッチ」）
   8. 冗長なコードの分割・簡潔化
 
   ## PRリファクタリングの場合の追加観点
@@ -98,11 +94,13 @@ prompt: |
 
 ### 1. 対象の特定
 
+差分ファイルはプロジェクトの主要ソース拡張子で絞り込む（下記例の `$SRC_EXT` はプロジェクトに合わせる。例: `ts|tsx|vue|php|py`）。
+
 ```bash
 # 引数なし: 現在の未コミット変更
 if [ -z "$ARGUMENTS" ]; then
   echo "🔍 現在の変更をリファクタリング対象とします"
-  git diff --name-only | grep -E '\.(ts|tsx)$'
+  git diff --name-only | grep -E "\.($SRC_EXT)$"
 
 # PR番号の場合（#123 または 123）
 elif [[ "$ARGUMENTS" =~ ^#?[0-9]+$ ]]; then
@@ -116,7 +114,7 @@ elif [[ "$ARGUMENTS" =~ ^#?[0-9]+$ ]]; then
 
   # PRの差分ファイルを取得
   git fetch origin $HEAD_BRANCH
-  git diff --name-only origin/$BASE_BRANCH...origin/$HEAD_BRANCH | grep -E '\.(ts|tsx)$'
+  git diff --name-only origin/$BASE_BRANCH...origin/$HEAD_BRANCH | grep -E "\.($SRC_EXT)$"
 
 # ファイル/ディレクトリの場合
 elif [ -e "$ARGUMENTS" ]; then
@@ -127,16 +125,16 @@ elif git rev-parse --verify $ARGUMENTS >/dev/null 2>&1; then
   if git show-ref --verify --quiet refs/heads/$ARGUMENTS; then
     echo "🔍 ブランチ $ARGUMENTS の変更をリファクタリング対象とします"
     BASE_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
-    git diff --name-only $BASE_BRANCH...$ARGUMENTS | grep -E '\.(ts|tsx)$'
+    git diff --name-only $BASE_BRANCH...$ARGUMENTS | grep -E "\.($SRC_EXT)$"
   else
     echo "🔍 コミット $ARGUMENTS の変更をリファクタリング対象とします"
-    git diff --name-only $ARGUMENTS^ $ARGUMENTS | grep -E '\.(ts|tsx)$'
+    git diff --name-only $ARGUMENTS^ $ARGUMENTS | grep -E "\.($SRC_EXT)$"
   fi
 
 # 引数指定なしで最近の変更を自動検出
 else
   echo "🔍 最近変更されたファイルを自動検出（過去5コミット）"
-  git diff --name-only HEAD~5..HEAD | grep -E '\.(ts|tsx)$'
+  git diff --name-only HEAD~5..HEAD | grep -E "\.($SRC_EXT)$"
 fi
 ```
 
@@ -169,7 +167,7 @@ tdd-practitioner エージェントに以下の情報を渡す：
    - ハードコーディングの除去
    - セキュリティリスクの解消
    - 明らかなバグの修正
-   - **useEffect の除去**: バグの温床となる useEffect を代替手段に置き換え
+   - **（React）データフェッチ用 useEffect の除去**: バグの温床となる useEffect を代替手段に置き換え（frontend-patterns スキル参照）
 
 2. **High（高優先度）**
    - 重複コードの統合
@@ -208,8 +206,10 @@ tdd-practitioner エージェントに以下の情報を渡す：
 
 3. **コミット/プッシュ**
 
+   `git add` はリファクタリングしたファイルの個別指定で行う（`git add .` で無関係な変更を巻き込まない。正本: best-practices の references/coding-standards.md）。
+
    ```bash
-   git add .
+   git add [変更したファイルを個別指定]
    git commit -m "refactor: [変更内容の説明]"
 
    # PRの場合は対象ブランチにプッシュ
@@ -217,9 +217,7 @@ tdd-practitioner エージェントに以下の情報を渡す：
 
    # PRにコメントを追加（オプション）
    gh pr comment $PR_NUMBER --body "リファクタリングを実行しました：
-   - useEffectの削除
-   - コーディング規約への準拠
-   - 重複コードの統合"
+   - [実際に行った変更の要約]"
    ```
 
 ## 実行例
@@ -251,29 +249,7 @@ tdd-practitioner エージェントに以下の情報を渡す：
 - **テストを常にグリーンに**: 各ステップでテスト実行
 - **段階的に実行**: 一度に大きな変更を避ける
 - **YAGNI 原則**: 将来の拡張を過度に考慮しない
-
-### useEffect リファクタリングの具体例
-
-```typescript
-// ❌ 悪い例：useEffect
-useEffect(() => {
-  fetchData().then(setData);
-}, []);
-
-// ✅ 良い例1：Server Component
-async function Component() {
-  const data = await fetchData();
-  return <div>{data}</div>;
-}
-
-// ✅ 良い例2：イベントハンドラー
-function handleClick() {
-  fetchData().then(setData);
-}
-
-// ✅ 良い例3：データフェッチライブラリ
-const { data } = useSWR("/api/data", fetcher);
-```
+- **React の useEffect リファクタリング**: 具体例と代替手段は `dev-core:frontend-patterns` スキルの「データフェッチ」を参照（知識の正本はスキル側に置き、ここには複製しない）
 
 ## ワークフロー全体像
 
