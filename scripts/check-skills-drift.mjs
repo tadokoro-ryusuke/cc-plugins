@@ -53,6 +53,12 @@ const CLAUDE_PLUGIN_MANIFEST_REL = join(
 /** dev-core のスキルを格納するディレクトリのリポジトリルートからの相対パス。 */
 const SKILLS_DIR_REL = join("dev-core", "skills");
 
+/** マーケットプレイス定義（frontmatter 走査対象の導出元）のリポジトリルートからの相対パス。 */
+const MARKETPLACE_MANIFEST_REL = join(".claude-plugin", "marketplace.json");
+
+/** 各プラグイン配下で SKILL.md frontmatter 検証の対象とするサブディレクトリ名。 */
+const PLUGIN_SKILL_SUBDIRS = ["skills", "workflows"];
+
 /** 知識の正本（スキルインデックス）のリポジトリルートからの相対パス。 */
 const AGENTS_DOC_REL = "AGENTS.md";
 
@@ -383,25 +389,80 @@ function isNonEmptyString(value) {
 }
 
 /**
- * 全 dev-core スキルの SKILL.md frontmatter を走査し、違反を集約する。
+ * marketplace.json の plugins[].source から、frontmatter 検証対象のスキル格納
+ * ディレクトリ（<plugin>/skills・<plugin>/workflows のうち実在するもの）を列挙する。
+ * プラグイン追加時にこのスクリプトへのハードコード追記漏れで検証対象から漏れることを
+ * 防ぐため、走査対象はマーケットプレイス定義から導出する。
+ * @returns {{ dirRels: string[], errors: string[] }}
+ *   dirRels: 検証対象ディレクトリの相対パス配列。errors: マニフェスト側の違反。
+ */
+function readAllSkillDirRels() {
+  const { data, error } = loadManifest(MARKETPLACE_MANIFEST_REL);
+  if (data === null) {
+    return {
+      dirRels: [],
+      errors: [error ?? `missing ${MARKETPLACE_MANIFEST_REL}`],
+    };
+  }
+
+  const plugins = data.plugins;
+  if (!Array.isArray(plugins)) {
+    return {
+      dirRels: [],
+      errors: [`${MARKETPLACE_MANIFEST_REL}: plugins が配列でない`],
+    };
+  }
+
+  /** @type {string[]} */
+  const dirRels = [];
+  /** @type {string[]} */
+  const errors = [];
+  for (const plugin of plugins) {
+    if (!isRecord(plugin) || !isNonEmptyString(plugin.source)) {
+      errors.push(
+        `${MARKETPLACE_MANIFEST_REL}: source を持たない plugin エントリがある`,
+      );
+      continue;
+    }
+    const sourceRel = plugin.source.replace(/^\.\//, "");
+    for (const subdir of PLUGIN_SKILL_SUBDIRS) {
+      const dirRel = join(sourceRel, subdir);
+      if (existsSync(join(REPO_ROOT, dirRel))) {
+        dirRels.push(dirRel);
+      }
+    }
+  }
+
+  return { dirRels, errors };
+}
+
+/**
+ * マーケットプレイス掲載の全プラグインのスキル（skills/・workflows/）の SKILL.md
+ * frontmatter を走査し、違反を集約する。
  * @returns {string[]} 「ファイル名: 違反内容」形式の違反メッセージ配列。
  */
 function collectFrontmatterViolations() {
   /** @type {string[]} */
   const violations = [];
 
+  // dev-core/skills は AGENTS.md 索引・Codex 共有の要のため、存在自体を必須とする。
   const skillsDir = join(REPO_ROOT, SKILLS_DIR_REL);
   if (!existsSync(skillsDir)) {
     violations.push(`missing ${SKILLS_DIR_REL}`);
     return violations;
   }
 
-  for (const dirName of readSkillDirNames()) {
-    const skillFileRel = join(SKILLS_DIR_REL, dirName, SKILL_FILE_NAME);
-    const skillFilePath = join(REPO_ROOT, skillFileRel);
-    const issues = validateSkillFrontmatter(dirName, skillFilePath);
-    for (const issue of issues) {
-      violations.push(`${skillFileRel}: ${issue}`);
+  const { dirRels, errors } = readAllSkillDirRels();
+  violations.push(...errors);
+
+  for (const dirRel of dirRels) {
+    for (const dirName of readSkillDirNamesIn(dirRel)) {
+      const skillFileRel = join(dirRel, dirName, SKILL_FILE_NAME);
+      const skillFilePath = join(REPO_ROOT, skillFileRel);
+      const issues = validateSkillFrontmatter(dirName, skillFilePath);
+      for (const issue of issues) {
+        violations.push(`${skillFileRel}: ${issue}`);
+      }
     }
   }
 
@@ -554,12 +615,13 @@ function collectManifestViolations() {
 }
 
 /**
- * dev-core/skills/ 直下の実ディレクトリ名一覧（ソート済み）を返す。
+ * 指定ディレクトリ直下の実ディレクトリ名一覧（ソート済み）を返す。
  * スキル名の正本は実ディレクトリ名であり、推測せず readdir して取得する。
- * @returns {string[]} スキルディレクトリ名の昇順配列。skills/ が無ければ空配列。
+ * @param {string} dirRel リポジトリルートからのスキル格納ディレクトリ相対パス。
+ * @returns {string[]} スキルディレクトリ名の昇順配列。ディレクトリが無ければ空配列。
  */
-function readSkillDirNames() {
-  const skillsDir = join(REPO_ROOT, SKILLS_DIR_REL);
+function readSkillDirNamesIn(dirRel) {
+  const skillsDir = join(REPO_ROOT, dirRel);
   if (!existsSync(skillsDir)) {
     return [];
   }
@@ -567,6 +629,15 @@ function readSkillDirNames() {
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .sort();
+}
+
+/**
+ * dev-core/skills/ 直下の実ディレクトリ名一覧（ソート済み）を返す。
+ * AGENTS.md のスキルインデックス照合（dev-core 知識スキル専用）が使う。
+ * @returns {string[]} スキルディレクトリ名の昇順配列。skills/ が無ければ空配列。
+ */
+function readSkillDirNames() {
+  return readSkillDirNamesIn(SKILLS_DIR_REL);
 }
 
 /**

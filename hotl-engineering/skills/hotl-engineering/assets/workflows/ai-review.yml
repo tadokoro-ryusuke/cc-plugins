@@ -1,0 +1,157 @@
+# =============================================================================
+# ai-review.yml — AIコードレビュー(二段構成)
+#
+#   Job 1: 全PR         → Sonnet 軽量レビュー(--max-turns 5)
+#   Job 2: Tier 2 パス  → Opus 深堀りセキュリティレビュー(--max-turns 8)
+#
+# 認証: AWS Bedrock 東京 + OIDC(静的キーなし)。秘匿情報要件に合わせ
+#       コードが Anthropic 直 API に出ない構成。
+#
+# 運用: Phase 1 はコメントのみ(required check にしない)。
+#       Phase 2 で "ai-review" を required check 化し、CRITICAL 指摘があると
+#       exit 1 でブロックするよう prompt 内の指示を有効化する。
+#       注意: prompt 内 exit 1 はベストエフォートのゲート。Tier 2 の "ai-review-deep"
+#       も required にする場合は、レビュー結果を structured 出力(JSON artifact)に落として
+#       集約 job が CRITICAL 件数で fail する構成に強化する(監査可能な機械的ゲート化)。
+#
+# 前提:
+#   - IAM ロール(GITHUB_OIDC_ROLE)に bedrock:InvokeModel* を付与し、
+#     GitHub OIDC の federated credential を設定済み
+#   - Bedrock ap-northeast-1 で対象モデルの推論プロファイルを有効化済み
+#     (--model は自社で有効化済みの inference profile ID に置換すること)
+# =============================================================================
+name: AI Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+
+concurrency:
+  group: ai-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write # OIDC 必須
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Tier 判定 — critical paths に触れているかで深堀りレビューの要否を決める
+  # ---------------------------------------------------------------------------
+  classify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: "!github.event.pull_request.draft"
+    outputs:
+      tier2: ${{ steps.filter.outputs.critical }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            critical:
+              # === Tier 2: 変更したら Opus 深堀り + 人間の精査必須のパス ===
+              - 'src/lib/auth/**'
+              - 'src/lib/permissions/**'      # テナント/ユーザー間アクセス制御
+              - 'src/middleware.ts'
+              - 'prisma/migrations/**'
+              - 'infra/**'
+              - '.github/workflows/**'         # CI設定自体の改変
+              - '**/*.env*'
+
+  # ---------------------------------------------------------------------------
+  # 全PR: Sonnet 軽量レビュー
+  # ---------------------------------------------------------------------------
+  review:
+    name: "ai-review"
+    runs-on: ubuntu-latest
+    needs: classify
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE }}
+          aws-region: ap-northeast-1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          use_bedrock: "true"
+          prompt: |
+            このPRをレビューしてください。CLAUDE.md のレビュー規範に従うこと。
+
+            ## 指摘の分類(必ずこの4段階で)
+            - CRITICAL: セキュリティ脆弱性、データ損失、権限バイパス、秘匿情報境界の破壊
+            - HIGH: 正しさに影響するバグ、契約(API/型)違反
+            - MEDIUM: 保守性・性能の問題
+            - LOW: 提案(コメントするが数を絞る)
+
+            ## ノイズ抑制ルール(重要)
+            - スタイル指摘はしない(L1 lintの仕事)
+            - 「〜を検討しては」系の曖昧な提案は書かない
+            - 確信がない指摘には [要確認] を付けて根拠のファイル:行を示す
+            - 指摘ゼロなら「重大な問題なし」とだけ書く。無理に指摘を作らない
+
+            ## 出力
+            1. PRコメントで結果サマリ(CP2で人間が3分で読める分量)
+            2. 個別指摘は該当行へのインラインコメント
+            3. Phase 2以降: CRITICAL が1件でもあれば最後に exit code 1 で終了する
+               こと(現在は Phase 1 のためコメントのみで正常終了してよい)
+          claude_args: |
+            --max-turns 5
+            --model apac.anthropic.claude-sonnet-4-5-20250929-v1:0
+
+  # ---------------------------------------------------------------------------
+  # Tier 2 のみ: Opus 深堀りセキュリティレビュー
+  # ---------------------------------------------------------------------------
+  deep-review:
+    name: "ai-review-deep (Tier 2)"
+    runs-on: ubuntu-latest
+    needs: classify
+    if: needs.classify.outputs.tier2 == 'true'
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE }}
+          aws-region: ap-northeast-1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          use_bedrock: "true"
+          prompt: |
+            このPRは認証・権限・DBスキーマ・インフラ等のクリティカルパスに触れて
+            います(Tier 2)。攻撃者の視点で深堀りレビューしてください。
+
+            ## 必須チェック観点
+            1. 認可バイパス: 権限チェックの追加漏れ・順序変更・条件緩和
+            2. テナント/ユーザー間アクセス制御: 検索フィルタが呼び出しユーザーの
+               権限スコープを必ず経由しているか。フィルタなしで index に
+               クエリが飛ぶ経路が新設されていないか
+            3. SQLi / パラメータ未バインド / ORM の raw query
+            4. secrets・接続文字列・トークンの直書き、ログへの漏出
+            5. migration の破壊的変更(カラム削除・型変更)とロールバック手順の有無
+            6. GitHub Actions 改変の場合: permissions 昇格、pull_request_target
+               の危険な使用、未pinのサードパーティ action
+            7. プロンプトインジェクション面: 外部入力(文書・メール本文)が
+               エージェントの指示として解釈されうる経路の新設
+
+            ## 出力
+            観点ごとに「問題なし / 指摘あり(根拠付き)」を明記した監査形式の
+            レポートをPRコメントに投稿。攻撃シナリオが成立する指摘は PoC 手順
+            の概要まで書くこと。
+          claude_args: |
+            --max-turns 8
+            --model apac.anthropic.claude-opus-4-6-v1:0

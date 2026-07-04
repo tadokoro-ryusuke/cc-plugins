@@ -1,0 +1,175 @@
+# =============================================================================
+# ci.yml — 5層品質ゲート
+# 対象: Next.js / TypeScript / pnpm 想定の Web アプリ(npm なら適宜置換)
+#
+# 設計方針:
+#   - AI生成コードを前提に「作者がdiffを説明できない」ケースでも防衛できる構成
+#   - 5層すべて並列実行。人間は結果サマリだけ見る(CP2のエビデンス)
+#   - Phase 1 では security 層を continue-on-error: true で観測運用 → Phase 2 で強制
+# =============================================================================
+name: CI Quality Gates
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # L1: Lint — 機械的なスタイル・明白なバグパターン
+  # ---------------------------------------------------------------------------
+  lint:
+    name: "L1 / lint"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint # biome check . もしくは eslint . --max-warnings 0
+
+  # ---------------------------------------------------------------------------
+  # L2: Typecheck — AIリファクタによる型ドリフトを捕捉(strict必須)
+  #   tsconfig: "strict": true, "noUncheckedIndexedAccess": true を推奨
+  # ---------------------------------------------------------------------------
+  typecheck:
+    name: "L2 / typecheck"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec tsc --noEmit
+
+  # ---------------------------------------------------------------------------
+  # L3: Security — AIが高頻度で生むパターン(secrets直書き・injection)を捕捉
+  #   Phase 1: continue-on-error: true(観測) → Phase 2: 外して強制
+  # ---------------------------------------------------------------------------
+  security:
+    name: "L3 / security"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Phase 1(較正期間)は観測のみを既定にする。偽陽性を潰し切った Phase 2 で
+    # この行を削除して強制化する(day-one enforcement は最頻失敗パターン。原則6)
+    continue-on-error: true # ← Phase 2 で削除
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Gitleaks は履歴走査のため全取得
+
+      # --- シークレット検出(AI生成コードで最頻出の事故) ---
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # --- SAST(SQLi / XSS / 認可漏れ / 危険なデシリアライズ等) ---
+      - name: Semgrep
+        run: |
+          pip install semgrep
+          # p/default + typescript + owasp-top-ten。偽陽性は .semgrepignore と
+          # `# nosemgrep: <rule-id>` で較正(Phase 1 の主作業)
+          semgrep scan \
+            --config p/default \
+            --config p/typescript \
+            --config p/owasp-top-ten \
+            --error --severity ERROR \
+            --sarif --output semgrep.sarif || exit_code=$?
+          exit ${exit_code:-0}
+
+      # --- 依存脆弱性 ---
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Dependency audit (high 以上でfail)
+        run: pnpm audit --audit-level high
+
+  # ---------------------------------------------------------------------------
+  # L4: Test + Coverage — 新規コードにのみカバレッジを要求(レガシー負債で
+  #   ブロックしない)。vitest 想定
+  # ---------------------------------------------------------------------------
+  test:
+    name: "L4 / test"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Unit / integration tests
+        run: pnpm test -- --coverage
+      # 変更ファイルに対するカバレッジ閾値。vitest.config の
+      # coverage.thresholds ではなく差分ベースで判定したい場合:
+      - name: Coverage on changed files (>= 70%)
+        if: github.event_name == 'pull_request'
+        uses: ArtiomTr/jest-coverage-report-action@v2 # vitest の json-summary 互換
+        with:
+          coverage-file: ./coverage/coverage-final.json
+          threshold: 70
+          annotations: failed-tests
+
+  # ---------------------------------------------------------------------------
+  # L5: Build — 最終防衛線
+  # ---------------------------------------------------------------------------
+  build:
+    name: "L5 / build"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+  # ---------------------------------------------------------------------------
+  # ゲートサマリ — CP2で人間が見る単一のステータス。
+  # branch protection の required check はこの "quality-gate" 1つを指定すれば
+  # よく、層の追加・削除時に ruleset を触らずに済む
+  # ---------------------------------------------------------------------------
+  quality-gate:
+    name: "quality-gate"
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, security, test, build]
+    if: always()
+    steps:
+      - name: Verify all gates
+        run: |
+          results='${{ toJSON(needs) }}'
+          echo "$results" | jq .
+          failed=$(echo "$results" | jq -r 'to_entries[] | select(.value.result != "success") | .key')
+          if [ -n "$failed" ]; then
+            echo "::error::Failed gates: $failed"
+            exit 1
+          fi
+          echo "✅ All 5 quality gates passed"

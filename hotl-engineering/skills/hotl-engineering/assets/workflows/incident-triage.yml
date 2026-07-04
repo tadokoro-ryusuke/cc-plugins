@@ -1,0 +1,132 @@
+# =============================================================================
+# incident-triage.yml — アラート → Read-Only 一次調査 → Teams 投稿
+#
+# 段階的自律性の Read-Only / Advised 段階の実装。
+# インシデント対応で最も遅いのは「コンテキストの組み立て」。そこだけを
+# エージェントに肩代わりさせ、判断と実行は人間に残す。
+#
+# 経路:
+#   Azure Monitor アラート → Action Group (Webhook)
+#     → Azure Function(ペイロード整形して GitHub repository_dispatch を叩く)
+#     → 本 workflow
+#
+# ガードレール(重要):
+#   - Azure 側の OIDC ロールは Reader + Log Analytics Reader のみ。
+#     このワークフローからは構造的に何も変更できない
+#   - --allowedTools で書き込み系ツールを一切与えない
+#   - 対応案の「実行」はフェーズ3以降に別ワークフロー(人間承認つき
+#     workflow_dispatch)として分離する。調査と実行の権限を同居させない
+# =============================================================================
+name: Incident Triage
+
+on:
+  repository_dispatch:
+    types: [azure-alert]
+  workflow_dispatch:
+    inputs:
+      alert_name:
+        description: "アラート名(手動調査用)"
+        required: true
+      resource:
+        description: "対象リソース"
+        required: false
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+concurrency:
+  group: incident-${{ github.event.client_payload.alert_id || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4 # CLAUDE.md / runbooks/ を読ませるため
+
+      # --- Bedrock(推論)用 AWS OIDC ---
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE }}
+          aws-region: ap-northeast-1
+
+      # --- 調査対象(Azure)用 Read-Only OIDC ---
+      - name: Azure login (Reader only)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID_READER }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - uses: anthropics/claude-code-action@v1
+        id: triage
+        with:
+          use_bedrock: "true"
+          prompt: |
+            本番アラートの一次調査を実施してください。あなたの権限は Read-Only
+            です。いかなる変更操作も行わないでください(そもそも権限がありません)。
+
+            ## アラート情報
+            ```json
+            ${{ toJSON(github.event.client_payload || inputs) }}
+            ```
+
+            ## 調査手順
+            1. runbooks/ 配下に該当アラートの runbook があればまず読む
+            2. az CLI で対象リソースの状態・直近のアクティビティログを確認
+               (az monitor activity-log list, az containerapp revision list 等)
+            3. Log Analytics へクエリ(az monitor log-analytics query)し、
+               エラーの時系列・件数・代表スタックトレースを取得
+            4. gh CLI で直近24時間のマージ済みPRとデプロイ実行を確認し、
+               変更とエラー発生時刻の相関を見る
+            5. 仮説を確度順に最大3つ立てる
+
+            ## 出力(最後のメッセージを以下の構造で)
+            - 事象サマリ(2行)
+            - 影響範囲(ユーザー影響の有無・対象機能)
+            - 時系列(検知時刻・関連する変更)
+            - 原因仮説(確度: 高/中/低、根拠となるログ/クエリ結果を引用)
+            - 推奨アクション(実行コマンド案。ただし実行はしない)
+            - 緊急度判定: P1(即時対応)/ P2(営業時間内)/ P3(次スプリント)
+          claude_args: |
+            --max-turns 15
+            --model apac.anthropic.claude-sonnet-4-5-20250929-v1:0
+            --allowedTools "Read,Grep,Glob,Bash(az monitor:*),Bash(az containerapp revision list:*),Bash(az containerapp show:*),Bash(az webapp log:*),Bash(gh pr list:*),Bash(gh run list:*),Bash(gh api:*)"
+
+      # --- GitHub Issue 化(証跡 + 追跡) ---
+      # alert_name は外部由来(repository_dispatch payload / 手動input)の非信頼入力。
+      # shell へ直接展開せず env: に逃がして quote 付きで使う(command injection 防止)
+      - name: Create incident issue
+        id: issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALERT_NAME: ${{ github.event.client_payload.alert_name || inputs.alert_name }}
+          BODY_FILE: ${{ steps.triage.outputs.execution_file || '/dev/null' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          url=$(gh issue create \
+            --title "🚨 [triage] ${ALERT_NAME}" \
+            --label incident \
+            --body-file "$BODY_FILE" \
+            2>/dev/null || gh issue create \
+            --title "🚨 [triage] ${ALERT_NAME}" \
+            --label incident \
+            --body "調査結果は Actions run を参照: ${RUN_URL}")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      # --- 人間への通知(Teams)。ここから先の判断・実行が人間の仕事 ---
+      # JSON は jq --arg で生成する(非信頼入力の直埋めで JSON が壊れる/注入されるのを防止)
+      - name: Notify Teams
+        if: always()
+        env:
+          ALERT_NAME: ${{ github.event.client_payload.alert_name || inputs.alert_name }}
+          ISSUE_URL: ${{ steps.issue.outputs.url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          jq -n --arg text "🚨 一次調査完了: ${ALERT_NAME} / Issue: ${ISSUE_URL} / Run: ${RUN_URL}" \
+            '{text: $text}' \
+            | curl -s -H "Content-Type: application/json" -d @- "${{ secrets.TEAMS_WEBHOOK_URL }}"

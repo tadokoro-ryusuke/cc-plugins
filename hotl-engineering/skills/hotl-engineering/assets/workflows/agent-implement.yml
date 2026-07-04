@@ -1,0 +1,82 @@
+# =============================================================================
+# agent-implement.yml — CP1(Spec承認)→ 実装 → Draft PR
+#
+# HOTLの起点。人間の仕事は Issue の Spec を承認して `agent:approved` ラベルを
+# 付けるだけ。以降は Draft PR 作成まで自動。
+#
+# Issue テンプレート(.github/ISSUE_TEMPLATE/feature.yml)には以下を必須項目に:
+#   - 目的(why)/ 受入条件(Given-When-Then 形式)/ 非スコープ / 影響パス
+# → これがそのまま SDD の「spec」になる。曖昧な Issue にラベルを付けない
+#   ことが CP1 の品質を決める。
+#
+# ガードレール:
+#   - ラベル付与者を collaborator に限定(if 条件)
+#   - Draft PR 止まり(Ready for review にするのは人間)
+#   - main への直 push は branch protection が拒否
+#   - Issue 本文は非信頼のプロンプト入力として扱う(prompt injection がエージェントに
+#     届く経路)。外部者が Issue を起票できる環境では、environment approval の追加・
+#     起票者の trusted 判定・CP1 で人間が本文を確定してからラベルを付ける運用を
+#     必ず組み合わせること
+# =============================================================================
+name: Agent Implement
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: agent-implement-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # ラベルが agent:approved かつ、付与者が管理権限保持者のときのみ発火
+    if: >
+      github.event.label.name == 'agent:approved' &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'),
+               github.event.sender.author_association)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE }}
+          aws-region: ap-northeast-1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          use_bedrock: "true"
+          prompt: |
+            Issue #${{ github.event.issue.number }} を実装してください。
+
+            ## 手順(SDD: plan → implement → verify)
+            1. Issue 本文の受入条件を読み、実装計画を Issue にコメント投稿
+               (影響ファイル・アプローチ・リスク)。受入条件が曖昧・矛盾して
+               いる場合は実装せず、質問コメントを投稿して終了すること
+            2. ブランチ `agent/issue-${{ github.event.issue.number }}` を作成
+            3. CLAUDE.md の規約に従い実装。受入条件ごとに対応するテストを先に
+               書く(TDD)。テストなしの実装は不可
+            4. lint / typecheck / test をローカル実行し、全部通るまで修正
+            5. Draft PR を作成。PR 本文には以下を必ず含める:
+               - `Closes #${{ github.event.issue.number }}`
+               - 受入条件と検証結果の対応表
+               - 自己申告のリスクポイント(人間レビュアーが見るべき箇所)
+
+            ## 禁止事項
+            - Issue に書かれていないスコープの変更(気づいた改善は別Issueを起票)
+            - 依存パッケージの追加(必要なら計画コメントで承認を求める)
+            - migration を含む変更での既存カラム削除
+          claude_args: |
+            --max-turns 30
+            --model apac.anthropic.claude-sonnet-4-5-20250929-v1:0

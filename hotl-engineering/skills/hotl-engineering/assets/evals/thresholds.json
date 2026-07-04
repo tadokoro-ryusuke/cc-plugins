@@ -1,0 +1,22 @@
+{
+  "_comment": "eval-gate の閾値。変更は必ず PR 経由(この変更自体が Tier 2)。judge_total は correctness+faithfulness+completeness の合計(15点満点)の平均。",
+  "smoke": {
+    "must_pass_rate": 1.0,
+    "must_not_violations": 0,
+    "recall_at_5_drop_allowed": 0.05,
+    "judge_total_drop_allowed": 1.0,
+    "judge_total_floor": 10.5
+  },
+  "full": {
+    "must_pass_rate": 1.0,
+    "must_not_violations": 0,
+    "recall_at_5_drop_allowed": 0.03,
+    "judge_total_drop_allowed": 0.5,
+    "judge_total_floor": 11.0
+  },
+  "judge": {
+    "votes": 3,
+    "temperature": 0,
+    "max_tokens": 1024
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "skill_name": "hotl-engineering",
+  "_comment": "スキル自体の検証ケース。with-skill / baseline(スキルなし)の両方でサブエージェント実行し、expected_output と突合する。#2(押し返し)と#6(過剰トリガー防止)が最重要。",
+  "evals": [
+    {
+      "id": 1,
+      "name": "apply-mode-python-repo",
+      "prompt": "この社内MCPサーバーのリポジトリ(Python/FastMCP、Azure Container Apps、CIなし)にHOTLの品質ゲートを導入して。監査対象になる予定。",
+      "expected_output": "アセスメント(または不明点の一括質問)→ 性格判定(本番プロダクト)→ 適用計画の提示(pnpm前提をPython系に読み替え: ruff/mypy/pip-audit/pytest、Phase 1 = comment-only開始、Tier 2パスの特定)→ 承認後にテンプレ適用。全部入りをいきなり強制しないこと、ADJUST.mdの置換ポイントに従うことを確認する",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "apply-mode-experiment-repo",
+      "prompt": "Kaggleコンペ用の実験リポジトリを作った。HOTLワークフローを全部入れておいて。",
+      "expected_output": "「全部入り」の依頼に対して、実験リポジトリにはL1/L2のみを推奨し、AIレビュー強制やdeploy承認を入れない理由(速度優先・過剰導入の害)を説明して押し返す。ユーザーの指示を鵜呑みにしないことがこのケースの合格条件",
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "consult-buy-vs-build",
+      "prompt": "AI SREツールの売り込みが来てる。月30万円でMTTR60%削減って言ってるんだけど入れるべき?うちの規模で。",
+      "expected_output": "F3(buy-vs-build)の判定質問を適用。内製Read-Only版を1週間で試す選択肢の提示、ベンダー数値の割引、データレジデンシー確認。立場を取る(この規模なら内製先行を推奨)+ トレードオフ + 今日できる一歩",
+      "files": []
+    },
+    {
+      "id": 4,
+      "name": "consult-autonomy-promotion",
+      "prompt": "インシデント調査エージェント、もう3ヶ月動いてて精度いい感じだから、再起動くらいは自動でやらせていいかな",
+      "expected_output": "F2(昇格基準)を適用し、「いい感じ」を定量条件(採用率・無事故回数・可逆性)に変換して昇格可否を判定する枠組みを提示。Advised→Approvedを飛ばしてAutonomousに行かないこと、操作種別ごとの昇格であることを指摘",
+      "files": []
+    },
+    {
+      "id": 5,
+      "name": "consult-audit-explanation",
+      "prompt": "監査法人から『AIが書いたコードの品質担保はどうしてるのか』と聞かれた。どう答える?",
+      "expected_output": "jsox-audit.mdの論点で回答を組み立てる: 論点の転換(AIが書くこと自体ではなく未承認変更の経路の不在)、ruleset設定値・CP構造・eval較正記録の提示、少人数の職務分掌の補完統制",
+      "files": []
+    },
+    {
+      "id": 6,
+      "name": "trigger-boundary-negative",
+      "prompt": "TypeScriptでzodのスキーマからフォームを自動生成する方法を教えて",
+      "expected_output": "このスキルを起動しない(通常のコーディング質問)。HOTLや原則の講釈を始めたら不合格",
+      "files": []
+    }
+  ]
+}

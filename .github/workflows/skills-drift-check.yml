@@ -14,6 +14,7 @@ on:
       - "dev-core/**"
       - "github-tools/**"
       - "ui-ux-pro-max/**"
+      - "hotl-engineering/**"
       - ".claude-plugin/**"
       - "AGENTS.md"
       - "CLAUDE.md"
@@ -53,7 +54,7 @@ jobs:
         run: claude plugin validate . --strict
       - name: Validate plugin manifests (strict)
         run: |
-          for plugin in dev-core github-tools ui-ux-pro-max; do
+          for plugin in dev-core github-tools ui-ux-pro-max hotl-engineering; do
             echo "::group::$plugin"
             claude plugin validate "$plugin" --strict
             echo "::endgroup::"

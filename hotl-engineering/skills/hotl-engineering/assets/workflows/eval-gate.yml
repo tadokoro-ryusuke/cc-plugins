@@ -1,0 +1,130 @@
+# =============================================================================
+# eval-gate.yml — エージェント系(RAG/検索QA等)の評価ゲート(CP4のエビデンス生成)
+#
+# 発火条件:
+#   - PR: プロンプト / 検索ロジック / モデル設定 / ツール定義の変更時
+#         → smoke スイート(~20件、must-pass 含む)
+#   - nightly: full スイート(全golden set)+ baseline 更新判定
+#
+# 思想:
+#   - 「プロンプト変更はコード変更と同じ重さの変更管理対象」
+#   - デプロイ単位は agent version(モデル+プロンプト+ツール定義の束)
+#   - ゲートは (a) must-pass ケース100%(権限境界・injection)
+#             (b) 平均スコアが baseline - 許容幅 以上
+#   - レポートは PR コメント + artifact(90日)+ S3 退避(J-SOX証跡)
+#
+# 秘匿データ注意:
+#   golden set に実データを含める場合は repo に置かない。
+#   S3(ap-northeast-1, アクセス制御済み)から CI 実行時に取得する。
+#   repo にはサニタイズ済みサンプルのみコミットする。
+#
+# セキュリティ注意(PR トリガーと secrets):
+#   この workflow は PR の evals/** 変更で発火し、PR 側のコード(run_evals.py)を
+#   secrets(TARGET_STAGING_API_KEY 等)付きで実行する。evals/** と .github/workflows/
+#   を CODEOWNERS の Tier 2 に含め、レビューなしで eval runner を差し替えられない
+#   ことを必ず担保する(fork PR には GitHub 仕様で secrets は渡らないが、
+#   同一 repo のブランチ PR・エージェント生成 PR は対象になる)。
+#   より強い分離が必要なら、runner を base 側から checkout する workflow_run 構成に変える。
+# =============================================================================
+name: Eval Gate
+
+on:
+  pull_request:
+    paths:
+      - "prompts/**"
+      - "src/retrieval/**"
+      - "src/agent/**"
+      - "evals/**"
+      - "agent.config.*"
+  schedule:
+    - cron: "30 18 * * *" # 03:30 JST nightly full
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "smoke | full"
+        default: "full"
+
+concurrency:
+  group: eval-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      AWS_REGION: ap-northeast-1
+      # 評価対象(エージェントのクエリAPI)。staging を指す
+      TARGET_ENDPOINT: ${{ vars.TARGET_STAGING_ENDPOINT }}
+      TARGET_API_KEY: ${{ secrets.TARGET_STAGING_API_KEY }}
+      # judge に使うモデル(Bedrock 東京)。生成側と分けるのが理想
+      JUDGE_MODEL: apac.anthropic.claude-sonnet-4-5-20250929-v1:0
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE }}
+          aws-region: ap-northeast-1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install "anthropic[bedrock]" boto3
+
+      # 実データ golden set は S3 から取得(repo にはサンプルのみ)
+      - name: Fetch golden dataset
+        run: |
+          aws s3 cp s3://${{ vars.EVAL_BUCKET }}/golden/golden.jsonl \
+            evals/golden/golden.jsonl
+          aws s3 cp s3://${{ vars.EVAL_BUCKET }}/baseline/baseline.json \
+            evals/baseline.json || echo "no baseline yet"
+
+      - name: Run evals
+        id: run
+        run: |
+          SUITE="${{ github.event_name == 'pull_request' && 'smoke' || (inputs.suite || 'full') }}"
+          python evals/run_evals.py \
+            --dataset evals/golden/golden.jsonl \
+            --suite "$SUITE" \
+            --thresholds evals/thresholds.json \
+            --baseline evals/baseline.json \
+            --out evals/out
+
+      # --- CP4 エビデンス: PR コメントにレポートを貼る ---
+      - name: Post report to PR
+        if: always() && github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: eval-report
+          path: evals/out/report.md
+
+      # --- J-SOX 証跡: artifact + S3(不変ストレージ)へ退避 ---
+      - name: Upload artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report-${{ github.run_id }}
+          path: evals/out/
+          retention-days: 90
+
+      - name: Archive to S3 (audit trail)
+        if: always()
+        run: |
+          aws s3 cp evals/out/ \
+            s3://${{ vars.EVAL_BUCKET }}/reports/${{ github.repository_id }}/${{ github.run_id }}/ \
+            --recursive
+
+      # --- nightly が全ゲート通過したら baseline を更新(CP4はPR側で担保) ---
+      - name: Update baseline (nightly only)
+        if: success() && github.event_name == 'schedule'
+        run: |
+          aws s3 cp evals/out/results.json \
+            s3://${{ vars.EVAL_BUCKET }}/baseline/baseline.json
