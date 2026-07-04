@@ -30,6 +30,8 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
 - [ ] 発火 paths(prompts/ 等)→ 実際のプロンプト・検索ロジックの置き場所
 - [ ] TARGET_ENDPOINT / EVAL_BUCKET の vars 設定
 - [ ] thresholds.json の値はそのまま使わず、初回 full 実行の実測から設定する
+- [ ] PR 時の trusted-runner 方式(base 側 checkout)は維持する。runner(run_evals.py)を
+      変更する PR では「マージ後の nightly で初めて新 runner が secrets 付きで走る」ことをチームに周知
 
 ## evals/run_evals.py(エージェント系のみ)
 - [ ] `call_target()` を評価対象の API 契約に合わせて書き換える(この1関数に隔離してある)

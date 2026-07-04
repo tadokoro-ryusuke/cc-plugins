@@ -25,6 +25,7 @@
     "governance"
   ],
   "skills": [
-    "./skills"
+    "./skills",
+    "./workflows"
   ]
 }

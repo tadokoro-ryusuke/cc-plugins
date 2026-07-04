@@ -25,6 +25,8 @@ skills/hotl-engineering/
     templates/                # CLAUDE.md / CODEOWNERS / branch protection 設定スクリプト
     evals/                    # eval ハーネス雛形（run_evals.py / thresholds / rubric / golden sample）
     ADJUST.md                 # テンプレ適用時の置換ポイント一覧
+workflows/
+  assess/ apply/              # 適用モードの明示スラッシュ入口（/hotl-engineering:assess, :apply）
 evals/cases.json              # スキル自体の検証ケース6件（with-skill / baseline 比較用）
 ```
 
@@ -41,7 +43,13 @@ evals/cases.json              # スキル自体の検証ケース6件（with-ski
 ```
 
 スキルは自動ロードされる（明示的な指定は不要）。動作確認は「このリポジトリに HOTL の品質ゲートを導入して」等で。
-確実に起動したいときは `/hotl-engineering:hotl-engineering` で明示起動できる。
+
+適用モードを確実に・段階的に回したいときは明示スラッシュ入口を使う:
+
+```
+/hotl-engineering:assess   # アセスメント → 性格判定 → 適用計画の提示（ここで止まる）
+/hotl-engineering:apply    # 合意済み計画に基づくテンプレ適用（Phase 1 設定で導入）
+```
 
 ### claude.ai（チームメンバー向けアップロード）
 

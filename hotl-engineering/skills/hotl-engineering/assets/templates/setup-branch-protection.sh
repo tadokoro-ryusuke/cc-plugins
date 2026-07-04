@@ -7,7 +7,7 @@
 #   - PR 必須 + 承認1名以上 + Code Owners レビュー必須(Tier 2 パス)
 #   - 新コミットで既存承認を無効化(承認後のすり替え防止)
 #   - required status checks: quality-gate(CI 5層の集約)
-#     ※ Phase 2 後半で "ai-review" を、エージェント系リポジトリでは "eval" を追加
+#     ※ Phase 2 後半で "ai-review-gate" を、エージェント系リポジトリでは "eval" を追加
 #
 # 前提: gh CLI 認証済み、対象リポジトリの admin 権限
 # 使い方: ./setup-branch-protection.sh <owner>/<repo>
@@ -57,7 +57,7 @@ JSON
 echo "✅ ruleset created for ${REPO}"
 echo ""
 echo "次にやること:"
-echo "  1. Phase 2 後半: required_status_checks に 'ai-review' を追加"
+echo "  1. Phase 2 後半: required_status_checks に 'ai-review-gate' を追加(併せて vars.AI_REVIEW_ENFORCE=true)"
 echo "     (エージェント系リポジトリは 'eval' も追加)"
 echo "  2. Settings > Environments > production に Required reviewers を設定(CP3)"
 echo "  3. .github/CODEOWNERS.sample を CODEOWNERS にリネームして有効化"

@@ -7,12 +7,12 @@
 # 認証: AWS Bedrock 東京 + OIDC(静的キーなし)。秘匿情報要件に合わせ
 #       コードが Anthropic 直 API に出ない構成。
 #
-# 運用: Phase 1 はコメントのみ(required check にしない)。
-#       Phase 2 で "ai-review" を required check 化し、CRITICAL 指摘があると
-#       exit 1 でブロックするよう prompt 内の指示を有効化する。
-#       注意: prompt 内 exit 1 はベストエフォートのゲート。Tier 2 の "ai-review-deep"
-#       も required にする場合は、レビュー結果を structured 出力(JSON artifact)に落として
-#       集約 job が CRITICAL 件数で fail する構成に強化する(監査可能な機械的ゲート化)。
+# 運用: Phase 1 はコメントのみ(既定。ゲートは観測モード)。
+#       各レビュー job は verdict(JSON artifact)を出力し、集約 job "ai-review-gate" が
+#       CRITICAL 件数を機械的に検査する。Phase 2 では
+#         1. リポジトリ変数 AI_REVIEW_ENFORCE=true を設定(ゲート強制化)
+#         2. branch protection の required check に "ai-review-gate" を1本追加
+#       の2手で強制化する(prompt 内の exit 1 に依存しない、監査可能なゲート)。
 #
 # 前提:
 #   - IAM ロール(GITHUB_OIDC_ROLE)に bedrock:InvokeModel* を付与し、
@@ -102,11 +102,21 @@ jobs:
             ## 出力
             1. PRコメントで結果サマリ(CP2で人間が3分で読める分量)
             2. 個別指摘は該当行へのインラインコメント
-            3. Phase 2以降: CRITICAL が1件でもあれば最後に exit code 1 で終了する
-               こと(現在は Phase 1 のためコメントのみで正常終了してよい)
+            3. 最後に必ずリポジトリ直下に `ai-review-verdict.json` を作成し、
+               `{"critical": <CRITICAL件数>, "high": <HIGH件数>}` のみを書き込む
+               (指摘ゼロなら {"critical": 0, "high": 0}。ゲート判定はこのファイルで行われる)
           claude_args: |
             --max-turns 5
             --model apac.anthropic.claude-sonnet-4-5-20250929-v1:0
+
+      # ゲート判定用の structured 出力(集約 job が読む)
+      - name: Upload verdict
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-review-verdict-light
+          path: ai-review-verdict.json
+          if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
   # Tier 2 のみ: Opus 深堀りセキュリティレビュー
@@ -152,6 +162,55 @@ jobs:
             観点ごとに「問題なし / 指摘あり(根拠付き)」を明記した監査形式の
             レポートをPRコメントに投稿。攻撃シナリオが成立する指摘は PoC 手順
             の概要まで書くこと。
+            最後に必ずリポジトリ直下に `ai-review-verdict.json` を作成し、
+            `{"critical": <CRITICAL件数>, "high": <HIGH件数>}` のみを書き込むこと。
           claude_args: |
             --max-turns 8
             --model apac.anthropic.claude-opus-4-6-v1:0
+
+      # ゲート判定用の structured 出力(集約 job が読む)
+      - name: Upload verdict
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-review-verdict-deep
+          path: ai-review-verdict.json
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # 集約ゲート — Phase 2 の required check はこの1本を指定する。
+  # verdict(JSON)の CRITICAL 合計で機械的に判定するため、prompt の挙動に依存しない。
+  # Phase 1(vars.AI_REVIEW_ENFORCE 未設定)では観測のみで fail しない。
+  # ---------------------------------------------------------------------------
+  ai-review-gate:
+    name: "ai-review-gate"
+    runs-on: ubuntu-latest
+    needs: [review, deep-review]
+    if: always() && !cancelled()
+    timeout-minutes: 5
+    steps:
+      - name: Download verdicts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ai-review-verdict-*
+          path: verdicts
+
+      - name: Enforce gate
+        env:
+          REVIEW_RESULT: ${{ needs.review.result }}
+          DEEP_RESULT: ${{ needs.deep-review.result }}
+          ENFORCE: ${{ vars.AI_REVIEW_ENFORCE }}
+        run: |
+          total=$(cat verdicts/*/ai-review-verdict.json 2>/dev/null \
+            | jq -s '[.[].critical // 0] | add // 0' 2>/dev/null || echo 0)
+          echo "CRITICAL 合計: ${total:-0} / review=${REVIEW_RESULT} / deep=${DEEP_RESULT}"
+          if [ "$ENFORCE" != "true" ]; then
+            echo "Phase 1(観測モード): fail しない。強制化は vars.AI_REVIEW_ENFORCE=true"
+            exit 0
+          fi
+          # 強制モード: CRITICAL あり / レビュー job 自体の失敗(fail-open 防止)でブロック
+          fail=0
+          [ "${total:-0}" -gt 0 ] && { echo "::error::CRITICAL 指摘 ${total} 件"; fail=1; }
+          [ "$REVIEW_RESULT" != "success" ] && { echo "::error::ai-review job: $REVIEW_RESULT"; fail=1; }
+          [ "$DEEP_RESULT" = "failure" ] && { echo "::error::ai-review-deep job: failure"; fail=1; }
+          exit $fail

@@ -21,3 +21,13 @@ references の内容変更・description の意味的変更は PR で提案し�
   - agent-implement.yml: Issue 本文 = prompt injection 経路の注記と推奨ガードを追記
   - ADJUST.md: サードパーティ actions の SHA pin 項目、run_evals.py の置換ポイント（call_target / metrics / golden 設計）を追加
   - run_evals.py: judge 1 票の API 失敗で suite 全体が落ちないよう例外処理を追加
+- レビューで提案された強化 4 点を実装:
+  - eval-gate.yml: PR 実行時は runner コードを base 側から checkout する trusted-runner 方式に
+    （PR による runner 差し替え + secrets 実行を遮断）
+  - agent-implement.yml: `environment: agent-implement` を追加（Required reviewers を設定すると
+    ラベル付与後にもう1段の人間承認を挟める。未設定なら従来どおり）
+  - ai-review.yml: verdict(JSON artifact) + 集約 job `ai-review-gate` による機械的ゲート化。
+    Phase 2 の強制化は vars.AI_REVIEW_ENFORCE=true + required check "ai-review-gate" の2手
+    （prompt 内 exit 1 依存を廃止）。setup-branch-protection.sh のヒントも更新
+  - 適用モードの明示スラッシュ入口 `/hotl-engineering:assess`（Step 1–2 で停止）と
+    `/hotl-engineering:apply`（Step 3–5、計画なしの全部入りコピー禁止）を workflows/ に追加

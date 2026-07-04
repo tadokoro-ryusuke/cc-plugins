@@ -38,6 +38,10 @@ jobs:
   implement:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # Settings > Environments > agent-implement に Required reviewers を設定すると、
+    # ラベル付与後にもう1段の人間承認を挟める(外部起票がある環境で推奨)。
+    # environment を未設定のままなら保護なしで従来どおり即実行される
+    environment: agent-implement
     # ラベルが agent:approved かつ、付与者が管理権限保持者のときのみ発火
     if: >
       github.event.label.name == 'agent:approved' &&

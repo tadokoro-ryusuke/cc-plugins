@@ -24,7 +24,8 @@
 #   を CODEOWNERS の Tier 2 に含め、レビューなしで eval runner を差し替えられない
 #   ことを必ず担保する(fork PR には GitHub 仕様で secrets は渡らないが、
 #   同一 repo のブランチ PR・エージェント生成 PR は対象になる)。
-#   より強い分離が必要なら、runner を base 側から checkout する workflow_run 構成に変える。
+#   加えて PR 実行では runner コードを base 側から checkout する(下記 trusted runner)。
+#   PR で runner 自体を変更した場合、その runner が secrets 付きで走るのはマージ後。
 # =============================================================================
 name: Eval Gate
 
@@ -67,6 +68,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # PR 実行では runner コードを base 側(信頼済み)から取る。PR の evals/** 変更は
+      # データ(golden・thresholds)としては当日反映されるが、runner コード自体の差し替えは
+      # マージ後まで secrets 付きで実行されない(悪意ある PR による API キー流出の遮断)
+      - name: Checkout trusted runner (base)
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .trusted
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -91,7 +102,12 @@ jobs:
         id: run
         run: |
           SUITE="${{ github.event_name == 'pull_request' && 'smoke' || (inputs.suite || 'full') }}"
-          python evals/run_evals.py \
+          RUNNER="evals/run_evals.py"
+          # PR 時は base 側の runner を使う(上の trusted checkout 参照)
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            RUNNER=".trusted/evals/run_evals.py"
+          fi
+          python "$RUNNER" \
             --dataset evals/golden/golden.jsonl \
             --suite "$SUITE" \
             --thresholds evals/thresholds.json \
