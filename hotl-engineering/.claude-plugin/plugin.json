@@ -1,0 +1,31 @@
+{
+  "name": "hotl-engineering",
+  "displayName": "HOTL Engineering",
+  "version": "1.0.0",
+  "description": "Human-on-the-Loop(HOTL)開発ワークフローの設計・適用と、AIネイティブな開発運営のCTO判断を支援。リポジトリの引き継ぎ・開発フロー構築から、品質ゲート/CI/CD/evalゲートの段階導入、自律性の昇格判断、J-SOX/監査対応まで。",
+  "author": {
+    "name": "Ryusuke Tadokoro",
+    "email": "tado56@poshiri.org"
+  },
+  "homepage": "https://github.com/tadokoro-ryusuke/cc-plugins",
+  "repository": "https://github.com/tadokoro-ryusuke/cc-plugins",
+  "license": "MIT",
+  "keywords": [
+    "hotl",
+    "human-on-the-loop",
+    "ci-cd",
+    "quality-gates",
+    "ai-review",
+    "eval-gate",
+    "deployment",
+    "incident-response",
+    "engineering-management",
+    "jsox",
+    "audit",
+    "governance"
+  ],
+  "skills": [
+    "./skills",
+    "./workflows"
+  ]
+}

@@ -16,6 +16,7 @@ t-wada 式 TDD、FSD、Clean Architecture、DDD に基づいた開発をハー�
 |-----------|------|
 | [dev-core](./dev-core/) | TDD 開発フレームワーク。開発原則のスキル、ワークフロー、専門エージェント、Hooks 自動化を提供 |
 | [github-tools](./github-tools/) | GitHub 連携ワークフロー支援。PR 作成とドキュメント更新を効率化 |
+| [hotl-engineering](./hotl-engineering/) | Human-on-the-Loop 開発ワークフローの設計・適用と開発運営の CTO 判断支援。リポジトリ引き継ぎ・品質ゲート段階導入・自律性の昇格判断・監査対応 |
 | [ui-ux-pro-max](./ui-ux-pro-max/) | UI/UX デザインインテリジェンス（[nextlevelbuilder/ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) のベンダリング） |
 
 ## リポジトリ構成
@@ -27,6 +28,7 @@ cc-plugins/
 ├── CLAUDE.md                         # Claude Code 固有の薄いラッパ（@AGENTS.md を import）
 ├── dev-core/                         # メインプラグイン
 ├── github-tools/
+├── hotl-engineering/                 # HOTL 開発運営スキル（テンプレ・eval 雛形同梱）
 ├── ui-ux-pro-max/
 ├── docs/codex-interop/               # Codex との相互運用ガイド
 └── scripts/                          # drift 検証・共有スキルセットアップ

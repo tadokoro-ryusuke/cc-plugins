@@ -1,0 +1,20 @@
+# CODEOWNERS — Tier 2 パスに人間レビューを構造的に強制する
+# branch protection の "Require review from Code Owners" と併用して初めて効く
+#
+# 使い方: このファイルを .github/CODEOWNERS にリネームし、ユーザー名を実名に置換
+
+# 既定オーナー(全ファイル)
+* @your-github-username
+
+# === Tier 2: クリティカルパス(ai-review.yml の paths-filter と同期させること) ===
+# 3人目・外注が増えたら、ここに第二レビュアーを追加して職務分掌を強化する
+/src/lib/auth/           @your-github-username
+/src/lib/permissions/    @your-github-username
+/src/middleware.ts       @your-github-username
+/prisma/migrations/      @your-github-username
+/infra/                  @your-github-username
+/.github/                @your-github-username
+# evals/ は runner ごと Tier 2(eval-gate.yml が PR コードを secrets 付きで実行するため、
+# runner・閾値の無レビュー差し替えを構造的に防ぐ)
+/evals/                  @your-github-username
+/CLAUDE.md               @your-github-username

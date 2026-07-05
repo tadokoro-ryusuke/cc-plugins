@@ -1,0 +1,40 @@
+# CLAUDE.md — <プロジェクト名> constitution(エージェント向けリポジトリ規範)
+
+このファイルはエージェント(Claude Code / claude-code-action)の実行時コンテキスト。
+**人間向け説明ではなく、機械が従う規範**として書く。短く保つこと(肥大化したら Skill に切り出す)。
+
+## プロジェクト概要
+- Next.js (App Router) / TypeScript strict / PostgreSQL (Prisma) / Azure Container Apps
+- (例) 社内CRM。インサイダー情報等の秘匿データを扱う。**外部サービスへのデータ送信コードは書かない**
+
+## 絶対規範(non-negotiables)
+1. 権限チェックは必ず `src/lib/permissions/` の既存関数を経由する。独自実装禁止
+2. DB アクセスは Prisma 経由のみ。`$queryRaw` を使う場合は必ずパラメータバインド
+3. secrets・接続文字列の直書き禁止。環境変数は `src/env.ts` の zod スキーマに追加してから使う
+4. migration で既存カラムの削除・型変更をしない(必要なら Issue を起票して人間の判断を仰ぐ)
+5. 新規依存パッケージの追加は勝手にしない(計画段階で提案し承認を得る)
+6. UIテキスト・コメント・コミットメッセージは日本語
+
+## コーディング規約
+- named export を基本とする(default export は Next.js の規約ファイルのみ)
+- サーバー側の入力検証は zod。クライアント側の検証だけで済ませない
+- エラーは握りつぶさない。`src/lib/logger.ts` 経由で構造化ログに出す
+- テスト: Vitest。受入条件1つにつき最低1テスト。外部I/Oは MSW でモック
+
+## 開発コマンド
+```bash
+pnpm dev          # 開発サーバー
+pnpm lint         # Biome
+pnpm exec tsc --noEmit
+pnpm test         # Vitest
+pnpm build
+```
+
+## レビュー規範(ai-review.yml が参照)
+- 指摘は CRITICAL / HIGH / MEDIUM / LOW の4段階
+- スタイル指摘はしない(lint の仕事)。曖昧な「検討しては」は書かない
+- 権限・認証・migration・秘匿情報境界に触れる差分は必ず攻撃者視点で1周する
+
+## よくある間違い(過去のインシデントから追記していく)
+- (例) 検索APIに user_id を渡し忘れて全件検索になる → `searchDocs()` は user_id 必須引数
+- (運用ルール: エージェントが同じ間違いを2回したらここに1行追記する)

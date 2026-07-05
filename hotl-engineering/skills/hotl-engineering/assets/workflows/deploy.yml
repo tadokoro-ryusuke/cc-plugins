@@ -1,0 +1,146 @@
+# =============================================================================
+# deploy.yml — staging 自動 → CP3(人間1タップ承認)→ production → 自動ロールバック
+#
+# 例は Azure Container Apps。App Service / ECS でも
+# 構造は同じ: 「承認は environment に外出しし、承認後の作業は全自動+可逆」
+#
+# GitHub 側の事前設定:
+#   Settings > Environments > production
+#     - Required reviewers: リード1名(+もう1名いれば追加)
+#     - (任意) Wait timer: 0分 / Deployment branches: main のみ
+#   → スマホの GitHub アプリから Approve 可能。これが CP3。
+#
+# Azure 側の事前設定:
+#   - Entra ID アプリに GitHub OIDC の federated credential
+#   - ロールは対象リソースグループ限定の Contributor(最小権限)
+# =============================================================================
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false # デプロイは直列化
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  ACR_NAME: myappacr
+  RESOURCE_GROUP: rg-myapp-prod
+  APP_NAME: myapp
+  IMAGE: myapp
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # build & staging(全自動)
+  # ---------------------------------------------------------------------------
+  staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: staging
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - id: meta
+        run: echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push image
+        run: |
+          az acr build \
+            --registry $ACR_NAME \
+            --image $IMAGE:${{ steps.meta.outputs.tag }} .
+
+      - name: Deploy to staging
+        run: |
+          az containerapp update \
+            --name ${APP_NAME}-staging \
+            --resource-group $RESOURCE_GROUP \
+            --image $ACR_NAME.azurecr.io/$IMAGE:${{ steps.meta.outputs.tag }}
+
+      # --- staging smoke(CP3で人間が見るエビデンス) ---
+      - name: Smoke test
+        run: |
+          for i in $(seq 1 10); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" \
+              "${{ vars.STAGING_URL }}/api/health")
+            [ "$code" = "200" ] && break
+            sleep 15
+          done
+          [ "$code" = "200" ] || { echo "::error::staging smoke failed"; exit 1; }
+          # 主要フローのE2E(playwright smoke タグ)をここに追加
+          echo "✅ staging smoke passed: $code"
+
+  # ---------------------------------------------------------------------------
+  # production(CP3: environment の required reviewer 承認で初めて実行される)
+  # ---------------------------------------------------------------------------
+  production:
+    runs-on: ubuntu-latest
+    needs: staging
+    timeout-minutes: 30
+    environment:
+      name: production # ← required reviewer がここに紐づく
+      url: ${{ vars.PRODUCTION_URL }}
+    steps:
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID_PROD }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # 現行リビジョンを控えてからデプロイ(ロールバック先)
+      - name: Record current revision
+        id: current
+        run: |
+          rev=$(az containerapp revision list \
+            --name $APP_NAME --resource-group $RESOURCE_GROUP \
+            --query "[?properties.active].name | [0]" -o tsv)
+          echo "revision=$rev" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to production
+        run: |
+          az containerapp update \
+            --name $APP_NAME \
+            --resource-group $RESOURCE_GROUP \
+            --image $ACR_NAME.azurecr.io/$IMAGE:${{ needs.staging.outputs.image_tag }}
+
+      # --- 承認後は自動でヘルス監視。閾値超過なら人間を待たずロールバック ---
+      - name: Health watch (5 min)
+        id: health
+        run: |
+          fails=0
+          for i in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" \
+              "${{ vars.PRODUCTION_URL }}/api/health") || code=000
+            [ "$code" = "200" ] || fails=$((fails+1))
+            # 5xx率などアプリメトリクスを見るならここで az monitor metrics も併用
+            sleep 15
+          done
+          echo "fails=$fails"
+          [ "$fails" -le 2 ] || { echo "unhealthy=true" >> "$GITHUB_OUTPUT"; exit 1; }
+
+      - name: Auto rollback
+        if: failure() && steps.current.outputs.revision != ''
+        run: |
+          echo "::warning::Health check failed — rolling back to ${{ steps.current.outputs.revision }}"
+          az containerapp revision activate \
+            --name $APP_NAME --resource-group $RESOURCE_GROUP \
+            --revision ${{ steps.current.outputs.revision }}
+          # ロールバック発生は必ず人間へ通知(incident-triage と同じ Teams webhook)
+          curl -s -H "Content-Type: application/json" \
+            -d "{\"text\":\"🔴 production auto-rollback executed: ${{ github.sha }} → ${{ steps.current.outputs.revision }} (run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"}" \
+            "${{ secrets.TEAMS_WEBHOOK_URL }}"
