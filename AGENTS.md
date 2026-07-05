@@ -3,8 +3,14 @@
 このファイルは cc-plugins / dev-core の **ツール非依存の知識正本（Single Source of Truth）** です。
 開発原則・パターン・協働ワークフローの本体は dev-core の各 SKILL.md にあり、本ファイルはそれらを **横断的にインデックス** します。
 
-- **cc-plugins**: Claude Code プラグインのマーケットプレイス・ソースリポジトリ。
+- **cc-plugins**: Claude Code プラグインのマーケットプレイス・ソースリポジトリ（**public**）。
 - **dev-core**: TDD / FSD / Clean Architecture / DDD などの開発原則と、それを駆動するスキル・ワークフロー・エージェントを束ねたプラグイン。
+
+## リポジトリ構成
+
+- マーケットプレイス定義の正本: `.claude-plugin/marketplace.json`（プラグイン一覧はここから導出する）。
+- 各プラグイン: `<plugin>/.claude-plugin/plugin.json` + `skills/`（+ 必要に応じて `workflows/`、`agents/`、`hooks/`）。
+- Codex との相互運用ガイド: `docs/codex-interop/`。検証スクリプト: `scripts/`。
 
 dev-core のスキルは2層に分かれます:
 
@@ -37,5 +43,37 @@ dev-core のスキルは2層に分かれます:
 - **Claude Code**: `.claude-plugin/plugin.json` の `skills: ["./skills", "./workflows"]` で知識スキルとワークフロースキルの両方を読み込む。
 - **Codex**: `.codex-plugin/plugin.json` の `skills: "./skills/"` で**知識スキルのみ**を参照する（workflows は Claude 固有機能に依存するため共有しない）。
 
-name / version は `.claude-plugin/plugin.json` を正とし、`.codex-plugin/plugin.json` は同期します。
-両者のずれは `scripts/check-skills-drift.mjs`（CI）で継続的に検証されます。
+両マニフェストのずれは `scripts/check-skills-drift.mjs`（CI）で継続的に検証されます（version の正本は「編集ルール」節を参照）。
+
+## 検証コマンド
+
+プラグイン・スキル・マニフェストを変更したら、コミット前に必ず実行する。
+
+```bash
+node scripts/check-skills-drift.mjs        # 構成 drift 検証（Node 標準のみ・追加依存なし）
+claude plugin validate . --strict          # マーケットプレイス全体の公式検証
+claude plugin validate <plugin> --strict   # 変更した各プラグインごとに実行する公式検証
+```
+
+注意: `claude plugin validate --strict` は description 欠落しか検出しない。
+name とディレクトリ名の不一致・description の 1024 字超過などは素通りするため、
+**drift チェッカを一次ゲート**として扱う（validate は補助）。
+
+## 編集ルール
+
+- version の正本は各プラグインの `.claude-plugin/plugin.json`。リリースする変更ごとに semver で bump し、Codex マニフェストを持つプラグイン（現在は dev-core のみ）は `.codex-plugin/plugin.json` の name / version / description を同期する。
+- SKILL.md frontmatter は `name` と `description` を必須とする。description は「何をするか + いつ使うか」をトリガー語込みで書き、1024 字以内に収める。
+- SKILL.md 本文は 500 行以内。詳細は `references/`（1 階層）へ、決定的なロジックはテスト済み `scripts/` へ逃がす（progressive disclosure）。
+- 知識本体は SKILL.md にのみ置く。AGENTS.md・README への複製は禁止（本ファイルはインデックスのみ持つ）。
+
+## 兄弟リポジトリ（codex-plugins）
+
+- `~/work/codex-plugins`（[tadokoro-ryusuke/codex-plugins](https://github.com/tadokoro-ryusuke/codex-plugins)）は Codex ネイティブ版マーケットプレイス。dev-core の知識スキルと hotl-engineering は、日本語正本からの**英語翻案**としてミラーする（機械コピーではなく、Codex の機能差に合わせた翻案）。
+- cc-plugins 側で対象スキルを改善したら、codex-plugins 側へも同じ翻案ルールで反映し、`node scripts/validate-codex-plugins.mjs`（codex-plugins 側）で検証する。
+- Codex は install 時にプラグインをキャッシュへスナップショットする。codex-plugins 更新後は `codex plugin add <plugin>@codex-plugins` で再インストールし、新スレッドを開始しないと反映されない。
+
+## 公開リポジトリとしての注意
+
+本リポジトリは public。クライアント案件由来のスキル・テンプレート・eval データを入れる場合は、
+コミット前に固有識別子（製品名・リソース名・ユーザー名・ドメイン固有の golden データ）を汎用化し、
+`grep -rn` で残存ゼロを確認してからコミットする。単価・内部戦略を含む INTERNAL な内容は置かない。

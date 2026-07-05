@@ -26,20 +26,25 @@ Codex に認識させる経路は **2 つあり、別物** として扱う。両
 install すると、`skills: "./skills/"` で参照される dev-core の bundled skills が
 Codex から使えるようになる。
 
-手順の考え方:
+**推奨**: Codex への配布は、兄弟リポジトリ
+[tadokoro-ryusuke/codex-plugins](https://github.com/tadokoro-ryusuke/codex-plugins)
+（Codex ネイティブ・マーケットプレイス。skills は英語翻案）を使う。
 
-1. Codex 側の plugin / marketplace 機構で、`.codex-plugin/plugin.json` を持つ
-   このリポジトリ（dev-core プラグイン）を install 対象として登録する。
-2. install を実行する。
-3. 必要に応じて Codex を再起動（restart / reload）する。
-4. Codex の `/skills` 一覧または skill selector で dev-core の各スキルが
-   表示されることを確認する。
+```bash
+codex plugin marketplace add tadokoro-ryusuke/codex-plugins
+codex plugin add dev-core@codex-plugins
+```
 
-> 確実に言えること: dev-core は `.codex-plugin/plugin.json`（`name` / `version` /
-> `description` / `skills: "./skills/"`）を持つため、Codex の plugin 機構で install すれば
-> `skills/` 配下のスキルを bundled skills として読み込める形になっている。
-> install コマンドの正確な表記や marketplace 登録方法は Codex のバージョンに依存するため、
-> 実環境で確認し、結果を手動確認ログに記録すること。
+install 後は **新しい Codex スレッド**を開始し、`/skills` 一覧または skill selector で
+各スキルが表示されることを確認する（実機確認済み: 2026-07-05）。
+
+> **キャッシュに注意**: Codex は install 時にプラグインをキャッシュへスナップショットする。
+> marketplace 側を更新しても自動反映されないため、更新後は
+> `codex plugin add <plugin>@codex-plugins` で再インストールし、新スレッドを開始する。
+
+なお、cc-plugins 側の dev-core も `.codex-plugin/plugin.json`（`skills: "./skills/"`）を
+持つため、この cc-plugins を直接 marketplace 登録して install することも機構上は可能だが、
+スキル本文が日本語のままになる。英語環境・チーム配布には codex-plugins を使うこと。
 
 ---
 
@@ -140,6 +145,17 @@ drift が緑でも「Codex が実際に skill を認識するか」は経路ご�
 - 結果:                     [ OK / NG ]
 - 備考:                     <NG の場合の原因・対処、環境（OS / Codex バージョン）など>
 ```
+
+### 確認ログ: 経路A / 2026-07-05
+
+- 経路: A: plugin install
+- marketplace / SSoT path:  marketplace=~/work/codex-plugins（ローカル clone を `codex plugin marketplace add` で登録）
+- install 方式:             `codex plugin add hotl-engineering@codex-plugins`
+- Codex restart 有無:       なし（`codex exec` の新スレッドで確認）
+- 確認方法:                 `codex exec` に skill 一覧を回答させる discovery プロンプト
+- 認識できた skill 名一覧:  hotl-engineering（`hotl-engineering:hotl-engineering`）
+- 結果:                     OK
+- 備考:                     macOS。install 時キャッシュのため marketplace 更新後は再インストール + 新スレッドが必要
 
 ### 記入例（テンプレートの使い方の例。実際の確認結果に置き換える）
 
