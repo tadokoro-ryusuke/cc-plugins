@@ -36,7 +36,8 @@ codex plugin add dev-core@codex-plugins
 ```
 
 install 後は **新しい Codex スレッド**を開始し、`/skills` 一覧または skill selector で
-各スキルが表示されることを確認する（実機確認済み: 2026-07-05）。
+各スキルが表示されることを確認する（経路Aの機構自体は hotl-engineering で実機確認済み:
+2026-07-05。末尾の手動確認ログ参照。dev-core 固有の認識確認は install 時に行うこと）。
 
 > **キャッシュに注意**: Codex は install 時にプラグインをキャッシュへスナップショットする。
 > marketplace 側を更新しても自動反映されないため、更新後は
