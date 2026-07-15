@@ -15,12 +15,12 @@ description: "TDD、SOLID、コーディング規約、FSD/Clean Architecture/DD
 | [references/architecture.md](references/architecture.md) | FSD レイヤー構造、Clean Architecture、DDD（エンティティ/VO/集約） | 設計判断・ファイル配置・ドメインモデリング時 |
 | [references/security.md](references/security.md) | OWASP Top 10 チェックリスト、入力検証、機密情報保護、金融システム要件 | セキュリティレビュー・API/認証実装時 |
 
-## 1. TDD サイクル（t-wada 式）— Red→Green→Refactor→Commit
+## 1. TDD サイクル（t-wada 式）— Red→Green→Refactor→Evidence
 
 1. **Red 🔴**: 単一機能の失敗するテストを1つ作成。実装は存在しないため必ず失敗する
 2. **Green 🟢**: テストをパスさせる**最小限のコード**を記述。余分な機能は追加しない
 3. **Refactor 🔨**: テストをグリーンに保ちながら品質向上。重複排除、命名改善、複雑さの解消
-4. **Commit ✅**: 意味のあるまとまりとしてコミット
+4. **Evidence ✅**: focused verification を実行して結果を記録。commit はユーザーまたは delivery workflow が明示的に許可した場合だけ、意味のある単位で行う
 
 **Iron Law: テストなしのプロダクションコードは存在してはならない。** 検証コマンドを実行せずに「パス」を宣言することも禁止（証拠ベース完了判定の詳細は `verify` スキル参照）。
 

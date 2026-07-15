@@ -30,6 +30,8 @@
 
 ## Git 規約
 
+commit / push / PR が現在の依頼で明示的に許可されている場合だけ、この節を適用する。
+
 ### Conventional Commits
 
 ```

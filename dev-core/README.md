@@ -7,7 +7,9 @@ TDD 開発フレームワーク。t-wada 式 TDD、FSD、Clean Architecture、DD
 ### 新機能開発
 
 ```
-/dev-core:task ユーザー認証機能を追加    # 要件整理 → 計画 → Issue
+/dev-core:grill 認証方式の選択肢を検討  # 重要判断を一度に1問ずつ圧力テスト
+/dev-core:task ユーザー認証機能を追加    # 調査 → 証拠付き計画
+/dev-core:task ユーザー認証機能を追加 --issue # 明示時だけIssue作成
 /dev-core:execute docs/plans/task-*.md   # TDD 実装
 /dev-core:verify                         # 6段階検証
 ```
@@ -48,9 +50,10 @@ TDD 開発フレームワーク。t-wada 式 TDD、FSD、Clean Architecture、DD
 
 | コマンド | 用途 |
 |----------|------|
-| `/dev-core:task` | 対話型要件整理 → TDD計画 → Issue作成 |
+| `/dev-core:grill` | 重要な計画・判断を一度に1問ずつ圧力テスト |
+| `/dev-core:task` | リポジトリ調査 → 証拠付き完了条件 → TDD計画。Issueはopt-in |
 | `/dev-core:task-team` | Agent Teamで複数視点から設計議論 |
-| `/dev-core:execute` | 計画書に基づくTDD実装 |
+| `/dev-core:execute` | 永続計画に基づく自律TDD実装。commit/PRはopt-in |
 | `/dev-core:tdd` | 単独TDDサイクル |
 | `/dev-core:refactor` | リファクタリング |
 | `/dev-core:code-review` | コードレビュー |
@@ -67,7 +70,7 @@ TDD 開発フレームワーク。t-wada 式 TDD、FSD、Clean Architecture、DD
 | tdd-practitioner | TDD実行 + リファクタリング | TDD実装、リファクタリング |
 | quality-checker | lint/typecheck/test実行・修正 | 品質チェック |
 | security-auditor | セキュリティ監査（OWASP/金融） | セキュリティ監査 |
-| code-reviewer | 3軸コードレビュー（Zero Trust Review） | コードレビュー |
+| code-reviewer | 3軸コードレビュー + P0-P3 severity gate（Zero Trust Review） | コードレビュー |
 | build-error-resolver | ビルドエラー自動修復 | ビルドエラー修正 |
 | architecture-guide | FSD/CA/DDD設計ガイド | レイヤー配置判断 |
 | doc-updater | ドキュメント自動更新 | ドキュメント更新 |
@@ -80,13 +83,16 @@ TDD 開発フレームワーク。t-wada 式 TDD、FSD、Clean Architecture、DD
 
 | タイミング | 処理 | 実体 |
 |-----------|------|------|
-| SessionStart | プロジェクト状態注入 + 行動規律リマインド | prompt hook |
+| SessionStart | allowlist済みrepository metadata + 未完了planのpath/status注入 | scripts/session-start-context.sh |
 | PreToolUse:Bash | 危険コマンドブロック（rm -rf、force push等） | scripts/block-dangerous-commands.sh |
 | PostToolUse:Write\|Edit | Prettier自動フォーマット（設定があるプロジェクトのみ） | scripts/format-changed-file.sh |
-| PreCompact | 構造化状態保存 | prompt hook |
 | Stop | デバッグ残骸（console.log/debugger）の停止前検出 | scripts/stop-quality-gate.sh |
 
-検出パターンの追加 = continuous-learning スキルの実践箇所。スクリプトを編集してフック自体を成長させる。
+Claude Code の現行hook仕様では SessionStart/PreCompact は prompt handler 非対応。planの永続化は `/execute` が各iteration・停止・圧縮前に行い、SessionStart command hook はplan本文をdeveloper contextへ流さず再開対象だけを知らせる。`scripts/validate-claude-hooks.mjs` がevent/type互換性をCIで検証する。
+
+検出パターンの追加 = continuous-learning スキルの実践箇所。スクリプトとfixtureを編集してフック自体を成長させる。
+
+`dev-core/evals/skill-behavior-cases.json` は grill の trigger/no-trigger、可逆な判断の継続、不可逆判断の停止、現在証拠による完了判定、TDD/refactor/debugのdelivery side effect禁止を9ケースで固定する。`node scripts/validate-skill-evals.mjs` は schema と参照 skill を決定的に検証する静的gateであり、model挙動の採点は将来のcalibrated live evalで行う。
 
 ## Codex 互換・協働
 
@@ -97,7 +103,7 @@ dev-core の知識スキル（`skills/`）は Agent Skills 標準準拠で、Cla
   - 経路B: `scripts/setup-shared-skills.sh` で利用者プロジェクトの `.agents/skills/<skill>` を SSoT（`dev-core/skills`）へ symlink
 - **Codex 権限設定**: Claude Code の `permissions.allow/deny` は、Codex では permission profiles（filesystem/network）と rules（command allow/prompt/forbidden）へ分けて移行。
 - **協働ワークフロー**: `codex-collab` スキルが Claude 実装 → Codex レビュー（`/codex:review`）/ レスキュー（`/codex:rescue`）を駆動。Three Strikes Rule・Zero Trust Review と統合。前提に codex-plugin-cc（OpenAI 公式）。
-- **構成検証**: `scripts/check-skills-drift.mjs` + `claude plugin validate --strict`（CI: `.github/workflows/skills-drift-check.yml`）が frontmatter 標準準拠・マニフェスト整合・インデックス整合を静的検証。
+- **構成検証**: `scripts/check-skills-drift.mjs` + `scripts/validate-claude-hooks.mjs` + `claude plugin validate --strict`（CI: `.github/workflows/skills-drift-check.yml`）が frontmatter 標準準拠・マニフェスト整合・hook互換性・インデックス整合を静的検証。
 
 詳細・移行手順:
 

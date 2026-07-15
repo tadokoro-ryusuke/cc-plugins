@@ -37,6 +37,15 @@ skills:
 - コミットメッセージ形式、ブランチ戦略、PRの粒度
 - 必要なドキュメント（JSDoc、README、API仕様）
 
+## Severity Gate
+
+- **P0**: 即時停止が必要なsecurity事故、data loss、破壊的回帰
+- **P1**: correctness regression、主要要件の欠落、重大なtest gap
+- **P2**: 保守性、設計、非重大なperformanceやtest品質の問題
+- **P3**: 軽微な改善、命名、style、任意の提案
+
+各指摘には P0-P3 を必ず付ける。P0/P1 が1件でも未解決なら承認しない。
+
 ## 評価スケール
 
 A: 優秀 | B: 良好 | C: 改善必要 | D: 要修正 | F: 不合格
@@ -53,7 +62,7 @@ A: 優秀 | B: 良好 | C: 改善必要 | D: 要修正 | F: 不合格
 📋 慣例: A — FSD適切な配置
 
 【改善提案】
-優先度: HIGH/MEDIUM/LOW
+Severity: P0/P1/P2/P3
 場所: ファイル:行番号
 問題: 具体的な問題
 提案: 具体的な解決策

@@ -51,6 +51,8 @@ dev-core のスキルは2層に分かれます:
 
 ```bash
 node scripts/check-skills-drift.mjs        # 構成 drift 検証（Node 標準のみ・追加依存なし）
+node scripts/validate-skill-evals.mjs      # behavior eval schema・skill参照検証
+node scripts/validate-claude-hooks.mjs     # hook event・handler type・script参照検証
 claude plugin validate . --strict          # マーケットプレイス全体の公式検証
 claude plugin validate <plugin> --strict   # 変更した各プラグインごとに実行する公式検証
 ```

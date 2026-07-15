@@ -5,8 +5,8 @@
       {
         "hooks": [
           {
-            "type": "prompt",
-            "prompt": "セッション開始時のプロジェクト状態確認:\n\n1. `git status` で作業状態を確認\n2. `git log --oneline -5` で直近の変更を確認\n3. 未完了の計画書（docs/plans/task-*.md）があれば内容を確認\n4. .claude/*.local.md があればプロジェクト固有設定を読み込む\n\n把握した状態を簡潔に報告し、中断された作業があれば再開を提案してください。\n\n## 行動規律リマインド\n\nこのセッションでは以下のルールが有効です。スキルやエージェントを呼び出す際は必ず遵守すること:\n- **Iron Law**: テストなしのプロダクションコードは禁止。検証コマンドを実行せずに「パス」を宣言することも禁止\n- **合理化テーブル**: 「小さな変更だから」「前回通った」等の言い訳でチェックをスキップしない\n- **Zero Trust Review**: 前段エージェントの自己申告を信用せず独立検証する\n- **Three Strikes Rule**: 修正が3回失敗したらSTOPしてユーザーに報告する"
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/session-start-context.sh\""
           }
         ]
       }
@@ -31,17 +31,6 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/format-changed-file.sh\""
-          }
-        ]
-      }
-    ],
-
-    "PreCompact": [
-      {
-        "hooks": [
-          {
-            "type": "prompt",
-            "prompt": "コンテキスト圧縮前の状態保存:\n\n以下を構造化して記録してください:\n1. 現在のタスク名と計画書パス\n2. 完了したイテレーション/ステップ\n3. 次に実行すべきアクション（具体的なコマンドやファイル）\n4. 発見した問題や保留事項\n5. 重要な判断とその理由"
           }
         ]
       }

@@ -1,9 +1,9 @@
 ---
 name: debug-team
-description: "Agent Teamで複数の仮説を並行検証し、バグの根本原因を特定する。単独調査でアンカリングバイアスが懸念される複雑なバグで /dev-core:debug-team で起動する。軽量版は debug スキル。"
-argument-hint: "[バグの症状/Issue番号/エラーメッセージ]"
+description: "Agent Teamで複数の仮説を並行検証し、バグの根本原因を特定する。単独調査でアンカリングバイアスが懸念される複雑なバグで /dev-core:debug-team で起動する。Issue commentは明示指定時だけ行う。"
+argument-hint: "[バグの症状/Issue番号/エラーメッセージ] [--comment]"
 disable-model-invocation: true
-allowed-tools: Bash(git:*), Bash(gh:*), Read, Grep, Glob, Write(*.md)
+allowed-tools: Read, Grep, Glob, Write(*.md)
 ---
 
 # デバッグ調査チーム
@@ -12,7 +12,7 @@ allowed-tools: Bash(git:*), Bash(gh:*), Read, Grep, Glob, Write(*.md)
 
 ## 概要
 
-$ARGUMENTS の問題について、複数の調査員が異なる仮説を並行で検証し、互いの理論に反証し合う科学的討論を行うことで根本原因を特定する。
+最初に `$ARGUMENTS` から `--comment` をdelivery flagとして分離し、残りを `DEBUG_INPUT` とする。`DEBUG_INPUT` の問題について、複数の調査員が異なる仮説を並行で検証し、互いの理論に反証し合う科学的討論を行うことで根本原因を特定する。
 
 1 人で調査すると最初に見つけた仮説にアンカリングバイアスがかかる。独立した調査 + 相互反証で、生き残った理論がより正確な原因である可能性が高くなる。
 
@@ -61,7 +61,7 @@ Issue 番号がある場合は `gh issue view` で詳細を取得する。エラ
 spawn プロンプトのテンプレート（各 Investigator で仮説部分を差し替え）:
 
 ```
-「$ARGUMENTS」の問題を調査してください。
+「$DEBUG_INPUT」の問題を調査してください。
 
 あなたの担当仮説: [仮説の内容]
 
@@ -70,6 +70,7 @@ spawn プロンプトのテンプレート（各 Investigator で仮説部分を
 確証バイアスに注意し、反する証拠も必ず探すこと。証拠なしに結論を出さないこと。
 
 調査結果は Lead に報告してください: 仮説の妥当性（HIGH/MEDIUM/LOW）、発見した証拠、推定される根本原因、修正案。
+ファイルは編集せず、読み取り調査と報告だけを行ってください。
 ```
 
 #### チームの運営
@@ -97,12 +98,13 @@ Lead がチームメイトの調査結果を統合し、結論を判定する:
 1. 全 Investigator に shutdown_request を送信する
 2. 全員が停止したことを確認する
 3. TeamDelete でチームリソースをクリーンアップする
-4. ユーザーに結論を報告し、次のステップを提案する:
+4. ユーザーに結論を報告し、次のステップとして `/dev-core:tdd [修正内容]` を提案する。
+5. `--comment` があるか、現在の依頼で明示された場合だけ、調査結果を指定Issueへコメントする。flagも明示依頼もなければ外部投稿しない。
 
 ```
-修正を実装しますか？
-- Yes → `/dev-core:tdd [修正内容]` で TDD サイクルを実行
-- No → 調査結果を Issue にコメントとして追記
+根本原因: [結論と証拠]
+推奨する次のアクション: `/dev-core:tdd [修正内容]`
+Issue comment: [明示依頼時だけURL、それ以外はnot requested]
 ```
 
 ## 注意事項
