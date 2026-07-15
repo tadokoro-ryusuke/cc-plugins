@@ -1,14 +1,16 @@
 ---
 name: tdd
-description: "単独のTDDサイクル（Red→Green→Refactor→Commit）を実行する。新機能の実装・バグ修正をテストファーストで進めるときに /dev-core:tdd で起動する。"
-argument-hint: "[機能名/テスト名] [--red テストのみ] [--green 実装のみ] [--no-commit]"
+description: "単独のTDDサイクル（Red→Green→Refactor→Evidence）を実行する。新機能の実装・バグ修正をテストファーストで進めるときに /dev-core:tdd で起動する。commitは --commit 指定時だけ行う。"
+argument-hint: "[機能名/テスト名] [--red テストのみ] [--green 実装のみ] [--commit]"
 disable-model-invocation: true
-allowed-tools: Bash(pnpm:*), Bash(npm:*), Bash(git:*), Read, Write, Edit, Grep, Glob, Task(subagent_type:dev-core:tdd-practitioner)
+allowed-tools: Read, Write, Edit, Grep, Glob, Task(subagent_type:dev-core:tdd-practitioner)
 ---
 
 # TDD サイクル実行
 
 t-wada 式の TDD サイクルを単独で実行する。サイクルの定義・規律（Iron Law、合理化テーブル）の正本は `best-practices` スキルと `tdd-practitioner` エージェント。
+
+最初に `$ARGUMENTS` から `--red`、`--green`、`--commit` を flags として分離し、残りを `TDD_TARGET` とする。
 
 ## 実行フロー
 
@@ -18,7 +20,7 @@ t-wada 式の TDD サイクルを単独で実行する。サイクルの定義�
 
 tdd-practitioner に以下を依頼する:
 
-- 対象機能: $ARGUMENTS
+- 対象機能: $TDD_TARGET
 - テストは具体的で明確であること。1 つの機能に対して 1 つのテスト
 - 境界値とエッジケースを考慮
 
@@ -32,9 +34,9 @@ tdd-practitioner に以下を依頼する:
 
 テストがグリーンの状態を維持しながらコード改善（重複の排除、命名の改善、構造の整理）。各変更後にテストを再実行する。
 
-### Phase 4: Commit ✅（コミット）
+### Phase 4: Evidence ✅（証拠）
 
-`--no-commit` 指定がなければ、変更ファイルを個別指定で `git add` し、Conventional Commits 形式でコミットする。
+focused test と関連する lint/typecheck を実行し、実出力を記録する。`--commit` 指定がある場合だけ、変更ファイルを個別指定で `git add` し、Conventional Commits 形式でコミットする。
 
 ## 報告ルール
 
@@ -44,7 +46,7 @@ tdd-practitioner に以下を依頼する:
 
 - `--red`: Phase 1 のみ実行（テスト作成）
 - `--green`: Phase 2 のみ実行（実装）
-- `--no-commit`: コミットをスキップ
+- `--commit`: 検証後に変更を明示的にコミット
 
 ## 使用例
 

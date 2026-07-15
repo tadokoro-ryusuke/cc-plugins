@@ -1,9 +1,9 @@
 ---
 name: refactor
 description: "作業中の変更・PR・ブランチ・最近の変更に対して Martin Fowler / t-wada の原則でリファクタリングを実行する。テストグリーン維持・外部動作不変が制約。/dev-core:refactor で起動する。"
-argument-hint: "[コミットハッシュ|PR番号|ブランチ名|ファイル/ディレクトリ] (省略時は現在の変更)"
+argument-hint: "[コミットハッシュ|PR番号|ブランチ名|ファイル/ディレクトリ] [--commit] [--push]"
 disable-model-invocation: true
-allowed-tools: Task(subagent_type:dev-core:tdd-practitioner), Task(subagent_type:dev-core:quality-checker), Bash(git:*), Bash(gh:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read, Glob
+allowed-tools: Task(subagent_type:dev-core:tdd-practitioner), Task(subagent_type:dev-core:quality-checker), Read, Glob
 ---
 
 # コードリファクタリング
@@ -20,6 +20,8 @@ allowed-tools: Task(subagent_type:dev-core:tdd-practitioner), Task(subagent_type
 
 Martin Fowler と T-wada の原則に基づいたリファクタリングを実行する。
 対象は現在の変更、PR、ブランチ、特定ファイル/ディレクトリ、または最近の変更から選択可能。
+
+最初に `$ARGUMENTS` から `--commit` と `--push` を delivery flags として分離し、残りを `TARGET` とする。`--push` はこのリファクタリングの commit と push を許可する。PR comment は含まず、別の明示依頼が必要。以下の対象判定では `TARGET` だけを使う。
 
 ## サブエージェント使用ガイド（必須）
 
@@ -98,13 +100,13 @@ prompt: |
 
 ```bash
 # 引数なし: 現在の未コミット変更
-if [ -z "$ARGUMENTS" ]; then
+if [ -z "$TARGET" ]; then
   echo "🔍 現在の変更をリファクタリング対象とします"
   git diff --name-only | grep -E "\.($SRC_EXT)$"
 
 # PR番号の場合（#123 または 123）
-elif [[ "$ARGUMENTS" =~ ^#?[0-9]+$ ]]; then
-  PR_NUMBER="${ARGUMENTS#\#}"
+elif [[ "$TARGET" =~ ^#?[0-9]+$ ]]; then
+  PR_NUMBER="${TARGET#\#}"
   echo "🔍 PR #$PR_NUMBER の変更をリファクタリング対象とします"
 
   # PRの情報を取得
@@ -117,18 +119,18 @@ elif [[ "$ARGUMENTS" =~ ^#?[0-9]+$ ]]; then
   git diff --name-only origin/$BASE_BRANCH...origin/$HEAD_BRANCH | grep -E "\.($SRC_EXT)$"
 
 # ファイル/ディレクトリの場合
-elif [ -e "$ARGUMENTS" ]; then
-  echo "🔍 $ARGUMENTS をリファクタリング対象とします"
+elif [ -e "$TARGET" ]; then
+  echo "🔍 $TARGET をリファクタリング対象とします"
 
 # ブランチ名またはコミットハッシュの場合
-elif git rev-parse --verify $ARGUMENTS >/dev/null 2>&1; then
-  if git show-ref --verify --quiet refs/heads/$ARGUMENTS; then
-    echo "🔍 ブランチ $ARGUMENTS の変更をリファクタリング対象とします"
+elif git rev-parse --verify $TARGET >/dev/null 2>&1; then
+  if git show-ref --verify --quiet refs/heads/$TARGET; then
+    echo "🔍 ブランチ $TARGET の変更をリファクタリング対象とします"
     BASE_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
-    git diff --name-only $BASE_BRANCH...$ARGUMENTS | grep -E "\.($SRC_EXT)$"
+    git diff --name-only $BASE_BRANCH...$TARGET | grep -E "\.($SRC_EXT)$"
   else
-    echo "🔍 コミット $ARGUMENTS の変更をリファクタリング対象とします"
-    git diff --name-only $ARGUMENTS^ $ARGUMENTS | grep -E "\.($SRC_EXT)$"
+    echo "🔍 コミット $TARGET の変更をリファクタリング対象とします"
+    git diff --name-only $TARGET^ $TARGET | grep -E "\.($SRC_EXT)$"
   fi
 
 # 引数指定なしで最近の変更を自動検出
@@ -204,20 +206,19 @@ tdd-practitioner エージェントに以下の情報を渡す：
    git diff
    ```
 
-3. **コミット/プッシュ**
+3. **Optional コミット/プッシュ**
 
-   `git add` はリファクタリングしたファイルの個別指定で行う（`git add .` で無関係な変更を巻き込まない。正本: best-practices の references/coding-standards.md）。
+   `--commit`、`--push`、または明示依頼がある場合だけ、リファクタリングしたファイルを個別指定で `git add` して commit する。`--push` または明示依頼がある場合だけ、その新しい commit を push する。PR comment は `--push` に含めず、現在の依頼でコメントを明示された場合だけ行う。指定がなければ検証済み working tree の差分を報告して終了する。
 
    ```bash
+   # --commit または --push 指定時のみ
    git add [変更したファイルを個別指定]
    git commit -m "refactor: [変更内容の説明]"
 
-   # PRの場合は対象ブランチにプッシュ
+   # --push 指定時のみ
    git push origin $HEAD_BRANCH
 
-   # PRにコメントを追加（オプション）
-   gh pr comment $PR_NUMBER --body "リファクタリングを実行しました：
-   - [実際に行った変更の要約]"
+   # PR comment は別途明示依頼された場合のみ
    ```
 
 ## 実行例
@@ -254,7 +255,7 @@ tdd-practitioner エージェントに以下の情報を渡す：
 ## ワークフロー全体像
 
 ```
-/dev-core:task → 要件整理・計画・Issue作成
+/dev-core:task → 調査・証拠付き計画（Issueはopt-in）
        ↓
 /dev-core:execute → TDD 実装
        ↓

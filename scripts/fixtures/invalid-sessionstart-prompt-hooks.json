@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "This handler type is intentionally invalid for the fixture."
+          }
+        ]
+      }
+    ]
+  }
+}

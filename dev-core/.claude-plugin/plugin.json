@@ -1,8 +1,8 @@
 {
   "name": "dev-core",
   "displayName": "Dev Core",
-  "version": "4.0.1",
-  "description": "TDD開発フレームワーク。t-wada式TDD、FSD、Clean Architecture、DDDのベストプラクティスと、Hooks自動化、systematic debugging、複利的改善ループを提供。",
+  "version": "4.1.0",
+  "description": "意思決定grill、証拠ベース計画、永続的な自律実行、TDD、独立レビュー、Hooks自動化、systematic debuggingを提供する開発フレームワーク。",
   "author": {
     "name": "Ryusuke Tadokoro",
     "email": "tado56@poshiri.org"

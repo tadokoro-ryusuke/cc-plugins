@@ -2,7 +2,7 @@
 name: code-review
 description: "コードレビューを実行する。セキュリティ・品質・慣例の3段階評価。PR・コミット・特定ファイルのレビュー依頼時に /dev-core:code-review で起動する。"
 argument-hint: "[PR番号/#123] [ファイルパス] [--strict 厳格モード]"
-allowed-tools: Bash(git:*), Bash(gh:*), Read, Grep, Glob, Task(subagent_type:dev-core:code-reviewer)
+allowed-tools: Read, Grep, Glob, Task(subagent_type:dev-core:code-reviewer)
 ---
 
 # コードレビュー
@@ -31,7 +31,7 @@ Task ツールで `dev-core:code-reviewer` に diff と評価観点を渡す:
 
 ### 3. 結果の報告
 
-code-reviewer の評価（A〜F スケール + 優先度付き改善提案）をそのまま提示する。**改善提案には必ず実在するファイル:行番号と具体的な問題・解決策を含める**（エージェントの出力にそれが欠けていれば差し戻す）。
+code-reviewer の評価（A〜F スケール + P0-P3 severity付き改善提案）をそのまま提示する。**改善提案には必ず実在するファイル:行番号と具体的な問題・解決策を含める**（エージェントの出力にそれが欠けていれば差し戻す）。
 
 ## 使用例
 

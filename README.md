@@ -38,13 +38,16 @@ cc-plugins/
 
 - **Single Source of Truth**: 知識本体はスキル（`dev-core/skills/<skill>/SKILL.md`）に置き、二重管理しない。バージョン・メタデータの正本は各プラグインの `.claude-plugin/plugin.json`
 - **Codex 互換**: dev-core の知識スキルは Agent Skills 標準準拠で、Claude Code と Codex の双方から同一実体を参照する（詳細: [docs/codex-interop/](./docs/codex-interop/)）
-- **継続的検証**: 構成の drift は CI（`scripts/check-skills-drift.mjs` + `claude plugin validate --strict`）で静的に検証する
+- **継続的検証**: 構成 drift、behavior eval schema、Claude hook event互換性、公式 plugin validation を CI で検証する
+- **調査根拠**: 自律ワークフローへ採用した外部実践と採用しなかった設計は [docs/research/autonomous-development-workflows.md](./docs/research/autonomous-development-workflows.md) に記録する
 
 ## 開発
 
 ```bash
 # drift チェック（Node 標準モジュールのみ・追加依存なし）
 node scripts/check-skills-drift.mjs
+node scripts/validate-skill-evals.mjs
+node scripts/validate-claude-hooks.mjs
 
 # 公式バリデーション
 claude plugin validate . --strict

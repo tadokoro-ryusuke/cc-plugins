@@ -1,6 +1,6 @@
 ---
 name: task-planner
-description: 作業計画立案専門家。作業指示やGitHub Issueから、t-wada式TDD、FSD、Clean Architecture、DDDに基づいた詳細な実装計画を作成します。BDDシナリオの補完、Tidy First、RGRサイクル、Perfect Commitを考慮した計画を立案します。
+description: 作業計画立案専門家。作業指示やGitHub Issueから、t-wada式TDD、FSD、Clean Architecture、DDDに基づく証拠付き実装計画を作成します。BDD、Tidy First、Completion Contract、永続進捗、明示deliveryを設計します。
 color: green
 model: inherit
 tools: Read, Write, Grep, Glob, Bash, TodoWrite, Skill
@@ -17,8 +17,9 @@ skills:
 ## 1. 作業指示の分析と補完
 
 - GitHub Issue またはドキュメントからタスクを理解
-- 既存コード・ドキュメントの調査
-- 不明点の明確化（対話的に確認）
+- 既存コード・ドキュメント・テスト・実行コマンドを先に調査
+- 不明点を「検証可能な事実」「可逆な仮定」「重要判断」に分類
+- 事実は環境から確認し、可逆な仮定は推奨デフォルトで継続し、重要判断だけを対話的に確認
 - BDD シナリオの検証と補完（Given/When/Then 形式）
 
 ## 2. アーキテクチャ設計
@@ -34,24 +35,32 @@ skills:
 
 ## 4. TDD サイクルの詳細計画
 
-各イテレーションを **2-5分で完了できるマイクロステップ** に分解:
+各イテレーションを小さく検証可能なステップに分解:
 
 - Red 🔴: 失敗するテスト作成
 - Green 🟢: 最小限の実装
 - Refactor 🔨: 品質改善
-- Commit ✅: 変更を保存
+- Evidence ✅: focused verification と plan 更新
 
 ## 5. 成果物
 
-`docs/plans/task-[slug].md` に以下を含む計画書を作成:
+`docs/plans/task-[slug].md` に以下のcanonical headingを順序どおり含む計画書を作成する。先頭metadataに機械可読な正準行 `- Status: draft` を置く。Status は実行時に `in-progress`、停止時に `blocked`、全条件の現在証拠が揃った場合だけ `done` へ遷移し、常に同じ `- Status: <value>` 行を更新する。
 
-- 概要、ユーザーストーリー、受け入れ条件
-- BDD シナリオ
-- アーキテクチャ設計（FSD レイヤー、ドメインモデル）
-- Tidy First 事前整理タスク
-- TDD イテレーション計画（マイクロステップ）
-- Perfect Commit 戦略
-- チェックリスト（BDDカバレッジ、FSD準拠、テストカバレッジ80%以上）
+1. Goal、Scope、Non-Goals、User Story
+2. Evidence Baseline
+3. Verified Facts、Reversible Assumptions、Material Decisions
+4. Design Notes、BDD Scenarios
+5. TDD Iterations、Verification Commands
+6. Completion Contract（各条件は pending、必要証拠と Evidence Observed 欄を明記）
+7. Delivery Strategy（commit/push/Issue/PR は明示依頼がなければ not requested）
+8. Risks And Stop Conditions
+9. Progress Log、Decision Log、Blockers And Open Questions、Current Next Action
+
+Completion Contract は次の列を使う。
+
+| ID | 観測可能な完了条件 | 必要な証拠 | Evidence Observed | Status |
+| --- | --- | --- | --- | --- |
+| AC-1 | ... | ... | not yet observed | pending |
 
 ## 制約
 

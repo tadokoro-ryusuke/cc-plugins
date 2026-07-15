@@ -51,6 +51,8 @@ dev-core のスキルは2層に分かれます:
 
 ```bash
 node scripts/check-skills-drift.mjs        # 構成 drift 検証（Node 標準のみ・追加依存なし）
+node scripts/validate-skill-evals.mjs      # behavior eval schema・skill参照検証
+node scripts/validate-claude-hooks.mjs     # hook event・handler type・script参照検証
 claude plugin validate . --strict          # マーケットプレイス全体の公式検証
 claude plugin validate <plugin> --strict   # 変更した各プラグインごとに実行する公式検証
 ```
@@ -68,7 +70,7 @@ name とディレクトリ名の不一致・description の 1024 字超過など
 
 ## 兄弟リポジトリ（codex-plugins）
 
-- `~/work/codex-plugins`（[tadokoro-ryusuke/codex-plugins](https://github.com/tadokoro-ryusuke/codex-plugins)）は Codex ネイティブ版マーケットプレイス。dev-core の知識スキルと hotl-engineering は、日本語正本からの**英語翻案**としてミラーする（機械コピーではなく、Codex の機能差に合わせた翻案）。
+- `~/work/codex-plugins`（[tadokoro-ryusuke/codex-plugins](https://github.com/tadokoro-ryusuke/codex-plugins)）は Codex ネイティブ版マーケットプレイス。dev-core の知識スキルと hotl-engineering は、日本語正本からの**英語翻案**としてミラーする（機械コピーではなく、Codex の機能差に合わせた翻案）。github-tools / ui-ux-pro-max も両リポジトリに存在するが構成が異なり、翻案ミラーの対象外（リポジトリごとに管理）。
 - cc-plugins 側で対象スキルを改善したら、codex-plugins 側へも同じ翻案ルールで反映し、`node scripts/validate-codex-plugins.mjs`（codex-plugins 側）で検証する。
 - Codex は install 時にプラグインをキャッシュへスナップショットする。codex-plugins 更新後は `codex plugin add <plugin>@codex-plugins` で再インストールし、新スレッドを開始しないと反映されない。
 

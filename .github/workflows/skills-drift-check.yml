@@ -20,6 +20,7 @@ on:
       - "CLAUDE.md"
       - "scripts/**"
       - "docs/codex-interop/**"
+      - "docs/research/**"
       - ".github/workflows/skills-drift-check.yml"
   pull_request:
     paths: *drift_paths
@@ -40,6 +41,17 @@ jobs:
       # 追加依存なし（Node 標準モジュールのみ）のため npm install は不要。
       - name: Run skills drift check
         run: node scripts/check-skills-drift.mjs
+      - name: Validate skill behavior eval cases
+        run: node scripts/validate-skill-evals.mjs
+      - name: Validate Claude hook event compatibility
+        run: |
+          node scripts/validate-claude-hooks.mjs
+          if node scripts/validate-claude-hooks.mjs scripts/fixtures/invalid-sessionstart-prompt-hooks.json; then
+            echo "expected unsupported SessionStart prompt handler to fail"
+            exit 1
+          fi
+      - name: Smoke-test SessionStart context hook
+        run: bash dev-core/scripts/test-session-start-context.sh
 
   validate:
     runs-on: ubuntu-latest
