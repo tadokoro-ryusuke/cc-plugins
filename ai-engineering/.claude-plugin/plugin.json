@@ -1,0 +1,26 @@
+{
+  "name": "ai-engineering",
+  "displayName": "AI Engineering",
+  "version": "0.1.0",
+  "description": "LLM/AIエージェントを含むシステムの設計スキル群。エージェント構成（ワークフローvsエージェント）、ツール・コンテキスト設計、RAG、ガードレール、人間の介在点設計（承認ゲート・監査可能性）を提供。",
+  "author": {
+    "name": "Ryusuke Tadokoro",
+    "email": "tado56@poshiri.org"
+  },
+  "homepage": "https://github.com/tadokoro-ryusuke/cc-plugins",
+  "repository": "https://github.com/tadokoro-ryusuke/cc-plugins",
+  "license": "MIT",
+  "keywords": [
+    "ai-agents",
+    "llm",
+    "context-engineering",
+    "rag",
+    "human-in-the-loop",
+    "guardrails",
+    "agent-design",
+    "mcp"
+  ],
+  "skills": [
+    "./skills"
+  ]
+}
