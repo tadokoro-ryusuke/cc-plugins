@@ -1,7 +1,7 @@
 {
   "name": "ai-engineering",
   "displayName": "AI Engineering",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "LLM/AIエージェントを含むシステムの設計スキル群。エージェント構成（ワークフローvsエージェント）、ツール・コンテキスト設計、RAG、ガードレール、人間の介在点設計（承認ゲート・監査可能性）を提供。",
   "author": {
     "name": "Ryusuke Tadokoro",

@@ -114,6 +114,8 @@ CI/CD はリポジトリ作成と同時に整備する初期投資であり、�
 スキーマ変更は「**追加（expand）→ 新旧両対応 → 旧削除（contract）**」の3段階で行い、常に1世代前と互換にする。
 なぜ: スキーマが後方互換でないと、コードだけロールバックしても壊れる。ロールバック可能性は事実上ここで決まる。
 
+3フェーズ手順（Expand / Migrate / Contract）とオンライン DDL の詳細正本 → dev-core:data-design-ops 参照。本スキルはパイプラインへの組み込みとロールバック設計を担当する。
+
 ### ロールバック判断基準はデプロイ前に決める
 
 - [ ] 発動基準を事前定義する（例: エラー率 X% 超でロールバック）。「なんとなく大丈夫そう」で全量公開しない。
@@ -168,6 +170,7 @@ CI/CD はリポジトリ作成と同時に整備する初期投資であり、�
 - テスト配分・技法・観点表・検収テスト → 姉妹スキル test-design
 - ローカル6段階検証（build→type→lint→test→security→diff） → dev-core:verify
 - TDD・セキュリティ原則・コーディング規約 → dev-core:best-practices
+- セキュリティスキャンの選定方針・脆弱性トリアージ（EPSS/KEV）・SBOM 方針 → dev-core:security-by-design（本スキルは組み込み位置とタイミング）
 - CI 失敗の根本原因分析 → dev-core:debug
 - Issue 運用・ブランチ規約 → 姉妹スキル issue-driven-dev
 - 規約を自動ガードレール化する仕組み → 姉妹スキル conventions-as-guardrails

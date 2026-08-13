@@ -1,8 +1,8 @@
 {
   "name": "design-core",
   "displayName": "Design Core",
-  "version": "0.1.0",
-  "description": "ノンデザイナー向けデザイン品質スキル群。デザイン4原則（CRAP）・タイポグラフィ・配色・UX法則によるUI/資料の審査（design-review）と、提案書・スライド・図解の高速生成（business-doc-design）を提供。生成系スキルとは「審査側」として役割分担。",
+  "version": "0.2.0",
+  "description": "ノンデザイナー向けデザイン品質スキル群。デザイン4原則（CRAP）・タイポグラフィ・配色・UX法則によるUI/資料の審査（design-review）と、提案書・スライド・図解の高速生成（business-doc-design）を提供。生成系スキルとは「審査側」として役割分担。トークン確定=ui-visual-defaults、UI生成=生成系スキル、審査=design-review の分担。",
   "author": {
     "name": "Ryusuke Tadokoro",
     "email": "tado56@poshiri.org"
