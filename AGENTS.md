@@ -29,10 +29,15 @@ dev-core のスキルは2層に分かれます:
 |-------|------|
 | backend-patterns | API設計、Repository、サービス層、Result パターン、キャッシュ、トランザクションのパターンガイド（フレームワーク非依存） |
 | best-practices | TDD、SOLID、コーディング規約、FSD/Clean Architecture/DDD、セキュリティの開発原則ガイド（詳細は references/ に progressive disclosure） |
+| cicd-release-design | CI/CDパイプラインとデプロイ/リリース戦略の設計スキル。品質ゲート段階設計、シークレット管理（OIDC優先）、デプロイ戦略選択、フィーチャーフラグ寿命管理、ロールバック設計、エージェント権限設計 |
 | codex-collab | Claude Code と Codex の協働を駆動するスキル。Claude が実装し Codex に独立レビュー/セカンドオピニオン/レスキューを依頼する |
 | continuous-learning | セッションからの学習パターン抽出。ミスを二度と起こさないメカニズムを構築する |
+| conventions-as-guardrails | コーディング規約・命名規約・ログ規約を「AIエージェントが決定的に守れる形」に翻訳する。新規リポジトリ立ち上げ・CLAUDE.md/AGENTS.md 整備・lint/CI/フック設定時に使用 |
 | debug | 4フェーズ根本原因分析（収集→仮説→検証→修正）。Three Strikes Rule（3回失敗で STOP）の正本 |
+| external-design-deliverables | 受託開発の基本設計（外部設計）成果物一式を作るスキル。画面一覧→遷移図→ワイヤーフレーム→詳細仕様の合意順序、OOUI画面構成、冪等性・リラン・突き抜け対策を含むバッチ設計、設計書を機械可読形式で書きクライアント合意文書とAI実装指示の二役にする原則の正本 |
 | frontend-patterns | フロントエンドのコンポーネント設計、状態管理、フォーム、データフェッチのパターンガイド（フレームワーク非依存） |
+| issue-driven-dev | Issue起点で人間+AIエージェントの開発を回すスキル。Issue作成・分解・トリアージ、Issue Forms/ラベル/マイルストーン運用、ブランチ戦略選択、エージェントへのタスク委任、ADR/Design Docの書き分け、レビュー規律。task-planner / issue-creator の知識正本 |
+| test-design | テスト戦略・テスト設計・検収基準づくりのスキル。テスト計画・観点表・テスト技法の選択、リスクベースの優先順位付け、検収テスト仕様書・結果報告書。テストの「実行」ではなく「設計」を担当（実行と証拠報告は verify） |
 | verify | 6段階検証フロー（build→type→lint→test→security→diff）。証拠ベース完了判定（Iron Law）の正本 |
 <!-- skills:end -->
 
