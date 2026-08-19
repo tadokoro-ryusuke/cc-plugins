@@ -1,8 +1,8 @@
 {
   "name": "dev-core",
   "displayName": "Dev Core",
-  "version": "4.1.0",
-  "description": "意思決定grill、証拠ベース計画、永続的な自律実行、TDD、独立レビュー、Hooks自動化、systematic debuggingを提供する開発フレームワーク。",
+  "version": "4.3.0",
+  "description": "意思決定grill、証拠ベース計画、永続的な自律実行、TDD、独立レビュー、Hooks自動化、systematic debugging、Issue駆動開発、テスト設計、CI/CD・リリース設計、規約のガードレール化、外部設計成果物を提供する開発フレームワーク。",
   "author": {
     "name": "Ryusuke Tadokoro",
     "email": "tado56@poshiri.org"

@@ -68,3 +68,5 @@ argument-hint: "[--fix 自動修正] [--skip-test テストスキップ]"
 ## CI/CD 統合
 
 同じ 6 段階を CI でも実行する。検出した検証コマンドをそのまま GitHub Actions 等のステップに並べる（ローカルで通らないものを CI に追加しない）。
+
+CI 上での段階配置（PR時/マージ時/リリース前の3段階）と品質ゲート全体の設計は dev-core:cicd-release-design を正本とする。

@@ -1,0 +1,26 @@
+{
+  "name": "delivery-core",
+  "displayName": "Delivery Core",
+  "version": "0.2.0",
+  "description": "受託開発のデリバリー上流を支援するスキル群。PM運営（方式選択・変更管理・進捗報告）、要件定義（RDRA・受入基準）、顧客との合意形成（議事録・Decision Log）、業務設計・サービス設計・システム化範囲の線引きを提供。",
+  "author": {
+    "name": "Ryusuke Tadokoro",
+    "email": "tado56@poshiri.org"
+  },
+  "homepage": "https://github.com/tadokoro-ryusuke/cc-plugins",
+  "repository": "https://github.com/tadokoro-ryusuke/cc-plugins",
+  "license": "MIT",
+  "keywords": [
+    "project-management",
+    "requirements",
+    "rdra",
+    "acceptance-criteria",
+    "stakeholder-management",
+    "business-design",
+    "scope-management",
+    "change-management"
+  ],
+  "skills": [
+    "./skills"
+  ]
+}

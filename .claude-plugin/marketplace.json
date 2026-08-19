@@ -1,6 +1,6 @@
 {
   "name": "cc-plugins",
-  "version": "4.2.0",
+  "version": "4.3.0",
   "description": "証拠ベース計画、段階的な自律実行、TDD、独立評価に基づいた開発をハーネスエンジニアリングで支援します。",
   "owner": {
     "name": "Ryusuke Tadokoro",
@@ -29,6 +29,30 @@
       "name": "ui-ux-pro-max",
       "description": "UI/UXデザインインテリジェンス。UIスタイル、カラーパレット、フォントペアリング、チャートタイプ、UXガイドラインの検索可能データベースを8つのテックスタック向けに提供",
       "source": "./ui-ux-pro-max",
+      "category": "design"
+    },
+    {
+      "name": "delivery-core",
+      "description": "受託開発のデリバリー上流を支援。PM運営、要件定義（RDRA・受入基準）、顧客との合意形成、業務設計・サービス設計・システム化範囲の線引き",
+      "source": "./delivery-core",
+      "category": "workflow"
+    },
+    {
+      "name": "ai-engineering",
+      "description": "LLM/AIエージェントを含むシステムの設計。エージェント構成、ツール・コンテキスト設計、RAG、ガードレール、人間の介在点設計（承認ゲート・監査）",
+      "source": "./ai-engineering",
+      "category": "development"
+    },
+    {
+      "name": "compliance-core",
+      "description": "受託開発の法規制コンプライアンス。個人情報保護法の実務、OSSライセンス監査（SBOM）、生成AI利用の権利処理。法的助言ではなく実務の型",
+      "source": "./compliance-core",
+      "category": "development"
+    },
+    {
+      "name": "design-core",
+      "description": "ノンデザイナー向けデザイン品質。デザイン4原則によるUI/資料の審査と、提案書・スライド・図解の高速生成",
+      "source": "./design-core",
       "category": "design"
     }
   ]

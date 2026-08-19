@@ -1,7 +1,7 @@
 {
   "name": "dev-core",
-  "version": "4.1.0",
-  "description": "証拠ベース検証、TDD、Clean Architecture、DDD、systematic debugging、継続学習を提供する共有開発スキル。",
+  "version": "4.3.0",
+  "description": "証拠ベース検証、TDD、Clean Architecture、DDD、systematic debugging、継続学習、Issue駆動開発、テスト設計、CI/CD・リリース設計、規約のガードレール化、外部設計成果物を提供する共有開発スキル。",
   "author": {
     "name": "Ryusuke Tadokoro",
     "email": "tado56@poshiri.org"

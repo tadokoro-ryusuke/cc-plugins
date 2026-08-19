@@ -45,7 +45,8 @@ type: feat | fix | docs | style | refactor | test | chore
 
 ### ブランチ戦略
 
-main | develop | feature/* | fix/* | release/*
+ブランチ戦略の選択（既定は GitHub Flow）→ dev-core:issue-driven-dev Step 5 を正本とする。
+ブランチ名は種別プレフィックス + Issue 番号（例: `feature/123-cancel-order`）。
 
 ## リファクタリング技法
 

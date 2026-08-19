@@ -1,0 +1,26 @@
+{
+  "name": "compliance-core",
+  "displayName": "Compliance Core",
+  "version": "0.1.0",
+  "description": "受託開発の法規制コンプライアンススキル群。個人情報保護法の実務（委託先義務・漏えい対応・クラウド例外）、OSSライセンス監査（コピーレフト検出・SBOM）、生成AI利用の権利処理（著作権整理・AI利用ポリシー）を提供。法的助言ではなく実務の型。",
+  "author": {
+    "name": "Ryusuke Tadokoro",
+    "email": "tado56@poshiri.org"
+  },
+  "homepage": "https://github.com/tadokoro-ryusuke/cc-plugins",
+  "repository": "https://github.com/tadokoro-ryusuke/cc-plugins",
+  "license": "MIT",
+  "keywords": [
+    "privacy",
+    "appi",
+    "oss-license",
+    "sbom",
+    "copyleft",
+    "generative-ai",
+    "copyright",
+    "compliance"
+  ],
+  "skills": [
+    "./skills"
+  ]
+}
