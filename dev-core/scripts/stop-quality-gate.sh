@@ -17,7 +17,9 @@ ACTIVE=$(printf '%s' "$INPUT" | jq -r '.stop_hook_active // false' 2>/dev/null)
 # git リポジトリ外では何もしない
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 
-DEBUG_PATTERN='^\+.*(console\.(log|debug)\(|debugger;|var_dump\(|binding\.pry|breakpoint\(\))'
+# JS/TS: console.log/debug, debugger / PHP: var_dump / Ruby: binding.pry
+# Python: breakpoint(), pdb.set_trace() / Rust: dbg!() / Go: fmt.Println
+DEBUG_PATTERN='^\+.*(console\.(log|debug)\(|debugger;|var_dump\(|binding\.pry|breakpoint\(\)|pdb\.set_trace\(\)|\bdbg!\(|fmt\.Println\()'
 
 # 除外対象（テストファイル・スクリプト類）はファイルパスで判定する
 EXCLUDE_PATH_PATTERN='(\.test\.|\.spec\.|_test\.|(^|/)tests?/|(^|/)__tests__/|(^|/)scripts?/)'

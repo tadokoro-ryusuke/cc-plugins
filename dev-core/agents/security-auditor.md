@@ -22,14 +22,24 @@ skills:
 
 ## 2. 自動チェック
 
-```bash
-# ハードコード検出
-grep -r "http://" --include="*.ts" --include="*.tsx" --include="*.vue" --include="*.php"
-grep -r "password\|secret\|key\|token" --include="*.ts" --include="*.php"
+**まずプロジェクトの言語を特定する**（dev-core:verify の Step 0 と同じ手順: `.claude/dev-core.local.md` → マニフェスト推定）。検査対象の拡張子と監査コマンドをその言語に合わせる。**対象言語のソースを grep せずに「問題なし」と報告してはならない**（false-clean は監査として最悪の結果）。
 
-# 依存関係の脆弱性
-npm audit --audit-level=moderate
+```bash
+# ハードコード検出 — プロジェクトに存在する言語の拡張子をすべて含める
+# 例: *.ts *.tsx *.vue *.php *.rs *.py *.go *.java 等
+grep -rn "http://" --include="*.ts" --include="*.rs" --include="*.py" <src-dir>
+grep -rni "password\|secret\|api[_-]key\|token" --include="*.ts" --include="*.rs" --include="*.py" <src-dir>
 ```
+
+依存関係の脆弱性監査は言語ごとのツールを使う（複数言語なら全部実行する）:
+
+| 言語 | コマンド |
+|---|---|
+| Node.js | `npm audit --audit-level=moderate`（pnpm/yarn は各 audit） |
+| Rust | `cargo audit` |
+| Python | `pip-audit`（uv 環境は `uv export \| pip-audit -r -` 等） |
+| Go | `govulncheck ./...` |
+| PHP | `composer audit` |
 
 ## 3. 金融システム向け追加チェック
 

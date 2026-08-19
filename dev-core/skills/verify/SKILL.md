@@ -20,7 +20,9 @@ argument-hint: "[--fix 自動修正] [--skip-test テストスキップ]"
    - `Cargo.toml` → `cargo build` / `cargo clippy` / `cargo test`
    - `go.mod` → `go build ./...` / `go vet ./...` / `go test ./...`
    - `composer.json` → `scripts` の `lint` / `test`（PHPStan, Pint, PHPUnit 等）
-3. **検出不能な場合**: 推測で実行せず、ユーザーに検証コマンドを確認する
+   - `wrangler.toml` / `wrangler.jsonc`（Cloudflare Workers）→ package.json の scripts に加えて `wrangler deploy --dry-run`（ビルド検証）、テストは `@cloudflare/vitest-pool-workers` の有無を確認
+3. **複数マニフェストが共存する場合**（例: Tauri = `Cargo.toml` + `package.json`、Python + JS モノレポ）: **検出した全系統を検証する**。片方だけ検証して完了扱いにしない。各 Step は系統ごとに実行し、結果を系統別に報告する。
+4. **検出不能な場合**: 推測で実行せず、ユーザーに検証コマンドを確認する
 
 該当ステップのコマンドがプロジェクトに存在しない場合（例: ビルド工程のないスクリプト集）は、そのステップを「⏭ 対象外（理由）」として明示的にスキップする。**黙ってスキップしない。**
 
