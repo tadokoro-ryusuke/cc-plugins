@@ -87,6 +87,7 @@ name とディレクトリ名の不一致・description の 1024 字超過など
 
 - `~/work/codex-plugins`（[tadokoro-ryusuke/codex-plugins](https://github.com/tadokoro-ryusuke/codex-plugins)）は Codex ネイティブ版マーケットプレイス。dev-core の知識スキルと hotl-engineering は、日本語正本からの**英語翻案**としてミラーする（機械コピーではなく、Codex の機能差に合わせた翻案）。github-tools / ui-ux-pro-max も両リポジトリに存在するが構成が異なり、翻案ミラーの対象外（リポジトリごとに管理）。
 - cc-plugins 側で対象スキルを改善したら、codex-plugins 側へも同じ翻案ルールで反映し、`node scripts/validate-codex-plugins.mjs`（codex-plugins 側）で検証する。
+- indie-product-marketing は向きが逆で、ドメイン知識（SKILL.md の内容、references、assets）の正本は codex-plugins。改善は codex-plugins で先に行い、cc へは一方向に日本語で翻案する。references/・assets/ は同一コピーにし、同期元の commit をプラグインの README に記録する。cc が所有するのは各スキルの `references/claude-code-runtime.md` だけ。
 - Codex は install 時にプラグインをキャッシュへスナップショットする。codex-plugins 更新後は `codex plugin add <plugin>@codex-plugins` で再インストールし、新スレッドを開始しないと反映されない。
 
 ## 公開リポジトリとしての注意
