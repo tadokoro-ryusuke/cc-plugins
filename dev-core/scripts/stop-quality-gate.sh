@@ -6,6 +6,8 @@
 # - stop_hook_active が true の場合（このフックのブロックから継続した応答）は
 #   無限ループ防止のため必ず exit 0 する。意図的に残す判断もこの 2 周目で許容される。
 # - 検出パターンを追加する場合は DEBUG_PATTERN を編集する（continuous-learning スキル参照）。
+# - Go の fmt.Println は、main パッケージのファイルと cmd/ 配下では正当な出力として
+#   使われるため、そのファイルに限って検出対象から外す（他のパターンはそのまま検出する）。
 set -u
 
 INPUT=$(cat)
@@ -21,14 +23,28 @@ git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 # Python: breakpoint(), pdb.set_trace() / Rust: dbg!() / Go: fmt.Println
 DEBUG_PATTERN='^\+.*(console\.(log|debug)\(|debugger;|var_dump\(|binding\.pry|breakpoint\(\)|pdb\.set_trace\(\)|\bdbg!\(|fmt\.Println\()'
 
+# Go の fmt.Println を正当な出力として扱うファイル: パスの cmd/ セグメント、または package main 宣言
+# GO_PRINT_TOKEN は DEBUG_PATTERN 内の表記と一致させる（一致しないと除外が効かず、検出側に倒れる）
+GO_PRINT_TOKEN='|fmt\.Println\('
+GO_PRINT_ALLOWED_PATH_PATTERN='(^|/)cmd/'
+GO_PACKAGE_MAIN_PATTERN='^[[:space:]]*package[[:space:]]+main([[:space:]]|$)'
+DEBUG_PATTERN_WITHOUT_GO_PRINT="${DEBUG_PATTERN/"$GO_PRINT_TOKEN"/}"
+
 # 除外対象（テストファイル・スクリプト類）はファイルパスで判定する
 EXCLUDE_PATH_PATTERN='(\.test\.|\.spec\.|_test\.|(^|/)tests?/|(^|/)__tests__/|(^|/)scripts?/)'
 
 # 未コミットの変更（staged + unstaged）の追加行のみを対象にする
+# name-only のパスはリポジトリルート基準なので、ファイル内容はルートから読む
+TOP=$(git rev-parse --show-toplevel 2>/dev/null)
 FINDINGS=""
 while IFS= read -r f; do
   [ -z "$f" ] && continue
-  hits=$(git diff HEAD --unified=0 -- "$f" 2>/dev/null | grep -E "$DEBUG_PATTERN" | head -5)
+  pattern="$DEBUG_PATTERN"
+  if printf '%s\n' "$f" | grep -qE "$GO_PRINT_ALLOWED_PATH_PATTERN" \
+    || grep -qE "$GO_PACKAGE_MAIN_PATTERN" "$TOP/$f" 2>/dev/null; then
+    pattern="$DEBUG_PATTERN_WITHOUT_GO_PRINT"
+  fi
+  hits=$(git diff HEAD --unified=0 -- "$f" 2>/dev/null | grep -E "$pattern" | head -5)
   if [ -n "$hits" ]; then
     FINDINGS="${FINDINGS}${f}:
 ${hits}

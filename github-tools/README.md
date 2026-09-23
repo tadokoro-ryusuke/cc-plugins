@@ -23,13 +23,13 @@ GitHub連携ワークフローを支援するClaude Codeプラグインです。
 ### 新機能開発フロー（dev-coreプラグインと連携）
 
 ```
-# 1. 要件整理 → 計画 → Issue作成
+# 1. 要件整理 → 計画（Issue は --issue 指定時だけ作成）
 /dev-core:task ユーザー認証機能を追加
 
 # 2. TDD実装
 /dev-core:execute docs/plans/task-user-auth.md
 
-# 3. Pull Request作成
+# 3. Pull Request作成（既定は draft）
 /github-tools:pr
 ```
 
@@ -44,11 +44,13 @@ GitHub連携ワークフローを支援するClaude Codeプラグインです。
 
 ### `/github-tools:pr`
 
-- **自動Issue連携**: ブランチ名やコミットメッセージからIssue番号を検出
-- **品質保証**: PR作成前にlint/typecheck/testを実行（dev-core 導入時は quality-checker エージェントを使用）
-- **テンプレート**: プロジェクト固有のPRテンプレートを使用
-- **変更分析**: 変更内容から適切なタイプ（feat/fix/test/docs）を判定
-- **ドラフト対応**: 作業中のPRはドラフトとして作成可能
+- **確認済みの Issue 連携**: ブランチ名やコミットメッセージから Issue 番号の候補を探し、`gh issue view` で存在と内容を確かめたときだけ `Closes` を付ける
+- **品質保証**: PR作成前にlint/typecheck/testを実行（dev-core 導入時は `dev-core:verify` を使い、未導入時はプロジェクトのコマンドを直接実行）。失敗や未実行のチェックは成功と区別して本文に書く
+- **テンプレート**: プロジェクト固有のPRテンプレートがあれば従う
+- **変更分析**: 変更の種類（feat/fix/docs など）をリポジトリの規約に合わせて判定する
+- **draft が既定**: `--ready` か明示の指示があるときだけ ready で作成する。`--body-only` では本文の下書きだけを作り、PR は作らない
+- **本文はファイル経由**: 本文を作業ツリーの外のファイルに書き、`--body-file` で渡す
+- **作業の保全**: 未コミットの変更を stash・破棄・自動コミットしない。作成直前に base と HEAD が分析時から変わっていないかを確かめる
 
 ## 前提条件
 
@@ -57,7 +59,8 @@ GitHub連携ワークフローを支援するClaude Codeプラグインです。
 
 ## 関連プラグイン
 
-- **dev-core**: TDD開発フロー、要件整理、Issue作成（任意。pr スキルの品質チェックで利用）
+- **dev-core**: TDD開発フロー、要件整理、Issue作成（任意。pr スキルの品質チェックで `dev-core:verify` を利用）
+  - dev-core 5.0.0 以降と組み合わせる場合は、github-tools 2.1.0 以上を使う。2.0.0 の pr は、dev-core 5.0.0 で廃止された quality-checker エージェントを呼ぶため
 
 ## ライセンス
 

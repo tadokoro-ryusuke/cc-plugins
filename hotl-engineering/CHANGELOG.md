@@ -3,6 +3,14 @@
 このスキルへの変更は必ずここに記録する（HANDOFF の運用ルール）。
 references の内容変更・description の意味的変更は PR で提案し、承認を得てから反映する。
 
+## 2.0.1 — 2026-09-23
+
+dev-core 5.0.0 の構成変更に合わせたドキュメントの修正。スキル本文・テンプレート・evals は変更なし。
+
+- docs/trigger-boundaries.md: 廃止された dev-core の task-team への案内を削除。レビューの境界に、
+  バグ探索全般は Claude Code 組み込みの `/code-review`、規約レンズでのレビューは dev-core:code-review
+  という分担を追加。スキル数の固定値を削除し、スラッシュ専用の workflows に grill を追加
+
 ## 2.0.0 — 2026-09-23
 
 Codex 版（codex-plugins の hotl-engineering 2.0.0 / 2.0.1）の変更を日本語正本へ翻案反映。

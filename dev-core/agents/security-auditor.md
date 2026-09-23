@@ -1,8 +1,9 @@
 ---
 name: security-auditor
-description: セキュリティ監査専門家。OWASP Top 10、ハードコーディング、機密情報漏洩、セキュリティ脆弱性を検出します。金融システム向けの高度なセキュリティチェックにも対応。API・認証・入力処理のコード変更時にproactiveに使用し、セキュアなコードベースを維持してください。
-color: red
+description: セキュリティ監査専門家。OWASP Top 10、ハードコーディング、機密情報漏洩、依存関係の脆弱性を検出し、指摘を file:line 付きで返します。金融システム向けの追加チェックにも対応。セキュリティ・認証・権限・秘密情報の境界に触れる変更がリスクゲートに該当したときに使用してください。
 model: inherit
+effort: high
+color: red
 tools: Read, Grep, Glob, Bash, TodoWrite, Skill
 skills:
   - dev-core:best-practices

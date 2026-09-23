@@ -4,7 +4,7 @@ description: "計画・意思決定・アイデアを、一度に1問ずつ掘�
 argument-hint: "[検討したい計画・意思決定・アイデア]"
 disable-model-invocation: true
 allowed-tools: Read, Grep, Glob
-disallowed-tools: Write, Edit, Bash, Task
+disallowed-tools: Write, Edit, Bash, Agent
 ---
 
 # Decision Grill

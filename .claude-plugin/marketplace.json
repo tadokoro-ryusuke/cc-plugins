@@ -1,6 +1,6 @@
 {
   "name": "cc-plugins",
-  "version": "4.3.0",
+  "version": "5.0.0",
   "description": "証拠ベース計画、段階的な自律実行、TDD、独立評価に基づいた開発をハーネスエンジニアリングで支援します。",
   "owner": {
     "name": "Ryusuke Tadokoro",
