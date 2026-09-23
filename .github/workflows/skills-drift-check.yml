@@ -1,9 +1,12 @@
 name: skills drift check
 
 # dev-core のスキル構成とマニフェストの「ずれ（drift）」を静的に検証する。
-# 検証本体は scripts/check-skills-drift.mjs（Node 標準モジュールのみ・追加依存なし）。
+# 検証本体は scripts/check-skills-drift.mjs と scripts/check-plugin-agents.mjs
+# （どちらも Node 標準モジュールのみ・追加依存なし）。
 # 加えて公式バリデータ（claude plugin validate --strict）で marketplace と
 # 各プラグインのマニフェスト・構成を検証する。
+# on.push.paths には marketplace の全 source を "<source>/**" で載せる
+# （載っていなければ check-skills-drift.mjs が失敗する）。
 # 注意: これは静的検証であり「Codex が実際に skill を認識するか」は検証しない
 #       （CI に Codex CLI は無い）。実認識は docs/codex-interop/shared-skills-setup.md
 #       の手動確認ログで受け入れる。
@@ -15,6 +18,10 @@ on:
       - "github-tools/**"
       - "ui-ux-pro-max/**"
       - "hotl-engineering/**"
+      - "delivery-core/**"
+      - "ai-engineering/**"
+      - "compliance-core/**"
+      - "design-core/**"
       - ".claude-plugin/**"
       - "AGENTS.md"
       - "CLAUDE.md"
@@ -41,6 +48,31 @@ jobs:
       # 追加依存なし（Node 標準モジュールのみ）のため npm install は不要。
       - name: Run skills drift check
         run: node scripts/check-skills-drift.mjs
+      - name: Check plugin agents and references
+        run: |
+          node scripts/check-plugin-agents.mjs
+          # 負例 fixture: 違反（exit 1）で落ち、各規則の code が出ることを確かめる。
+          # 起動失敗やパスの誤り（exit 2）は負例の成功とみなさない。
+          fixture=scripts/fixtures/invalid-plugin-agents
+          if output="$(node scripts/check-plugin-agents.mjs "$fixture" --pins "$fixture/agent-effort-pins.json" 2>&1)"; then
+            echo "expected invalid plugin agents fixture to fail"
+            exit 1
+          else
+            status=$?
+          fi
+          echo "$output"
+          if [ "$status" -ne 1 ]; then
+            echo "expected exit 1 (violations), got $status"
+            exit 1
+          fi
+          for code in frontmatter-missing name-mismatch description-missing description-proactive \
+            effort-invalid effort-unpinned effort-pin-mismatch model-invalid haiku-effort \
+            ignored-key when-to-use pin-stale ref-missing; do
+            if ! grep -qF "[$code]" <<<"$output"; then
+              echo "expected fixture violation [$code] was not reported"
+              exit 1
+            fi
+          done
       - name: Validate skill behavior eval cases
         run: node scripts/validate-skill-evals.mjs
       - name: Validate Claude hook event compatibility
@@ -66,7 +98,10 @@ jobs:
         run: claude plugin validate . --strict
       - name: Validate plugin manifests (strict)
         run: |
-          for plugin in dev-core github-tools ui-ux-pro-max hotl-engineering; do
+          # 対象は marketplace.json の全 source から導出する（追加したプラグインの検証漏れを防ぐ）。
+          plugins="$(node -e 'const m = require("./.claude-plugin/marketplace.json"); for (const p of m.plugins) console.log(p.source);')"
+          test -n "$plugins"
+          for plugin in $plugins; do
             echo "::group::$plugin"
             claude plugin validate "$plugin" --strict
             echo "::endgroup::"

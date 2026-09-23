@@ -40,7 +40,7 @@ dev-core のスキルは2層に分かれます:
 | external-design-deliverables | 受託開発の基本設計（外部設計）成果物一式を作るスキル。画面一覧→遷移図→ワイヤーフレーム→詳細仕様の合意順序、OOUI画面構成、冪等性・リラン・突き抜け対策を含むバッチ設計、設計書を機械可読形式で書きクライアント合意文書とAI実装指示の二役にする原則の正本 |
 | frontend-patterns | フロントエンドのコンポーネント設計、状態管理、フォーム、データフェッチのパターンガイド（フレームワーク非依存） |
 | interface-contract-design | API・イベント・エラーレスポンスなど機械間境界の契約設計スキル。プロトコル選定、バージョニング、後方互換規約、ページネーション、冪等性（Idempotency-Key）、配信保証・Outbox・Saga、RFC 9457 エラー体系。実装パターンは backend-patterns が正本で、本スキルは対外契約と互換性戦略を担当 |
-| issue-driven-dev | Issue起点で人間+AIエージェントの開発を回すスキル。Issue作成・分解・トリアージ、Issue Forms/ラベル/マイルストーン運用、ブランチ戦略選択、エージェントへのタスク委任、ADR/Design Docの書き分け、レビュー規律。task-planner / issue-creator の知識正本 |
+| issue-driven-dev | Issue起点で人間+AIエージェントの開発を回すスキル。Issue作成・分解・トリアージ、Issue Forms/ラベル/マイルストーン運用、ブランチ戦略選択、エージェントへのタスク委任、ADR/Design Docの書き分け、レビュー規律。計画立案と Issue 作成の知識正本 |
 | migration-cutover-planning | システム移行・データ移行・カットオーバー計画のスキル。移行方式3類型の選定、Strangler Fig、二重書き込み+照合、並行稼働の終了判定、Go/No-Go と Point of No Return 付きカットオーバー計画書、切り戻し可能性の確保 |
 | ops-design-handover | 運用設計・監視・インシデント管理・運用引き継ぎのスキル。ITIL 4 最小4プラクティス、SLOベースアラート、Severity定義、ブレームレス・ポストモーテムと顧客向け障害報告、引き継ぎ完了条件、月次運用レポート |
 | reliability-sla-design | 可用性・信頼性設計と保守SLA設計のスキル。SLI/SLO/SLA 3層とエラーバジェット、RTO/RPOとDR 4戦略、3-2-1バックアップ+リストア証跡、守れるSLA条項（対応時間帯・免責・上限）、外形監視によるSLI計測。SLA・SLO・稼働率・冗長化・バックアップ・DR・RTO/RPO・保守契約の条件設計で使用 |

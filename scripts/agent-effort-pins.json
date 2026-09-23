@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "description": "プラグイン agent の frontmatter に固定してよい effort の allowlist。ここに無い agent は effort を持たず、セッションの effort に従う。検査は scripts/check-plugin-agents.mjs。固定値はユーザー側で上書きできないため、追加・変更には理由を書く。",
+  "pins": {
+    "dev-core:tdd-practitioner": {
+      "effort": "medium",
+      "reason": "委譲された実装は Opus 5.5 の公式既定 medium を出発点にし、親を high 以上に上げても子は medium で動かす"
+    },
+    "dev-core:build-error-resolver": {
+      "effort": "medium",
+      "reason": "大量のビルドログを隔離する委譲先で、修正には意味の判断を含むため low にはせず medium に置く"
+    },
+    "dev-core:e2e-runner": {
+      "effort": "medium",
+      "reason": "E2E のログを親の文脈から隔離する委譲先で、実行とデバッグは実装と同じ medium で足りる"
+    },
+    "dev-core:code-reviewer": {
+      "effort": "high",
+      "reason": "リスクゲートのレビューは頻度を絞る代わりに high に置き、残るレビューの effort まで下げない（Phase C で medium と比較する暫定値）"
+    },
+    "dev-core:security-auditor": {
+      "effort": "high",
+      "reason": "セキュリティ境界の独立レビューは見逃しの影響が大きいため、code-reviewer と同じく high に置く（Phase C で比較する暫定値）"
+    }
+  }
+}

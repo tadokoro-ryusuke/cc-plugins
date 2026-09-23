@@ -3,7 +3,7 @@ name: task
 description: "リポジトリを先に調査し、要件・BDDシナリオ・証拠付き完了条件・TDD計画を永続化する。新機能・改修・曖昧な開発依頼を実装可能な計画へ変えるときに /dev-core:task で起動する。GitHub Issue は明示指定時だけ作成する。"
 argument-hint: "[タスクの概要] [--issue]"
 disable-model-invocation: true
-allowed-tools: Read, Write(*.md), Task(subagent_type:dev-core:task-planner)
+allowed-tools: Read, Write(*.md), Agent(Explore)
 ---
 
 # 証拠ベースのタスク計画
@@ -43,9 +43,11 @@ allowed-tools: Read, Write(*.md), Task(subagent_type:dev-core:task-planner)
 
 ## Phase 4: 実装計画
 
-横断的または非自明な変更では `task-planner` を新鮮なコンテキストで呼び出す。小さな docs/config 計画では、調査結果が十分なら現在のコンテキストで作成してよい。
+計画は親（このセッション）が書く。ユーザーとの対話で得た意図と判断の文脈を保ったまま書けるため。
 
-計画を `docs/plans/task-<slug>.md` に保存し、必ず以下を含める。
+対象が広く、関連コードの洗い出しに大量の読み取りが要るときは、組み込みの Explore サブエージェントに読み取り調査を任せてよい。調べる問いと範囲を具体的に渡し、返ってきた file:line の要約は、計画の前提にする箇所を親が開いて確かめてから使う。
+
+計画を `docs/plans/task-<slug>.md` に保存し、以下を含める。
 
 1. 先頭metadataの正準行 `- Status: draft`（許容値 `draft | approved | in-progress | blocked | done`）、最終更新時刻、目標、スコープ、非目標
 2. Evidence Baseline
@@ -65,9 +67,15 @@ Completion Contract は次の形式にし、全行を `pending` で開始する�
 
 commit、push、Issue、PR は、現在の依頼で明示されていなければ Delivery Strategy に `not requested` と記載する。
 
+設計の選択肢が複数あり、計画そのものを独立に批評させたいときは、計画を保存した後に新しい文脈で1回レビューする（例: `dev-core:codex-collab` の敵対的レビュー）。指摘は実ファイルで確かめてから計画に反映する。
+
 ## Phase 5: Optional Issue
 
-`--issue` があるか、ユーザーが明示的に依頼した場合だけ `issue-creator` を呼び出す。認証済み GitHub CLI がない場合は Issue 本文の draft を返し、認証や作成を勝手に進めない。
+`--issue` があるか、ユーザーが明示的に依頼した場合だけ、親が計画書から Issue を作る。Issue の書き方は `dev-core:issue-driven-dev` に従う。
+
+1. `gh auth status` で認証を確かめる。認証済みの GitHub CLI がなければ、Issue 本文の draft を返して終える。認証やログインを勝手に進めない。
+2. 本文をリポジトリ外の一時ファイルに書き、`gh issue create --title "<タイトル>" --body-file <一時ファイル>` で作成する。本文をコマンドライン引数に埋め込むと、改行や記号が崩れたりシェルに展開されたりするため。
+3. ラベルとマイルストーンは、リポジトリに既にあるものだけを付ける。
 
 ## 終了条件
 
