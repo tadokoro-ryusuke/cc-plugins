@@ -22,6 +22,7 @@ on:
       - "ai-engineering/**"
       - "compliance-core/**"
       - "design-core/**"
+      - "indie-product-marketing/**"
       - ".claude-plugin/**"
       - "AGENTS.md"
       - "CLAUDE.md"
@@ -75,6 +76,8 @@ jobs:
           done
       - name: Validate skill behavior eval cases
         run: node scripts/validate-skill-evals.mjs
+      - name: Validate indie-product-marketing behavior eval cases
+        run: node scripts/validate-skill-evals.mjs --plugin indie-product-marketing
       - name: Validate Claude hook event compatibility
         run: |
           node scripts/validate-claude-hooks.mjs

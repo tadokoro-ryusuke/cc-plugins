@@ -22,6 +22,7 @@ t-wada 式 TDD、FSD、Clean Architecture、DDD に基づいた開発をハー�
 | [ai-engineering](./ai-engineering/) | LLM / AI エージェントを含むシステムの設計。エージェント構成、ツール・コンテキスト設計、RAG、LLM の評価、人間の介在点設計 |
 | [compliance-core](./compliance-core/) | 受託開発の法規制コンプライアンス。個人情報保護法の実務、OSS ライセンス監査（SBOM）、生成 AI 利用の権利処理。法的助言ではなく実務の型 |
 | [design-core](./design-core/) | ノンデザイナー向けのデザイン品質。デザイン4原則による UI / 資料の審査と、提案書・スライド・図解の作成 |
+| [indie-product-marketing](./indie-product-marketing/) | 個人開発プロダクトの機会発見、需要検証、海外・多言語向け LP の設計、ローンチ、集客、定着、ユニットエコノミクス（codex-plugins が正本の日本語翻案） |
 
 ## リポジトリ構成
 
@@ -38,6 +39,7 @@ cc-plugins/
 ├── ai-engineering/                   # LLM / AI エージェントを含むシステムの設計
 ├── compliance-core/                  # 法規制コンプライアンスの実務
 ├── design-core/                      # デザイン品質の審査と資料作成
+├── indie-product-marketing/          # 個人開発プロダクトの機会発見・需要検証・LP・グロース
 ├── docs/codex-interop/               # Codex との相互運用ガイド
 ├── docs/research/                    # 設計判断の調査記録
 └── scripts/                          # drift 検証・共有スキルセットアップ
@@ -56,6 +58,7 @@ cc-plugins/
 # drift チェック（Node 標準モジュールのみ・追加依存なし）
 node scripts/check-skills-drift.mjs
 node scripts/validate-skill-evals.mjs
+node scripts/validate-skill-evals.mjs --plugin indie-product-marketing
 node scripts/validate-claude-hooks.mjs
 
 # 公式バリデーション

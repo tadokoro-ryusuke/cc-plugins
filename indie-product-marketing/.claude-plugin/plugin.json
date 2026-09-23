@@ -1,0 +1,28 @@
+{
+  "name": "indie-product-marketing",
+  "displayName": "Indie Product Discovery & Marketing",
+  "version": "0.1.0",
+  "description": "個人開発プロダクトの機会発見・需要検証・海外向けLP設計・ローンチ・集客・定着・ユニットエコノミクスを、証拠台帳と事前に宣言した判定ルールで進めるスキル群。codex-plugins の indie-product-marketing を Claude Code 向けに日本語で翻案。",
+  "author": {
+    "name": "Ryusuke Tadokoro",
+    "email": "tado56@poshiri.org"
+  },
+  "homepage": "https://github.com/tadokoro-ryusuke/cc-plugins",
+  "repository": "https://github.com/tadokoro-ryusuke/cc-plugins",
+  "license": "MIT",
+  "keywords": [
+    "indie-hacking",
+    "idea-generation",
+    "demand-validation",
+    "marketing",
+    "launch",
+    "growth",
+    "aso",
+    "seo",
+    "landing-page-design",
+    "localization"
+  ],
+  "skills": [
+    "./skills"
+  ]
+}
