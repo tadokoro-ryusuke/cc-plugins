@@ -32,9 +32,7 @@ concurrency:
 
 permissions:
   contents: read
-  pull-requests: write
-  issues: write
-  id-token: write # OIDC 必須
+  pull-requests: read
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -70,6 +68,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: classify
     timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -82,6 +85,8 @@ jobs:
           aws-region: ap-northeast-1
 
       - uses: anthropics/claude-code-action@v1
+        env:
+          VERDICT_PATH: ${{ runner.temp }}/review-light/verdict.json
         with:
           use_bedrock: "true"
           prompt: |
@@ -102,9 +107,11 @@ jobs:
             ## 出力
             1. PRコメントで結果サマリ(CP2で人間が3分で読める分量)
             2. 個別指摘は該当行へのインラインコメント
-            3. 最後に必ずリポジトリ直下に `ai-review-verdict.json` を作成し、
-               `{"critical": <CRITICAL件数>, "high": <HIGH件数>}` のみを書き込む
-               (指摘ゼロなら {"critical": 0, "high": 0}。ゲート判定はこのファイルで行われる)
+            3. 環境変数 VERDICT_PATH の親ディレクトリを作成し、今回のレビュー結果を
+               そのパスに書き込む。リポジトリ内にある verdict は決して流用しない。
+               {"critical": <非負整数>, "high": <非負整数>,
+                "head_sha": "${{ github.event.pull_request.head.sha }}"} を書き込む。
+               指摘ゼロなら件数は 0。必ずこの head revision をレビューすること
           claude_args: |
             --max-turns 5
             --model apac.anthropic.claude-sonnet-4-5-20250929-v1:0
@@ -115,7 +122,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ai-review-verdict-light
-          path: ai-review-verdict.json
+          path: ${{ runner.temp }}/review-light/verdict.json
           if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
@@ -127,6 +134,11 @@ jobs:
     needs: classify
     if: needs.classify.outputs.tier2 == 'true'
     timeout-minutes: 25
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -139,6 +151,8 @@ jobs:
           aws-region: ap-northeast-1
 
       - uses: anthropics/claude-code-action@v1
+        env:
+          VERDICT_PATH: ${{ runner.temp }}/review-deep/verdict.json
         with:
           use_bedrock: "true"
           prompt: |
@@ -162,8 +176,10 @@ jobs:
             観点ごとに「問題なし / 指摘あり(根拠付き)」を明記した監査形式の
             レポートをPRコメントに投稿。攻撃シナリオが成立する指摘は PoC 手順
             の概要まで書くこと。
-            最後に必ずリポジトリ直下に `ai-review-verdict.json` を作成し、
-            `{"critical": <CRITICAL件数>, "high": <HIGH件数>}` のみを書き込むこと。
+            環境変数 VERDICT_PATH の親ディレクトリを作成し、新しい verdict をその
+            パスに書き込むこと。リポジトリ内の verdict は流用しない。この head をレビューする。
+            {"critical": <非負整数>, "high": <非負整数>,
+             "head_sha": "${{ github.event.pull_request.head.sha }}"} を書き込むこと。
           claude_args: |
             --max-turns 8
             --model apac.anthropic.claude-opus-4-6-v1:0
@@ -174,7 +190,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ai-review-verdict-deep
-          path: ai-review-verdict.json
+          path: ${{ runner.temp }}/review-deep/verdict.json
           if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
@@ -185,11 +201,19 @@ jobs:
   ai-review-gate:
     name: "ai-review-gate"
     runs-on: ubuntu-latest
-    needs: [review, deep-review]
+    needs: [classify, review, deep-review]
     if: always() && !cancelled()
     timeout-minutes: 5
     steps:
+      # 強制化の前に assets/scripts/check_review_verdicts.py を base ブランチの
+      # このパスへ配置する。PR 側が持ち込んだゲートスクリプトは決して実行しない。
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .trusted
+          persist-credentials: false
       - name: Download verdicts
+        continue-on-error: true # 証跡の欠落はどちらの Phase でも validator が報告する
         uses: actions/download-artifact@v4
         with:
           pattern: ai-review-verdict-*
@@ -200,17 +224,8 @@ jobs:
           REVIEW_RESULT: ${{ needs.review.result }}
           DEEP_RESULT: ${{ needs.deep-review.result }}
           ENFORCE: ${{ vars.AI_REVIEW_ENFORCE }}
-        run: |
-          total=$(cat verdicts/*/ai-review-verdict.json 2>/dev/null \
-            | jq -s '[.[].critical // 0] | add // 0' 2>/dev/null || echo 0)
-          echo "CRITICAL 合計: ${total:-0} / review=${REVIEW_RESULT} / deep=${DEEP_RESULT}"
-          if [ "$ENFORCE" != "true" ]; then
-            echo "Phase 1(観測モード): fail しない。強制化は vars.AI_REVIEW_ENFORCE=true"
-            exit 0
-          fi
-          # 強制モード: CRITICAL あり / レビュー job 自体の失敗(fail-open 防止)でブロック
-          fail=0
-          [ "${total:-0}" -gt 0 ] && { echo "::error::CRITICAL 指摘 ${total} 件"; fail=1; }
-          [ "$REVIEW_RESULT" != "success" ] && { echo "::error::ai-review job: $REVIEW_RESULT"; fail=1; }
-          [ "$DEEP_RESULT" = "failure" ] && { echo "::error::ai-review-deep job: failure"; fail=1; }
-          exit $fail
+          CLASSIFY_RESULT: ${{ needs.classify.result }}
+          TIER2: ${{ needs.classify.outputs.tier2 }}
+          IS_DRAFT: ${{ github.event.pull_request.draft }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 .trusted/.github/scripts/check_review_verdicts.py

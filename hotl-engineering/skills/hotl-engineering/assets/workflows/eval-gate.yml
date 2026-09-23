@@ -19,8 +19,8 @@
 #   repo にはサニタイズ済みサンプルのみコミットする。
 #
 # セキュリティ注意(PR トリガーと secrets):
-#   この workflow は PR の evals/** 変更で発火し、PR 側のコード(run_evals.py)を
-#   secrets(TARGET_STAGING_API_KEY 等)付きで実行する。evals/** と .github/workflows/
+#   この workflow は PR の evals/** 変更で発火する。evaluator と thresholds は信頼済みの
+#   base 側から実行し、候補(PR)側の内容はデータとして扱う。evals/** と .github/workflows/
 #   を CODEOWNERS の Tier 2 に含め、レビューなしで eval runner を差し替えられない
 #   ことを必ず担保する(fork PR には GitHub 仕様で secrets は渡らないが、
 #   同一 repo のブランチ PR・エージェント生成 PR は対象になる)。
@@ -60,16 +60,24 @@ jobs:
     timeout-minutes: 60
     env:
       AWS_REGION: ap-northeast-1
-      # 評価対象(エージェントのクエリAPI)。staging を指す
+      # ADAPT: PR 実行では分離された preview を解決して向ける。共有 staging を対象にする場合、
+      # レスポンスの revision が EXPECTED_REVISION と一致しない限り PR の合格証跡にならない
       TARGET_ENDPOINT: ${{ vars.TARGET_STAGING_ENDPOINT }}
+      EXPECTED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
       TARGET_API_KEY: ${{ secrets.TARGET_STAGING_API_KEY }}
       # judge に使うモデル(Bedrock 東京)。生成側と分けるのが理想
       JUDGE_MODEL: apac.anthropic.claude-sonnet-4-5-20250929-v1:0
     steps:
+      - name: Prepare fresh evaluation artifacts
+        id: artifacts
+        run: |
+          directory=$(mktemp -d "$RUNNER_TEMP/eval-out.XXXXXX")
+          echo "directory=$directory" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
 
-      # PR 実行では runner コードを base 側(信頼済み)から取る。PR の evals/** 変更は
-      # データ(golden・thresholds)としては当日反映されるが、runner コード自体の差し替えは
+      # PR 実行では runner コードを base 側(信頼済み)から取る。候補側の thresholds 変更で
+      # ゲートを緩めることはできない。runner コード自体の差し替えは
       # マージ後まで secrets 付きで実行されない(悪意ある PR による API キー流出の遮断)
       - name: Checkout trusted runner (base)
         if: github.event_name == 'pull_request'
@@ -96,51 +104,61 @@ jobs:
           aws s3 cp s3://${{ vars.EVAL_BUCKET }}/golden/golden.jsonl \
             evals/golden/golden.jsonl
           aws s3 cp s3://${{ vars.EVAL_BUCKET }}/baseline/baseline.json \
-            evals/baseline.json || echo "no baseline yet"
+            evals/baseline.json
 
       - name: Run evals
         id: run
+        env:
+          EVAL_OUT: ${{ steps.artifacts.outputs.directory }}
         run: |
           SUITE="${{ github.event_name == 'pull_request' && 'smoke' || (inputs.suite || 'full') }}"
           RUNNER="evals/run_evals.py"
-          # PR 時は base 側の runner を使う(上の trusted checkout 参照)
+          THRESHOLDS="evals/thresholds.json"
+          # PR 時は base 側の runner と thresholds を使う(上の trusted checkout 参照)
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             RUNNER=".trusted/evals/run_evals.py"
+            THRESHOLDS=".trusted/evals/thresholds.json"
           fi
           python "$RUNNER" \
             --dataset evals/golden/golden.jsonl \
             --suite "$SUITE" \
-            --thresholds evals/thresholds.json \
+            --thresholds "$THRESHOLDS" \
+            --expected-revision "$EXPECTED_REVISION" \
             --baseline evals/baseline.json \
-            --out evals/out
+            --out "$EVAL_OUT"
 
       # --- CP4 エビデンス: PR コメントにレポートを貼る ---
       - name: Post report to PR
-        if: always() && github.event_name == 'pull_request'
+        if: always() && steps.artifacts.outcome == 'success' && steps.artifacts.outputs.directory != '' && steps.run.outcome != 'skipped' && github.event_name == 'pull_request'
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: eval-report
-          path: evals/out/report.md
+          path: ${{ steps.artifacts.outputs.directory }}/report.md
 
       # --- J-SOX 証跡: artifact + S3(不変ストレージ)へ退避 ---
       - name: Upload artifact
-        if: always()
+        if: always() && steps.artifacts.outcome == 'success' && steps.artifacts.outputs.directory != ''
         uses: actions/upload-artifact@v4
         with:
           name: eval-report-${{ github.run_id }}
-          path: evals/out/
+          path: ${{ steps.artifacts.outputs.directory }}/
+          if-no-files-found: warn
           retention-days: 90
 
       - name: Archive to S3 (audit trail)
-        if: always()
+        if: always() && steps.artifacts.outcome == 'success' && steps.artifacts.outputs.directory != '' && steps.run.outcome != 'skipped'
+        env:
+          EVAL_OUT: ${{ steps.artifacts.outputs.directory }}
         run: |
-          aws s3 cp evals/out/ \
+          aws s3 cp "$EVAL_OUT/" \
             s3://${{ vars.EVAL_BUCKET }}/reports/${{ github.repository_id }}/${{ github.run_id }}/ \
             --recursive
 
       # --- nightly が全ゲート通過したら baseline を更新(CP4はPR側で担保) ---
       - name: Update baseline (nightly only)
         if: success() && github.event_name == 'schedule'
+        env:
+          EVAL_OUT: ${{ steps.artifacts.outputs.directory }}
         run: |
-          aws s3 cp evals/out/results.json \
+          aws s3 cp "$EVAL_OUT/results.json" \
             s3://${{ vars.EVAL_BUCKET }}/baseline/baseline.json

@@ -3,7 +3,7 @@
 run_evals.py — 検索QAエージェント eval ハーネス
 
 L1: 決定的チェック(recall@5, MRR, must_not, refusal)
-L2: LLM-as-judge(Bedrock 東京 / temperature 0 / 3票中央値)
+L2: LLM-as-judge(Bedrock 東京 / temperature 0 ※受け付けるモデルのみ / 3票中央値)
 ゲート判定: thresholds.json + baseline 比較 → exit code
 
 使い方:
@@ -39,6 +39,18 @@ JUDGE_MODEL = os.environ.get(
 )
 RUBRIC_PATH = Path(__file__).parent / "judge_rubric.md"
 AXES = ("correctness", "faithfulness", "completeness")
+
+# temperature を受け付ける judge モデル系列の許可リスト(Claude 3 系 / Haiku 4.5 /
+# Sonnet・Opus 4.6 以前)。Opus 4.7 以降・Sonnet 5 以降などは temperature を送ると
+# 400 になるため、一致しない(未知・新しい)モデルには送らない。
+# max_tokens は Messages API の必須項目なので常に送る
+_SAMPLING_MODEL_RE = re.compile(
+    r"claude-(?:3-|haiku-4-5|(?:sonnet|opus)-4-(?:[0-6](?![0-9])|[0-9]{8}))"
+)
+
+
+def judge_accepts_sampling(model: str) -> bool:
+    return _SAMPLING_MODEL_RE.search(model) is not None
 
 
 # ---------------------------------------------------------------------------
@@ -142,28 +154,42 @@ def eval_l2(
 ) -> dict:
     prompt = make_judge_prompt(case, response, rubric)
     votes: list[dict] = []
-    for _ in range(int(cfg.get("votes", 3))):
+    vote_count = cfg.get("votes", 3)
+    if type(vote_count) is not int or vote_count < 1:
+        raise ValueError("judge votes must be a positive integer")
+    params: dict = {
+        "model": JUDGE_MODEL,
+        "max_tokens": int(cfg.get("max_tokens", 1024)),
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    # temperature は cfg にあり、かつ judge モデルが受け付ける場合だけ送る
+    if "temperature" in cfg and judge_accepts_sampling(JUDGE_MODEL):
+        params["temperature"] = float(cfg["temperature"])
+    for _ in range(vote_count):
         try:
-            msg = client.messages.create(
-                model=JUDGE_MODEL,
-                max_tokens=int(cfg.get("max_tokens", 1024)),
-                temperature=float(cfg.get("temperature", 0)),
-                messages=[{"role": "user", "content": prompt}],
-            )
+            msg = client.messages.create(**params)
         except Exception as e:  # noqa: BLE001 — judge 1票の失敗で suite 全体を止めない
-            print(f"  judge vote failed ({e})", file=sys.stderr)
+            print(f"  judge vote failed ({type(e).__name__})", file=sys.stderr)
             continue
         text = "".join(b.text for b in msg.content if b.type == "text")
         m = re.search(r"\{.*\}", text, re.DOTALL)
         if not m:
             continue
         try:
-            votes.append(json.loads(m.group(0)))
+            vote = json.loads(m.group(0))
+            if not isinstance(vote, dict):
+                continue
+            if not all(isinstance(vote.get(axis), dict)
+                       and type(vote[axis].get("score")) is int
+                       and 1 <= vote[axis]["score"] <= 5 for axis in AXES):
+                continue
+            votes.append(vote)
         except json.JSONDecodeError:
             continue
 
-    if not votes:
-        return {a: {"score": 0, "reason": "judge parse failure"} for a in AXES}
+    # 票の欠落・不正を品質スコア(0点)に化けさせない。呼び出し側でインフラ失敗として扱う
+    if len(votes) != vote_count:
+        raise ValueError("incomplete or invalid judge votes")
 
     result = {}
     for axis in AXES:
@@ -179,6 +205,10 @@ def eval_l2(
 # ---------------------------------------------------------------------------
 def gate(summary: dict, thresholds: dict, baseline: dict | None) -> tuple[bool, list[str]]:
     failures: list[str] = []
+    if summary["n_cases"] == 0:
+        failures.append("対象ケースが0件")
+    if summary["infrastructure_failed_ids"]:
+        failures.append(f"評価が未完了(target/judge エラー): {summary['infrastructure_failed_ids']}")
 
     if summary["must_pass_rate"] < thresholds["must_pass_rate"]:
         failures.append(
@@ -257,6 +287,7 @@ def main() -> int:
     ap.add_argument("--thresholds", required=True)
     ap.add_argument("--baseline", default=None)
     ap.add_argument("--out", default="evals/out")
+    ap.add_argument("--expected-revision", help="対象の全レスポンスがこのデプロイ済み revision を示すことを要求する")
     args = ap.parse_args()
 
     out = Path(args.out)
@@ -266,9 +297,12 @@ def main() -> int:
     judge_cfg = all_thresholds.get("judge", {})
     rubric = RUBRIC_PATH.read_text(encoding="utf-8")
 
+    # --baseline を明示したのにファイルが無い・壊れている場合は比較を黙って無効化しない
     baseline = None
-    if args.baseline and Path(args.baseline).exists():
-        baseline = json.loads(Path(args.baseline).read_text()).get("summary")
+    if args.baseline:
+        baseline = json.loads(Path(args.baseline).read_text())["summary"]
+        if not isinstance(baseline, dict) or not baseline:
+            raise ValueError("baseline summary is missing or invalid")
 
     cases = [
         json.loads(line)
@@ -284,14 +318,17 @@ def main() -> int:
 
     results: list[dict] = []
     for case in cases:
-        print(f"[{case['id']}] {case['query'][:40]}…")
+        print(f"[{case['id']}]")
         row: dict = {"id": case["id"], "category": case["category"],
                      "must_pass": case.get("must_pass", False),
                      "failed": False, "fail_reason": ""}
         try:
             response = call_target(case["query"], case.get("user_context") or {})
+            if args.expected_revision and response.get("revision") != args.expected_revision:
+                raise ValueError("target revision mismatch")
         except Exception as e:  # noqa: BLE001
-            row.update(failed=True, fail_reason=f"target error: {e}")
+            row.update(failed=True, infrastructure_error=True,
+                       fail_reason=f"target error or revision mismatch: {type(e).__name__}")
             results.append(row)
             continue
 
@@ -303,7 +340,13 @@ def main() -> int:
             results.append(row)
             continue  # L1 hard fail に judge コストは使わない
 
-        judge = eval_l2(client, case, response, rubric, judge_cfg)
+        try:
+            judge = eval_l2(client, case, response, rubric, judge_cfg)
+        except Exception as e:  # noqa: BLE001 — 未完了の実行でもレポートを残す
+            row.update(failed=True, infrastructure_error=True,
+                       fail_reason=f"judge error: {type(e).__name__}")
+            results.append(row)
+            continue
         total = sum(judge[a]["score"] for a in AXES)
         row.update(judge=judge, judge_total=total)
 
@@ -323,6 +366,8 @@ def main() -> int:
     summary = {
         "suite": args.suite,
         "n_cases": len(results),
+        "expected_revision": args.expected_revision,
+        "infrastructure_failed_ids": [r["id"] for r in results if r.get("infrastructure_error")],
         "recall_at_5_mean": statistics.mean(recalls) if recalls else None,
         "judge_total_mean": statistics.mean(totals) if totals else 0.0,
         "must_pass_rate": 1.0 - (len(mp_failed) / len(mp)) if mp else 1.0,
