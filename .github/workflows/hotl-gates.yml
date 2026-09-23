@@ -1,0 +1,42 @@
+name: hotl gates
+
+# hotl-engineering が配布する GitHub テンプレート(workflows / evals / scripts)の
+# 回帰テストをオフラインで実行する。モデルや評価対象 API は一切呼ばない。
+# 検証本体は scripts/tests/(Python 標準 unittest + PyYAML)。
+# agent-implement.yml の authorize スクリプトを実際に動かすため Node も用意する。
+
+on:
+  push:
+    paths: &hotl_gate_paths
+      - "hotl-engineering/**"
+      - "scripts/tests/**"
+      - ".github/workflows/hotl-gates.yml"
+  pull_request:
+    paths: *hotl_gate_paths
+
+# 同一 ref の実行が重なったら古い方をキャンセルする。
+concurrency:
+  group: hotl-gates-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # 配布物(assets/)配下に __pycache__ を生成しない
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install workflow parser for offline fixture tests
+        run: python3 -m pip install PyYAML==6.0.2
+      - name: Test HOTL delivery gates with offline fixtures
+        run: python3 -m unittest discover -s scripts/tests -v
