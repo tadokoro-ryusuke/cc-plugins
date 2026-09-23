@@ -3,7 +3,7 @@ name: e2e
 description: "Playwright E2Eテストを実行する。E2Eテストの実行・デバッグ・Page Object Modelパターンでのテスト作成時に /dev-core:e2e で起動する。"
 argument-hint: "[テストファイル/ディレクトリ] [--headed ブラウザ表示] [--debug デバッグモード]"
 disable-model-invocation: true
-allowed-tools: Read, Write, Task(subagent_type:dev-core:e2e-runner)
+allowed-tools: Read, Write, Agent(dev-core:e2e-runner)
 ---
 
 # E2E テスト実行
@@ -16,14 +16,15 @@ Playwright を使用して E2E テストを実行する。
 
 `package.json` とlockfileからPlaywrightが既存dependencyか先に確認し、project scriptを優先する。CLI確認が必要ならdownloadを禁止した `npx --no-install playwright --version` を使う。Playwright が未導入の場合は、`npx` の自動取得を起こさずユーザーに確認する。
 
-### 2. e2e-runner エージェント呼び出し
+### 2. e2e-runner への委譲
 
-Task ツールで `dev-core:e2e-runner` に以下を渡す:
+E2E の実行ログとトレースは大きく、親の文脈を圧迫するので、実行とデバッグは `Agent(dev-core:e2e-runner)` に委譲する。以下を渡す:
 
 - テスト対象: $ARGUMENTS
 - オプション: `--headed`（ブラウザ表示）/ `--debug`（デバッグモード）
+- 返してほしいもの: 実行したコマンド、テスト数と成功/失敗/スキップ数、失敗したテストのファイルと失敗理由（実出力の抜粋）
 
-### 3. テスト実行
+### 3. テスト実行（e2e-runner が実行する）
 
 ```bash
 npx --no-install playwright test $ARGUMENTS 2>&1

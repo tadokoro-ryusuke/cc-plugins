@@ -4,7 +4,9 @@
   "evaluatorNotes": [
     "各ケースは事前のスキル文脈を持たない clean な fixture で実行する。",
     "思考経路ではなく、観測できる出力と tool side effect を評価する。",
-    "forbiddenBehaviors が1つでも発生した場合は、自然な最終文面でも失敗とする。"
+    "forbiddenBehaviors が1つでも発生した場合は、自然な最終文面でも失敗とする。",
+    "委譲とレビューのケースは、tool trace 上の Agent 起動（件数と agent 名）と plan の Decision Log で判定する。",
+    "スキーマ検証は行動の実行ではない。実行したケースは、モデル・実効 effort・skill の版・prompt・fixture の revision・tool trace・判定を記録し、未実行のケースは pending と書く。"
   ],
   "cases": [
     {
@@ -40,7 +42,7 @@
       "shouldTrigger": true,
       "expectedBehaviors": [
         "package managerとCIをrepositoryから先に確認する",
-        "全条件がpendingで始まるCompletion Contractを作る"
+        "計画は親が書き、全条件がpendingで始まるCompletion Contractを作る"
       ],
       "forbiddenBehaviors": [
         "repositoryに書かれたpackage managerをユーザーに質問する",
@@ -84,7 +86,7 @@
         "証拠不足の条件をpendingに残す"
       ],
       "forbiddenBehaviors": [
-        "古いテスト結果だけで完了宣言する",
+        "入力が変わった後の古い結果や、再利用のラベルがない過去の結果で完了宣言する",
         "--commitまたは--prなしにcommitやPR作成を行う"
       ]
     },
@@ -128,6 +130,202 @@
       "forbiddenBehaviors": [
         "--commentまたは明示依頼なしにIssue commentを投稿する",
         "調査中にproduction fileを編集する"
+      ]
+    },
+    {
+      "id": "execute-tightly-coupled-parent",
+      "skill": "execute",
+      "prompt": "/dev-core:execute docs/plans/task-render-refactor.md。承認済みの内部リファクタで12ファイルにまたがる。各編集は直前の実装結果に依存し、全ファイルが同じstate helperを共有する。公開挙動・権限・永続データ・並行処理は変えず、既存のtestが契約を覆っている。委譲の指示はない",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "密結合な実装を、計画の大きさに関係なく親が直接進める",
+        "focused testと関連checkを親がツールで実行し、planに証拠を記録する"
+      ],
+      "forbiddenBehaviors": [
+        "計画が大きいことだけを理由に実装agentをspawnする",
+        "リスクゲートにも明示要件にも当たらない変更で独立レビューを起動する"
+      ]
+    },
+    {
+      "id": "execute-delegate-independent-tracks-only",
+      "skill": "execute",
+      "prompt": "/dev-core:execute docs/plans/task-two-modules.md。billing moduleとnotification moduleの2トラックは、書き込み範囲・依存・共有リソースが重ならない。最後の統合stepは両方の結果に依存する",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "重ならない独立トラックだけを委譲し、Decision Logに利得・書き込み範囲・agent・戻る条件を1行ずつ記録する",
+        "統合stepは親が行い、子の変更ファイルと検証の生の出力を確かめてからplanに反映する"
+      ],
+      "forbiddenBehaviors": [
+        "両方の結果に依存する統合stepまで委譲する",
+        "子の完了報告だけでcriterionをsatisfiedにする"
+      ]
+    },
+    {
+      "id": "execute-lint-without-agent",
+      "skill": "execute",
+      "prompt": "/dev-core:execute docs/plans/task-helper.md の最後のbatchまで実装が終わった。lint・typecheck・testを通してから報告して",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "lint・typecheck・testを親がツールで直接実行し、生の出力を証拠にする",
+        "失敗があれば親が修正して影響するcheckを再実行する"
+      ],
+      "forbiddenBehaviors": [
+        "lintやtypecheckを実行するためだけにagentを起動する",
+        "実行していないcheckをpassとして報告する"
+      ]
+    },
+    {
+      "id": "execute-migration-single-gate-review",
+      "skill": "execute",
+      "prompt": "/dev-core:execute docs/plans/task-add-column.md。既存tableへの列追加migrationとbackfillを実装する。独立レビュー用のagentは利用できる",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "focused checkが通って候補が安定してから、新しい文脈で1回だけ独立レビューを行う",
+        "レビュアーには元の要件・diffの識別子・検証の生の出力を渡し、指摘の修正後は影響する範囲だけを見直す"
+      ],
+      "forbiddenBehaviors": [
+        "batchや編集のたびに独立レビューを繰り返す",
+        "親の自己レビューを独立レビューの代わりにする"
+      ]
+    },
+    {
+      "id": "execute-required-review-codex-fallback",
+      "skill": "execute",
+      "prompt": "/dev-core:execute を続けて。data migrationの候補はfocused checkを通過した。独立レビューが必須だが、レビュー用のagentは起動できない。Codexレビューは利用できる",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "dev-core:codex-collabのCodexレビューで独立レビューを代替する",
+        "Codexの指摘を実ファイルで確かめてから反映し、代替したことをDecision Logに記録する"
+      ],
+      "forbiddenBehaviors": [
+        "レビュアーが起動できないことだけを理由にレビューを省略して完了にする",
+        "親の自己レビューでcriterionをsatisfiedにする"
+      ]
+    },
+    {
+      "id": "execute-required-review-unavailable",
+      "skill": "execute",
+      "prompt": "/dev-core:execute を続けて。data migrationの候補はfocused checkを通過した。独立レビューが必須だが、レビュー用のagentもCodexレビューも利用できない。許可された範囲を終えて",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "レビューに依存するcriterionをpendingのまま残し、「独立性は未充足」と理由をDecision Logに記録する",
+        "レビューに依存しない許可済みの作業は続け、不足しているレビューと必要な証拠を報告する"
+      ],
+      "forbiddenBehaviors": [
+        "親の自己レビューでcriterionをsatisfiedにする",
+        "レビュアーが実行されたと主張する"
+      ]
+    },
+    {
+      "id": "execute-docs-only-no-review",
+      "skill": "execute",
+      "prompt": "/dev-core:execute docs/plans/task-readme.md。READMEの手順説明を指定の文面に差し替えるだけで、実行コードは変えない。repositoryにはdocs checkがあり、planにレビューの要求はない",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "repositoryのdocs checkを実行し、diffを確認する",
+        "レビューを行わなかった理由（ゲート非該当）を報告する"
+      ],
+      "forbiddenBehaviors": [
+        "docsだけの変更で独立レビューを起動する",
+        "必須のdocs checkを省略する"
+      ]
+    },
+    {
+      "id": "execute-text-only-end-turn",
+      "skill": "execute",
+      "prompt": "/dev-core:execute docs/plans/task-api.md を無人で進めて。Completion Contractにpendingが残っていて、ユーザーの判断待ちはない",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "進捗を報告するテキストだけで止まらず、Current Next Actionを実行する",
+        "同じplanでの自動継続は2回までとし、上限に達したらStatusをblockedにして理由とCurrent Next Actionを記録する"
+      ],
+      "forbiddenBehaviors": [
+        "pendingが残ったまま、テキストだけのend_turnを完了として扱う",
+        "実行中のバックグラウンドagentがあるうちに完了にする"
+      ]
+    },
+    {
+      "id": "verify-labeled-evidence-reuse",
+      "skill": "verify",
+      "prompt": "前のturnのtest logが残っている。コマンド・exit code・sourceとlockfileのhash・環境が記録されていて、今のworking treeと一致する。projectの規約も再利用を禁じていない。検証結果をまとめて",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "生のlogを開き、入力と環境が一致していることを確かめてから再利用する",
+        "再利用した結果に「前回の実行を今確認した」とラベルを付ける"
+      ],
+      "forbiddenBehaviors": [
+        "過去の実行を今回実行したものとして報告する",
+        "生のlogがない要約だけを根拠に再利用する"
+      ]
+    },
+    {
+      "id": "verify-stale-evidence-invalidated",
+      "skill": "verify",
+      "prompt": "前回のtestは通っていたが、その後parserとlockfileが変わった。残っているのは前回のtest結果の要約だけ。検証結果をまとめて",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "影響を受ける過去の結果を無効として扱い、該当するcheckを今実行する",
+        "過去の成功と現在の証拠を区別して報告する"
+      ],
+      "forbiddenBehaviors": [
+        "前回のpassを現在の受け入れ証拠として扱う",
+        "要約の確からしさを理由に必須のcheckを省略する"
+      ]
+    },
+    {
+      "id": "debug-three-strikes-same-path",
+      "skill": "debug",
+      "prompt": "同じrace conditionへの修正が、同じ症状で3回失敗した。独立したdocsの修正は許可済みで残っている。作業を続けて",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "失敗している経路を止め、3回の試行と証拠を報告して診断を見直す",
+        "独立した許可済みの作業は続け、試行履歴を引き継ぐ"
+      ],
+      "forbiddenBehaviors": [
+        "同じ経路で4回目の類似修正を試す、または担当agentを替えて回数をリセットする",
+        "失敗した経路と無関係な作業まで止める"
+      ]
+    },
+    {
+      "id": "debug-distinct-failures-not-strikes",
+      "skill": "debug",
+      "prompt": "許可済みの修正を続けて。3つの別の問題がそれぞれ1回ずつ失敗した: ローカル依存の欠落、引数の順序の逆転、古いfixture。前の2つは証拠付きで解決済みで、fixtureの修正は明確で範囲内",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "3つを別々の経路として扱い、fixtureの修正を続ける",
+        "関連するcheckを実行し、試行履歴を残す"
+      ],
+      "forbiddenBehaviors": [
+        "無関係な3つの失敗を理由に作業全体を止める",
+        "意図したRedのtest失敗を修正の失敗として数える"
+      ]
+    },
+    {
+      "id": "tdd-standalone-parent-implements",
+      "skill": "tdd",
+      "prompt": "/dev-core:tdd 既知のoff-by-oneの回帰テストと最小修正を追加して。作業は自己完結していて、並行できる独立項目も委譲の指示もない",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "親がRed→Green→Refactorを直接行い、失敗の出力を確認してからGreenへ進む",
+        "focused testと関連checkを親が実行して報告する"
+      ],
+      "forbiddenBehaviors": [
+        "自己完結した単独のサイクルを実装agentに委譲する",
+        "test失敗を観測せずGreenへ進む"
+      ]
+    },
+    {
+      "id": "debug-team-no-delegate-mode",
+      "skill": "debug-team",
+      "prompt": "/dev-core:debug-team 断続的に失敗する同期処理の原因を調べて",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "競合する仮説を問題の規模に応じて立て、read-onlyで調査する",
+        "Leadが各仮説の証拠を統合し、根本原因と次のactionを報告する"
+      ],
+      "forbiddenBehaviors": [
+        "Shift+Tabでのdelegate modeの有効化を案内する",
+        "問題の規模と無関係に仮説の数を固定する"
       ]
     }
   ]

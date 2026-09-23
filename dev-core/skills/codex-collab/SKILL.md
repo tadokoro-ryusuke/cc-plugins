@@ -56,7 +56,16 @@ codex-plugin-cc（OpenAI 公式）が提供するスラッシュコマンド。�
 
 - 状態確認: `/codex:status`（review-gate 状態も表示される）
 - 無効化: `/codex:setup --disable-review-gate`
-- 協働を常用するなら有効化が有力。ただしゲートを通すぶん停止が一手間増えるので、頻度に応じて使い分ける。
+- ゲートは途中の停止でも走り、停止のたびに一手間増える。頻度とリスクに応じて使い分ける。
+
+### dev-core のリスクゲートと併用するとき
+
+dev-core は、独立レビューを行うかをリスクゲートで判定し、安定した候補に新しい文脈で1回行う（ゲートの対象と進め方の正本: `dev-core:best-practices` の `references/delegation-and-review.md` §5）。併用するときは次の順で扱う。
+
+1. リスクゲートで運用する作業では、stop-time review gate を常時有効にしない。停止のたびに途中の候補がレビューされ、ゲートのレビューと重複しやすいため。
+2. review gate を有効にするのは、リスクゲートを運用しない作業や、ユーザーがすべての停止でのレビューを明示的に求めた場合にする。
+3. review gate の結果をリスクゲートのレビューとして数えるのは、その入力が安定した候補（最終 diff）と一致するときだけにする。途中の停止で走ったレビューを、最終候補のレビューとして流用しない。
+4. リスクゲートで必須の独立レビュー役を起動できないときは、`/codex:review` や `/codex:adversarial-review` で代替できる。それもできなければ「独立性は未充足」と明記し、該当する受け入れ条件は pending のまま残す。
 
 ## dev-core 既存原則との統合
 
@@ -64,13 +73,13 @@ codex-plugin-cc（OpenAI 公式）が提供するスラッシュコマンド。�
 
 Codex レビューを「前段（自分）の自己申告を信用しない独立検証者」として使う。Codex の指摘もそのまま鵜呑みにせず、実ファイルで再検証する **双方向 Zero Trust** を徹底する。
 
-- 正本: `dev-core/agents/code-reviewer.md`（独立検証の原則 / Zero Trust Review）
+- 正本: `dev-core:best-practices` の `references/delegation-and-review.md`（Zero Trust Review）
 - Claude → Codex: Claude 実装の「テスト全パス」「lint クリア」等の自己申告を Codex が実ファイルで独立検証する。
 - Codex → Claude: Codex の指摘を Claude が実ファイルで再検証してから反映する（指摘も自己申告として扱い検証する）。
 
 ### Three Strikes Rule との連携
 
-同一バグの修正試行が **3 回連続で失敗したら STOP**。4 回目を試みず、`/codex:rescue` で Codex へ委譲する。3 回失敗は「修正方法」ではなく「問題の理解」が間違っている兆候であり、別モデルの視点に切り替える。
+同じ修正経路で類似の修正が **3 回失敗したら、その経路を止める**。4 回目を試みず、`/codex:rescue` で Codex へ委譲する。同じ経路での 3 回の失敗は「修正方法」ではなく「問題の理解」が間違っている兆候であり、別モデルの視点に切り替える。委譲するときは試行の履歴も渡し、担当の交代で回数をリセットしない。
 
 - 正本: `dev-core/skills/debug/SKILL.md`（3回失敗ルール / Three Strikes Rule）
 
@@ -78,7 +87,7 @@ Codex レビューを「前段（自分）の自己申告を信用しない独�
 
 - **セカンドオピニオン**: Claude 実装 → `/codex:review` でレビュー → 指摘を Zero Trust 検証して反映。
 - **敵対的レビュー**: リスクが高い設計変更の前に `/codex:adversarial-review` で設計 / 実装を疑う。
-- **レスキュー委譲**: 同一バグ修正が 3 回失敗したら `/codex:rescue` で Codex へ委譲（Three Strikes Rule）。
+- **レスキュー委譲**: 同じ修正経路で 3 回失敗したら `/codex:rescue` で Codex へ委譲（Three Strikes Rule）。
 - **レビュー観点**: 差分（diff）だけでなく全体整合性で見る。指摘の重大度（severity）が収束したら実装に着手する。
 
 ## ナレッジ分断への注意

@@ -23,6 +23,12 @@
  *              docs/codex-interop/shared-skills-setup.md）が存在し、現行パス `.agents/skills`
  *              （複数形）を参照し、旧パス（`.codex/skills` / `.agent/skills` 単数）を
  *              literal として含まないことを検証する（誤誘導防止）。
+ * Iteration 7: frontmatter の deny-list を層ごとに分ける。.codex-plugin を持つプラグインの
+ *              skills/（Codex と共有する層）では effort / context / agent も禁止する。
+ *              それ以外の skills/ と全プラグインの workflows/ は従来の deny-list のまま。
+ * Iteration 8: marketplace の各 source が .github/workflows/skills-drift-check.yml の
+ *              on.push.paths に "<source>/**" として含まれていることを検証する
+ *              （プラグインを追加したのに CI が起動しない漏れを防ぐ。YAML パーサは使わない）。
  */
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -127,6 +133,22 @@ const EXPECTED_CODEX_SKILLS = "./skills/";
  * Agent Skills 標準への混入を防ぐ deny-list。
  */
 const DENIED_TOP_LEVEL_KEYS = ["model", "color", "tools"];
+
+/**
+ * Codex と共有する層（.codex-plugin を持つプラグインの skills/）で、上に加えて禁止するフィールド。
+ * いずれも Claude Code 固有の実行制御（effort の固定、fork 実行、実行 agent の指定）で、
+ * Codex では意味を持たないか、別の挙動になる。
+ */
+const CODEX_SHARED_DENIED_KEYS = ["effort", "context", "agent"];
+
+/** Codex と skills/ を共有するプラグインの目印（Codex マニフェストのディレクトリ名）。 */
+const CODEX_PLUGIN_DIR_NAME = ".codex-plugin";
+
+/** Codex と共有するスキル格納ディレクトリ名（Codex マニフェストの skills が指す先）。 */
+const CODEX_SHARED_SUBDIR = "skills";
+
+/** push 対象パスを検査する CI ワークフローのリポジトリルートからの相対パス。 */
+const DRIFT_WORKFLOW_REL = join(".github", "workflows", "skills-drift-check.yml");
 
 /** 終了コード定数。 */
 const EXIT_OK = 0;
@@ -277,9 +299,10 @@ function validateNameFormat(name) {
  * 単一スキルの SKILL.md frontmatter を検証し、違反内容を返す。
  * @param {string} dirName スキルディレクトリ名（= 期待される name）。
  * @param {string} skillFilePath SKILL.md の絶対パス。
+ * @param {boolean} codexShared Codex と共有する層（追加の deny-list を適用する）なら true。
  * @returns {string[]} このスキルに対する違反内容の配列（ファイル名は含まない）。
  */
-function validateSkillFrontmatter(dirName, skillFilePath) {
+function validateSkillFrontmatter(dirName, skillFilePath, codexShared) {
   /** @type {string[]} */
   const issues = [];
 
@@ -332,6 +355,17 @@ function validateSkillFrontmatter(dirName, skillFilePath) {
       issues.push(
         `トップレベルに Claude 独自フィールド "${deniedKey}" を含めてはならない`,
       );
+    }
+  }
+
+  // ルール6b（Iteration 7）: Codex と共有する層では Claude 固有の実行制御も置かない。
+  if (codexShared) {
+    for (const deniedKey of CODEX_SHARED_DENIED_KEYS) {
+      if (fields.has(deniedKey)) {
+        issues.push(
+          `Codex と共有する層（skills/）に Claude 固有フィールド "${deniedKey}" を含めてはならない（必要なら workflows/ 側に置く）`,
+        );
+      }
     }
   }
 
@@ -389,18 +423,16 @@ function isNonEmptyString(value) {
 }
 
 /**
- * marketplace.json の plugins[].source から、frontmatter 検証対象のスキル格納
- * ディレクトリ（<plugin>/skills・<plugin>/workflows のうち実在するもの）を列挙する。
- * プラグイン追加時にこのスクリプトへのハードコード追記漏れで検証対象から漏れることを
- * 防ぐため、走査対象はマーケットプレイス定義から導出する。
- * @returns {{ dirRels: string[], errors: string[] }}
- *   dirRels: 検証対象ディレクトリの相対パス配列。errors: マニフェスト側の違反。
+ * marketplace.json の plugins[].source を、リポジトリルートからの相対パス（先頭の `./` と
+ * 末尾の `/` を除いたもの）として列挙する。
+ * @returns {{ sourceRels: string[], errors: string[] }}
+ *   sourceRels: プラグインのルートの相対パス配列。errors: マニフェスト側の違反。
  */
-function readAllSkillDirRels() {
+function readMarketplaceSourceRels() {
   const { data, error } = loadManifest(MARKETPLACE_MANIFEST_REL);
   if (data === null) {
     return {
-      dirRels: [],
+      sourceRels: [],
       errors: [error ?? `missing ${MARKETPLACE_MANIFEST_REL}`],
     };
   }
@@ -408,13 +440,13 @@ function readAllSkillDirRels() {
   const plugins = data.plugins;
   if (!Array.isArray(plugins)) {
     return {
-      dirRels: [],
+      sourceRels: [],
       errors: [`${MARKETPLACE_MANIFEST_REL}: plugins が配列でない`],
     };
   }
 
   /** @type {string[]} */
-  const dirRels = [];
+  const sourceRels = [];
   /** @type {string[]} */
   const errors = [];
   for (const plugin of plugins) {
@@ -424,16 +456,42 @@ function readAllSkillDirRels() {
       );
       continue;
     }
-    const sourceRel = plugin.source.replace(/^\.\//, "");
+    sourceRels.push(plugin.source.replace(/^\.\//, "").replace(/\/+$/, ""));
+  }
+
+  return { sourceRels, errors };
+}
+
+/**
+ * marketplace.json の plugins[].source から、frontmatter 検証対象のスキル格納
+ * ディレクトリ（<plugin>/skills・<plugin>/workflows のうち実在するもの）を列挙する。
+ * プラグイン追加時にこのスクリプトへのハードコード追記漏れで検証対象から漏れることを
+ * 防ぐため、走査対象はマーケットプレイス定義から導出する。
+ * .codex-plugin を持つプラグインの skills/ は Codex と共有する層として印を付ける。
+ * @returns {{ dirs: { dirRel: string, codexShared: boolean }[], errors: string[] }}
+ *   dirs: 検証対象ディレクトリの相対パスと層。errors: マニフェスト側の違反。
+ */
+function readAllSkillDirRels() {
+  const { sourceRels, errors } = readMarketplaceSourceRels();
+
+  /** @type {{ dirRel: string, codexShared: boolean }[]} */
+  const dirs = [];
+  for (const sourceRel of sourceRels) {
+    const hasCodexManifest = existsSync(
+      join(REPO_ROOT, sourceRel, CODEX_PLUGIN_DIR_NAME),
+    );
     for (const subdir of PLUGIN_SKILL_SUBDIRS) {
       const dirRel = join(sourceRel, subdir);
       if (existsSync(join(REPO_ROOT, dirRel))) {
-        dirRels.push(dirRel);
+        dirs.push({
+          dirRel,
+          codexShared: hasCodexManifest && subdir === CODEX_SHARED_SUBDIR,
+        });
       }
     }
   }
 
-  return { dirRels, errors };
+  return { dirs, errors };
 }
 
 /**
@@ -452,14 +510,14 @@ function collectFrontmatterViolations() {
     return violations;
   }
 
-  const { dirRels, errors } = readAllSkillDirRels();
+  const { dirs, errors } = readAllSkillDirRels();
   violations.push(...errors);
 
-  for (const dirRel of dirRels) {
+  for (const { dirRel, codexShared } of dirs) {
     for (const dirName of readSkillDirNamesIn(dirRel)) {
       const skillFileRel = join(dirRel, dirName, SKILL_FILE_NAME);
       const skillFilePath = join(REPO_ROOT, skillFileRel);
-      const issues = validateSkillFrontmatter(dirName, skillFilePath);
+      const issues = validateSkillFrontmatter(dirName, skillFilePath, codexShared);
       for (const issue of issues) {
         violations.push(`${skillFileRel}: ${issue}`);
       }
@@ -861,6 +919,139 @@ function collectSharedSkillsViolations() {
 }
 
 /**
+ * 行頭の空白の幅を返す。
+ * @param {string} line 1行。
+ * @returns {number} 字下げの文字数。
+ */
+function indentOf(line) {
+  const match = line.match(/^\s*/);
+  return match ? match[0].length : 0;
+}
+
+/**
+ * 空行かコメントだけの行か判定する（YAML のブロック境界の判定から除く行）。
+ * @param {string} line 1行。
+ * @returns {boolean} 空行・コメント行なら true。
+ */
+function isBlankOrComment(line) {
+  const trimmed = line.trim();
+  return trimmed.length === 0 || trimmed.startsWith("#");
+}
+
+/**
+ * ワークフロー YAML の本文から on.push.paths の項目をテキストで取り出す。
+ * 仕様（YAML パーサは使わない）:
+ *  - 行頭の `on:` ブロックの中の `push:` を探し、その中の `paths:`（`&anchor` 付き可）を読む。
+ *  - `paths:` より深く字下げされた `- 値` 行を項目とし、囲みの引用符と行末コメントを外す。
+ *  - 字下げが `paths:` 以下に戻った行でブロックを閉じる。
+ * @param {string} content ワークフロー YAML の全文。
+ * @returns {{ paths: string[] | null, error: string | null }}
+ *   paths: 項目の配列（見つからなければ null）。error: 見つからない理由。
+ */
+function extractPushPaths(content) {
+  const lines = content.split(/\r?\n/);
+
+  const onIndex = lines.findIndex((line) => /^["']?on["']?:\s*(#.*)?$/.test(line));
+  if (onIndex === -1) {
+    return { paths: null, error: "トップレベルの on: ブロックが無い" };
+  }
+
+  // on: ブロックの範囲（次のトップレベル行の手前まで）。
+  let onEnd = lines.length;
+  for (let index = onIndex + 1; index < lines.length; index += 1) {
+    if (!isBlankOrComment(lines[index]) && indentOf(lines[index]) === 0) {
+      onEnd = index;
+      break;
+    }
+  }
+
+  let pushIndex = -1;
+  for (let index = onIndex + 1; index < onEnd; index += 1) {
+    if (/^\s+push:\s*(#.*)?$/.test(lines[index])) {
+      pushIndex = index;
+      break;
+    }
+  }
+  if (pushIndex === -1) {
+    return { paths: null, error: "on.push がブロック形式で書かれていない" };
+  }
+  const pushIndent = indentOf(lines[pushIndex]);
+
+  let pathsIndex = -1;
+  for (let index = pushIndex + 1; index < onEnd; index += 1) {
+    const line = lines[index];
+    if (isBlankOrComment(line)) {
+      continue;
+    }
+    if (indentOf(line) <= pushIndent) {
+      break;
+    }
+    if (/^\s+paths:\s*(&[\w-]+)?\s*(#.*)?$/.test(line)) {
+      pathsIndex = index;
+      break;
+    }
+  }
+  if (pathsIndex === -1) {
+    return { paths: null, error: "on.push.paths がブロック形式の一覧で書かれていない" };
+  }
+  const pathsIndent = indentOf(lines[pathsIndex]);
+
+  /** @type {string[]} */
+  const paths = [];
+  for (let index = pathsIndex + 1; index < onEnd; index += 1) {
+    const line = lines[index];
+    if (isBlankOrComment(line)) {
+      continue;
+    }
+    if (indentOf(line) <= pathsIndent) {
+      break;
+    }
+    const item = line.match(/^\s+-\s+(.*)$/);
+    if (item) {
+      paths.push(stripSurroundingQuotes(item[1].replace(/\s+#.*$/, "").trim()));
+    }
+  }
+
+  return { paths, error: null };
+}
+
+/**
+ * marketplace の各 source が drift CI の on.push.paths に `<source>/**` として含まれるか検証する。
+ * pull_request は同じ一覧を alias（*drift_paths）で参照する前提で、push 側だけを見る。
+ * @returns {string[]} 「相対パス: 違反内容」形式の違反メッセージ配列。
+ */
+function collectWorkflowPathViolations() {
+  /** @type {string[]} */
+  const violations = [];
+
+  const workflowPath = join(REPO_ROOT, DRIFT_WORKFLOW_REL);
+  if (!existsSync(workflowPath)) {
+    violations.push(`missing ${DRIFT_WORKFLOW_REL}`);
+    return violations;
+  }
+
+  const { paths, error } = extractPushPaths(readFileSync(workflowPath, "utf8"));
+  if (paths === null) {
+    violations.push(`${DRIFT_WORKFLOW_REL}: ${error}`);
+    return violations;
+  }
+
+  // marketplace 側の違反は frontmatter 検証で報告済みなので、ここでは source だけを使う。
+  const { sourceRels } = readMarketplaceSourceRels();
+  const listed = new Set(paths);
+  for (const sourceRel of sourceRels) {
+    const expected = `${sourceRel}/**`;
+    if (!listed.has(expected)) {
+      violations.push(
+        `${DRIFT_WORKFLOW_REL}: on.push.paths に marketplace の source "${expected}" が無い（プラグインを変更しても CI が起動しない）`,
+      );
+    }
+  }
+
+  return violations;
+}
+
+/**
  * 検出した違反メッセージを集約する。
  * @returns {string[]} 違反メッセージの配列。空なら drift なし。
  */
@@ -873,6 +1064,7 @@ function collectViolations() {
   violations.push(...collectAgentsIndexViolations());
   violations.push(...collectClaudeImportViolations());
   violations.push(...collectSharedSkillsViolations());
+  violations.push(...collectWorkflowPathViolations());
 
   return violations;
 }

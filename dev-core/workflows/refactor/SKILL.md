@@ -1,16 +1,16 @@
 ---
 name: refactor
-description: "作業中の変更・PR・ブランチ・最近の変更に対して Martin Fowler / t-wada の原則でリファクタリングを実行する。テストグリーン維持・外部動作不変が制約。/dev-core:refactor で起動する。"
+description: "作業中の変更・PR・ブランチ・最近の変更に対して Martin Fowler / t-wada の原則でリファクタリングを実行する。テストグリーン維持・外部動作不変が制約。親が実装し、検証は dev-core:verify で行う。/dev-core:refactor で起動する。"
 argument-hint: "[コミットハッシュ|PR番号|ブランチ名|ファイル/ディレクトリ] [--commit] [--push]"
 disable-model-invocation: true
-allowed-tools: Task(subagent_type:dev-core:tdd-practitioner), Task(subagent_type:dev-core:quality-checker), Read, Glob
+allowed-tools: Read, Write, Edit, Grep, Glob, Agent(dev-core:tdd-practitioner)
 ---
 
 # コードリファクタリング
 
-**重要**: 開始前に `dev-core:best-practices` スキルをロードして、TDD/FSD/Clean Architecture/DDD のベストプラクティスを確認すること。
+開始前に `dev-core:best-practices` スキルをロードし、TDD/FSD/Clean Architecture/DDD のベストプラクティスを確認する。
 
-フロントエンド実装の際は以下のスキルもロードすること：
+フロントエンドを扱うときは、以下のスキルもロードする。
 
 - `dev-core:frontend-patterns` - コンポーネント設計・データフェッチのパターン（useEffect 回避の正本）
 - `frontend-design:frontend-design`（インストールされていれば） - フロントエンド設計ガイドライン
@@ -23,74 +23,39 @@ Martin Fowler と T-wada の原則に基づいたリファクタリングを実�
 
 最初に `$ARGUMENTS` から `--commit` と `--push` を delivery flags として分離し、残りを `TARGET` とする。`--push` はこのリファクタリングの commit と push を許可する。PR comment は含まず、別の明示依頼が必要。以下の対象判定では `TARGET` だけを使う。
 
-## サブエージェント使用ガイド（必須）
+## 実行の担当
 
-このコマンドでは以下のサブエージェントを **Task ツール** で必ず呼び出すこと。直接リファクタリングせず、専門エージェントに委譲することで品質を確保する。
+親（このセッション）がリファクタリングを実装し、検証も親がツールで直接実行する。外部動作を保ったままの小さな変更の積み重ねは密結合で逐次の作業なので、分けても文脈の受け渡しが増えるだけになる。
 
-### 1. tdd-practitioner（リファクタリング専門家）
+`Agent(dev-core:tdd-practitioner)` に委譲するのは、次のときだけにする（原則は `dev-core:best-practices` の `references/delegation-and-review.md`）。
 
-**呼び出しタイミング**: リファクタリング対象の特定後、事前テスト実行後
+- 対象の中に、書き込み範囲・依存が重ならない独立した塊があり、並行で進める利得がある
+- テストやビルドの出力が大きく、親の文脈から隔離したい
 
-**Task ツール呼び出しパターン**:
+委譲するときは、対象ファイル、変更コンテキスト、下記のリファクタリング観点と制約だけを渡す。子の報告にある実行コマンドと生の結果を親が確かめてから次へ進み、委譲の理由を報告に1行残す。
 
-```
-Task(subagent_type: "dev-core:tdd-practitioner")
-prompt: |
-  以下のコードをリファクタリングしてください。
+## リファクタリング観点
 
-  ## 対象
-  [リファクタリング対象のファイル/ディレクトリ]
+1. コーディング規約への準拠（プロジェクトの既存規約を優先する）
+2. 重複コードの排除（DRY原則）
+3. 単一責任の原則（SRP）の適用
+4. 早期リターン/ガード節の活用
+5. 明確で意図が伝わる命名への改善
+6. マジックナンバーの定数化
+7. （React の場合）データフェッチ用 useEffect の削除と代替実装への置き換え（正本: frontend-patterns スキルの「データフェッチ」）
+8. 冗長なコードの分割・簡潔化
 
-  ## 変更コンテキスト
-  [PR番号、ブランチ名、コミットハッシュなど]
+PR が対象のときは、次も見る。
 
-  ## リファクタリング観点
-  1. コーディング規約への準拠
-  2. 重複コードの排除（DRY原則）
-  3. 単一責任の原則（SRP）の適用
-  4. 早期リターン/ガード節の活用
-  5. 明確で意図が伝わる命名への改善
-  6. マジックナンバーの定数化
-  7. （React の場合）データフェッチ用 useEffect の削除と代替実装への置き換え
-     （正本: frontend-patterns スキルの「データフェッチ」）
-  8. 冗長なコードの分割・簡潔化
+- レビューコメントで指摘される前に品質を改善する
+- PR のサイズが大きい場合は段階的に実行する
+- CI で検出される前に lint/typecheck 違反を修正する
 
-  ## PRリファクタリングの場合の追加観点
-  - レビューコメントで指摘される前に品質改善
-  - PRのサイズが大きい場合は段階的に実行
-  - CIで検出される前にlint/typecheck違反を修正
+制約:
 
-  ## 制約
-  - テストは必ずグリーンを維持
-  - 外部動作は変更しない
-  - 各変更後にテスト実行で確認
-```
-
-### 2. quality-checker（品質チェック専門家）
-
-**呼び出しタイミング**: リファクタリング完了後、コミット前
-
-**Task ツール呼び出しパターン**:
-
-```
-Task(subagent_type: "dev-core:quality-checker")
-prompt: |
-  リファクタリング後のコードに対して品質チェックを実行してください。
-
-  ## 変更されたファイル
-  [git diff --name-only の結果]
-
-  ## チェック項目
-  - lint実行（警告・エラー0を確認）
-  - typecheck実行（型エラー0を確認）
-  - テスト実行（すべてグリーンを確認）
-  - コーディング規約の確認
-
-  ## 問題検出時
-  - 問題を修正
-  - 再度チェックを実行
-  - すべてクリーンになるまで繰り返す
-```
+- テストはグリーンを維持する
+- 外部動作は変更しない
+- 各変更後にテストを実行して確認する
 
 ## 実行フロー
 
@@ -153,13 +118,7 @@ fi
 
 ### 3. リファクタリング実行
 
-**⚠️ 重要**: 必ず Task ツールで tdd-practitioner エージェントを呼び出すこと。
-
-tdd-practitioner エージェントに以下の情報を渡す：
-
-- リファクタリング対象のファイル/ディレクトリ
-- 変更コンテキスト（PR 番号、ブランチ名など）
-- リファクタリング観点（上記パターン参照）
+親が「リファクタリング観点」と下記の優先順位に沿って、小さな変更を積み重ねる。各変更の後に focused なテストを実行し、グリーンを確かめてから次の変更へ進む。委譲の条件に当たる塊だけを `tdd-practitioner` に渡す（「実行の担当」参照）。
 
 ### 4. 優先順位
 
@@ -192,13 +151,11 @@ tdd-practitioner エージェントに以下の情報を渡す：
 - **目的**: コード品質の向上（動作は変更しない）
 - **結果**: テストが引き続きグリーン
 
-### 6. 品質確認とコミット
+### 6. 検証とコミット
 
-**⚠️ 重要**: 必ず Task ツールで quality-checker エージェントを呼び出すこと。
+1. **検証**
 
-1. **quality-checker を呼び出す**
-   - リファクタリング後のファイルに対して品質チェック
-   - 問題があれば修正を実行
+   親が `dev-core:verify` を実行し、build・typecheck・lint・test・security・diff の結果を実出力で確かめる。失敗があれば修正して、影響する段を再実行する。同じ修正経路で3回失敗したら止めて、状況を報告する。
 
 2. **差分の確認**
 
@@ -259,11 +216,9 @@ tdd-practitioner エージェントに以下の情報を渡す：
        ↓
 /dev-core:execute → TDD 実装
        ↓
-/dev-core:refactor → 追加リファクタリング（このコマンド）
+/dev-core:refactor → 追加リファクタリングと dev-core:verify での検証（このコマンド）
        ↓
-/dev-core:verify → 6段階検証
-       ↓
-/dev-core:code-review → コードレビュー
+/dev-core:code-review → 規約レンズのレビュー
        ↓
 PR 作成・マージ
 ```
@@ -271,7 +226,6 @@ PR 作成・マージ
 ## 関連コマンド
 
 - `/dev-core:verify`: リファクタリング後の 6 段階検証
-- `/dev-core:code-review`: コードレビュー実行
+- `/dev-core:code-review`: dev-core の規約レンズ（FSD / Clean Architecture / DDD、セキュリティ規約）でのレビュー
 
-プロジェクト設定ファイル（.claude/\*.local.md）を確認し、追加ツールが指定されている場合はそれを活用すること。
-コードの動作を変えずに、tdd-practitioner と quality-checker エージェントを活用して品質と保守性を向上させること。
+プロジェクト設定ファイル（.claude/\*.local.md）を確認し、追加ツールが指定されている場合はそれを使う。

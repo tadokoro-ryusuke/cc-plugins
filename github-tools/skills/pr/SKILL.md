@@ -1,225 +1,189 @@
 ---
 name: pr
-description: "現在のブランチから Pull Request を作成する。変更内容を分析して適切なタイトルと説明を生成し、Issue 番号を自動検出して紐付ける。/github-tools:pr で起動する。"
-argument-hint: "[Issue番号] (省略時は自動検出)"
+description: "現在のブランチから Pull Request を作成する。変更内容と検証結果から本文を作り、本文はファイル経由で渡し、既定では draft で作成する。Issue は存在と内容を確認できたときだけ紐付ける。本文の下書きだけを作ることもできる。/github-tools:pr で起動する。"
+argument-hint: "[Issue番号] [--ready] [--body-only]"
 disable-model-invocation: true
-allowed-tools: Bash(git:*), Bash(gh:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Read, Task(subagent_type:dev-core:quality-checker)
+allowed-tools: Bash(git:*), Bash(gh:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Bash(mktemp:*), Read
 ---
 
 # Pull Request 作成
 
 ## 概要
 
-現在のブランチの変更内容を分析し、プロジェクトの規約に従ったPull Requestを作成します。
+現在のブランチの変更内容を分析し、プロジェクトの規約に従った Pull Request を作成します。
+
+## モードと承認
+
+- **既定**: PR を draft で作成する。draft は後から ready にでき、取り消しやすいため。
+- **ready**: `--ready` が付いているか、ユーザーが「レビュー可能な状態で」などと明示したときだけ、ready で作成する。
+- **本文だけ**: `--body-only` が付いているか、「本文だけ」「下書きだけ」と頼まれたときは、タイトルと本文を作って提示し、push も PR 作成もしない。本文を頼まれただけでは、外部に PR を作る承認にはならないため。
+- `/github-tools:pr` の起動そのものが PR 作成の依頼なので、作成するかどうかや draft / ready を改めて確認しない。質問するのは、送信に必要な権限が欠けているとき（例: 未コミットの変更をコミットしてよいか分からない）だけにする。
 
 ## 実行フロー
 
 ### 1. 事前チェック
 
 ```bash
-# 現在のブランチを確認
-CURRENT_BRANCH=$(git branch --show-current)
-
-# mainブランチでないことを確認
-if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ]; then
-  echo "❌ mainブランチから直接PRは作成できません"
-  exit 1
-fi
-
-# 未コミットの変更がないか確認
-if [ -n "$(git status --porcelain)" ]; then
-  echo "⚠️ 未コミットの変更があります。コミットしてください。"
-  git status
-  exit 1
-fi
-
-# リモートとの同期確認
-git fetch origin
+git branch --show-current
+git status --short
 ```
 
-### 2. Issue番号の特定
+- `main` / `master` からは PR を作らない。
+- 未コミットの変更は保全する。stash・破棄・無関係なファイルの自動コミットはしない。
+  - PR に入るのはコミット済みの内容だけ。未コミットの変更があれば、PR に含まれないことを報告に書く。
+  - ユーザーがコミットまで頼んでいる場合は、手順 4 のチェックの後に、意図したファイルだけを stage してコミットする。
+  - 本文だけのモードでは、未コミットの変更があっても続けてよい。コミット済みの内容と未コミットの変更を、下書きの中で区別する。
+- リモートの状態を取得し、base ブランチを決める。本文だけのモードでネットワークが使えなければ、手元の情報で進め、base が古い可能性を下書きに明記する。
 
 ```bash
-# 引数で指定された場合
-if [ -n "$ARGUMENTS" ]; then
-  ISSUE_NUMBER="$ARGUMENTS"
-else
-  # ブランチ名から自動検出（例: feature/issue-31）
-  ISSUE_NUMBER=$(echo $CURRENT_BRANCH | grep -oE '[0-9]+' | head -1)
-
-  # コミットメッセージから検出
-  if [ -z "$ISSUE_NUMBER" ]; then
-    ISSUE_NUMBER=$(git log --oneline -10 | grep -oE '#[0-9]+' | head -1 | tr -d '#')
-  fi
-fi
-
-# Issue情報の取得
-if [ -n "$ISSUE_NUMBER" ]; then
-  echo "📋 Issue #$ISSUE_NUMBER の情報を取得中..."
-  ISSUE_TITLE=$(gh issue view $ISSUE_NUMBER --json title -q .title)
-fi
+git fetch origin
+git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@'
 ```
+
+### 2. Issue 番号の特定と確認
+
+候補は次の順に探す。
+
+1. 引数で指定された番号
+2. ブランチ名（例: `feature/issue-31`）
+3. 直近のコミットメッセージにある `#31`
+
+候補が見つかったら、存在と内容を確かめる。
+
+```bash
+gh issue view <番号> --json number,title,state,url
+```
+
+- `Closes #<番号>` を付けるのは、Issue が存在し、その内容が今回の変更に対応していると確認できたときだけにする。マージ時に Issue が自動で閉じられるため。
+- ブランチ名の数字は Issue 番号とは限らない。たとえば `feature/oauth2-login` からは `2` が取れるが、これはプロトコル名の一部である。Issue が見つからない、内容が変更と対応しない、すでに閉じている場合は `Closes` を付けず、関連 Issue の節も省く。
+- 引数で指定された番号でも、確認できなければ同じ扱いにし、そのことを報告する。
 
 ### 3. 変更内容の分析
 
 ```bash
-# ベースブランチとの差分を確認
-BASE_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
-CHANGED_FILES=$(git diff --name-only origin/$BASE_BRANCH...HEAD)
-COMMITS=$(git log --oneline origin/$BASE_BRANCH...HEAD)
-STATS=$(git diff --shortstat origin/$BASE_BRANCH...HEAD)
-
-# 変更の種類を判定
-if echo "$CHANGED_FILES" | grep -q "\.test\|\.spec"; then
-  CHANGE_TYPE="test"
-elif echo "$CHANGED_FILES" | grep -q "docs/"; then
-  CHANGE_TYPE="docs"
-elif echo "$COMMITS" | grep -qi "fix"; then
-  CHANGE_TYPE="fix"
-else
-  CHANGE_TYPE="feat"
-fi
+git rev-parse origin/<base> HEAD
+git diff --name-only origin/<base>...HEAD
+git diff --shortstat origin/<base>...HEAD
+git log --oneline origin/<base>..HEAD
 ```
+
+- 比較した base と HEAD の SHA を記録する。手順 7 で、作成直前の状態と照合するため。
+- 変更の種類（feat / fix / docs / test / refactor / chore など）は、リポジトリの規約（Conventional Commits、既存の PR タイトルなど）に合わせて決める。
+- このセッションでレビュー（組み込みの `/code-review`、`dev-core:code-review`、Codex レビューなど）を行っていれば、レビューした HEAD の SHA も控える。
 
 ### 4. 品質チェック
 
-quality-checkerエージェントを使用：
+- dev-core が導入されていれば、`dev-core:verify` で検証する。
+- 導入されていなければ、プロジェクトの設定（`.claude/dev-core.local.md`、`package.json` の scripts、`Makefile`、CI 設定、`AGENTS.md` / `CLAUDE.md`）から lint / typecheck / test のコマンドを見つけ、直接実行する。
+- 検証の証拠は、push する HEAD と同じ内容に対するものに限る。未コミットの変更（追跡ファイルの変更や、検証の入力になる未追跡ファイル）があると、作業ツリーで実行した結果は HEAD の証拠にならない。未コミットの修正でテストが通っても、HEAD の中身は壊れたままのことがあるため。
+  - その場合は、`git worktree add --detach <一時ディレクトリ> HEAD` で HEAD の隔離コピーを作り、そこでチェックを実行する。
+  - 隔離コピーで実行できない（依存の導入が重いなど）ときは、該当チェックを「HEAD に対して未実行」として扱い、理由とともに本文と報告に書く。
+  - 未コミットの変更が検証の入力と無関係だと確認できたとき（検証対象外の未追跡メモだけ、など）に限り、作業ツリーでの結果を HEAD の証拠にしてよい。
+- 同じ HEAD（と、上の条件を満たす作業ツリー）に対して同じコマンドをこのセッションで実行済みなら、その結果を使ってよい。その場合は、再実行ではなく既存の結果を使ったことを本文に書く。
+- 失敗したチェックがあれば、PR を作る前に結果を報告して止める。直すか、失敗を明記して draft で出すかは、ユーザーが決める。
+- 実行できなかったチェックは「未実行」として成功と区別し、理由とともに本文と報告に書く。
 
-```bash
-# lint と typecheck を実行
-echo "🔍 品質チェックを実行中..."
-```
-
-プロジェクト設定に従ってlint、typecheck、testを実行
-
-### 5. PRタイトルと説明の生成
+### 5. タイトル
 
 ```text
-# タイトルフォーマット
-[CHANGE_TYPE]: [簡潔な説明] (#[ISSUE_NUMBER])
+# フォーマット（Issue 番号は確認できたときだけ付ける）
+[種類]: [簡潔な説明] (#[Issue番号])
 
 # 例
 feat: クライアント検索機能の実装 (#31)
-fix: ログイン時のエラーハンドリング修正 (#45)
+fix: ログイン時のエラーハンドリング修正
 ```
 
-### 6. PR説明文の作成
+### 6. 本文の作成
+
+プロジェクトに PR テンプレート（`.github/pull_request_template.md` など）があれば、それに従う。無ければ次の構成にする。課題と変更後の振る舞いを先に書き、続けて検証と制約を書く。
 
 ```markdown
-## 📋 概要
+## 概要
 
-[変更の概要を記載]
+[何が問題で、この PR で何がどう変わるか]
 
-## 🔗 関連Issue
+## 関連 Issue
 
-- Closes #[ISSUE_NUMBER]
+- Closes #[確認できた Issue 番号]
 
-## 📝 変更内容
+## 変更内容
 
-### 追加
+- [主な変更]
 
-- [追加した機能や機能]
+## 検証
 
-### 変更
+- [実行したコマンドと結果。未実行のチェックは理由とともに書く]
 
-- [変更した内容]
+## 補足
 
-### 削除
-
-- [削除した内容]
-
-## 🧪 テスト
-
-- [ ] すべてのテストがパス
-- [ ] 新機能にテストを追加
-- [ ] 手動テスト完了
-
-## 📸 スクリーンショット
-
-[必要に応じて画面キャプチャ]
-
-## ✅ チェックリスト
-
-- [ ] コーディングガイドラインに準拠
-- [ ] コードレビューの準備完了
-- [ ] ドキュメント更新（必要な場合）
-
-## 🚀 デプロイ後の確認事項
-
-[本番環境での確認が必要な項目]
-
----
-
-### 実装詳細
-
-**アーキテクチャ**: FSD + Clean Architecture + DDD
-**TDD**: t-wada式 Red→Green→Refactor→Commit
-
-### 変更ファイル
-
-\`\`\`
-$STATS
-\`\`\`
-
-<details>
-<summary>コミット履歴</summary>
-
-\`\`\`
-$COMMITS
-\`\`\`
-
-</details>
+- [既知の制約、見てほしい点、デプロイ後の確認事項]
 ```
 
-### 7. PR作成
+- 確認できた Issue が無ければ「関連 Issue」の節ごと省く。「補足」も書くことが無ければ省く。
+- 本文はファイルに書いてから渡す。複数行の本文をコマンドライン引数に展開すると、クォートやバッククォートで内容が壊れるため。
+- ファイルは作業ツリーの外に作る。リポジトリ内に置くと、誤ってコミットされるおそれがあるため。
 
 ```bash
-# ドラフトかどうかを確認
-echo "このPRをドラフトとして作成しますか？ (y/N)"
-
-# PR作成
-gh pr create \
-  --title "$PR_TITLE" \
-  --body "$PR_BODY" \
-  --base $BASE_BRANCH
-
-# 作成されたPRのURLを表示
-PR_URL=$(gh pr view --json url -q .url)
-echo "✅ PR作成完了: $PR_URL"
+mktemp "${TMPDIR:-/tmp}/pr-body.XXXXXX"
 ```
 
-### 8. 後処理オプション
+作成したパスに本文を書き、Read で読み返して、意図した内容になっているか確かめる。本文だけのモードでは、ここでタイトル・本文・ファイルのパスを提示して終える。
+
+### 7. PR の作成
+
+作成の直前に、手順 3 で記録した状態と一致しているか確かめる。
 
 ```bash
-# ラベルの追加
-if [ "$CHANGE_TYPE" = "feat" ]; then
-  gh pr edit --add-label "enhancement"
-elif [ "$CHANGE_TYPE" = "fix" ]; then
-  gh pr edit --add-label "bug"
-fi
+git fetch origin
+git rev-parse origin/<base> HEAD
+```
 
-# レビュワーの追加（オプション）
+- base か HEAD が変わっていたら、手順 3 からやり直す。
+- レビューした HEAD と今の HEAD が違う場合は、差分をレビューし直すか、レビューしていない差分があることを本文の「補足」に書く。
+- ブランチがリモートに無い、またはリモートより進んでいれば push する。force push はしない。
+
+```bash
+git push -u origin HEAD
+```
+
+```bash
+# 既定（draft）。ready のときだけ --draft を外す
+gh pr create --draft --title "<タイトル>" --body-file "<本文ファイルのパス>" --base <base>
+gh pr view --json url,isDraft
+```
+
+- draft に対応していないリポジトリで作成に失敗したら、その結果を報告し、ready で作るかをユーザーに確認する。
+- 作成後は、PR の URL、draft / ready の別、スキップしたチェック、PR に含まれなかった未コミットの変更を報告する。
+
+### 8. 後処理（任意）
+
+ラベルやレビュアーは、リポジトリで実際に使われていて（`gh label list` などで確認できる）、規約かユーザーの指示があるときだけ付ける。
+
+```bash
+gh pr edit --add-label "<ラベル>"
 ```
 
 ## 実行例
 
 ```bash
-# Issue番号を自動検出してPR作成
+# Issue を自動で探し、draft で作成
 /github-tools:pr
 
-# Issue番号を指定してPR作成
+# Issue #31 を確認して紐付ける
 /github-tools:pr 31
 
-# ブランチ名: feature/issue-31 の場合
-# 自動的にIssue #31と関連付け
+# ready で作成
+/github-tools:pr --ready
+
+# 本文の下書きだけを作る（PR は作らない）
+/github-tools:pr --body-only
 ```
 
 ## 特徴
 
-- **自動Issue連携**: ブランチ名やコミットメッセージからIssue番号を検出
-- **品質保証**: PR作成前に必ずlint/typecheck/testを実行
-- **テンプレート**: プロジェクト固有のPRテンプレートを使用
-- **変更分析**: 変更内容から適切なタイプ（feat/fix/test/docs）を判定
-- **ドラフト対応**: 作業中のPRはドラフトとして作成可能
-
-高品質なPRを効率的に作成できます。
+- **確認済みの Issue だけを紐付ける**: ブランチ名やコミットメッセージから候補を探し、`gh issue view` で確かめてから `Closes` を付ける
+- **検証の証拠**: dev-core 導入時は `dev-core:verify`、未導入時はプロジェクトの lint / typecheck / test を実行し、結果を本文に書く
+- **draft が既定**: ready は明示されたときだけ
+- **本文はファイル経由**: 作業ツリーの外に書き、読み返してから `--body-file` で渡す
+- **作業の保全**: 未コミットの変更を stash・破棄・自動コミットしない。作成直前に base と HEAD を照合する

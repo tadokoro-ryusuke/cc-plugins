@@ -1,6 +1,6 @@
 ---
 name: issue-driven-dev
-description: "Issue起点で人間+AIエージェントの開発を回すスキル。GitHub Issueの作成・分解・トリアージ、Issue Forms(YAML)テンプレート、ラベル体系(type/priority/status)とマイルストーン運用、GitHub Flow/トランクベースのブランチ戦略選択、AIエージェントへのタスク委任・並列化、ADR/Design Docの書き分けと記録設計、PRレビュー規律(Small CL・Conventional Comments・AI一次レビュー)の作業時に必ず使用する。「Issueを立てて」「Issueに分解して」「チケット化して」「タスク分割して」「ラベル設計して」「ブランチ戦略どうする」「ADR書いて」「Design Doc書いて」と言われたときにも使う。task-planner / issue-creator エージェントの知識正本。"
+description: "Issue起点で人間+AIエージェントの開発を回すスキル。GitHub Issueの作成・分解・トリアージ、Issue Forms(YAML)テンプレート、ラベル体系(type/priority/status)とマイルストーン運用、GitHub Flow/トランクベースのブランチ戦略選択、AIエージェントへのタスク委任・並列化、ADR/Design Docの書き分けと記録設計、PRレビュー規律(Small CL・Conventional Comments・AI一次レビュー)の作業時に必ず使用する。「Issueを立てて」「Issueに分解して」「チケット化して」「タスク分割して」「ラベル設計して」「ブランチ戦略どうする」「ADR書いて」「Design Doc書いて」と言われたときにも使う。計画立案と Issue 作成の知識正本。"
 ---
 
 # Issue Driven Development — Issue起点で人間+AIエージェントの開発を回す
@@ -9,7 +9,7 @@ description: "Issue起点で人間+AIエージェントの開発を回すスキ�
 
 なぜ: 作業の理由(why)と受入基準を作業前に文章化することを強制でき、受託では顧客との合意履歴・請求根拠・引き継ぎ資料を兼ね、AIエージェント体制では Issue がそのまま作業指示書(work order)になるため。
 
-本スキルは dev-core の task-planner / issue-creator エージェントの知識正本である。
+本スキルは dev-core における計画立案と Issue 作成の知識正本である。
 
 ## 分担線: AI がやること / 人間にしか決められないこと
 

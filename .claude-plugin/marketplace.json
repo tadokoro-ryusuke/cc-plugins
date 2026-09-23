@@ -1,6 +1,6 @@
 {
   "name": "cc-plugins",
-  "version": "4.3.0",
+  "version": "5.1.0",
   "description": "証拠ベース計画、段階的な自律実行、TDD、独立評価に基づいた開発をハーネスエンジニアリングで支援します。",
   "owner": {
     "name": "Ryusuke Tadokoro",
@@ -54,6 +54,12 @@
       "description": "ノンデザイナー向けデザイン品質。デザイン4原則によるUI/資料の審査と、提案書・スライド・図解の高速生成",
       "source": "./design-core",
       "category": "design"
+    },
+    {
+      "name": "indie-product-marketing",
+      "description": "個人開発プロダクトの機会発見、需要検証、海外・多言語向けLPの設計、ローンチ、集客、定着、ユニットエコノミクス。証拠台帳と事前に宣言した判定ルールで進める",
+      "source": "./indie-product-marketing",
+      "category": "workflow"
     }
   ]
 }
