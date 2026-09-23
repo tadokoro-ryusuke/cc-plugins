@@ -1,6 +1,8 @@
 # アーキテクチャ原則 — FSD / Clean Architecture / DDD
 
-## Feature-Sliced Design (FSD)
+**適用範囲の使い分け**: FSD は **SPA/Web フロントエンド専用**の方法論（`widgets` = ページ構成要素）。バックエンド・CLI・バッチ・Cloudflare Workers・Tauri の Rust コアには適用せず、Clean Architecture / Hexagonal のレイヤリングを使う。普遍なのは「依存は内側（ドメイン）へ一方向」という原則であり、ディレクトリ命名は対象に合わせる。
+
+## Feature-Sliced Design (FSD) — フロントエンド専用
 
 ### レイヤー構造（上から下へ依存）
 
@@ -29,13 +31,25 @@ features/[feature-name]/
 └── index.ts  # パブリックAPI
 ```
 
-## Clean Architecture
+## Clean Architecture — 全スタック共通
 
 ### 依存性の逆転
 
 - ビジネスロジックは外部依存を持たない
-- インターフェースを通じた疎結合
+- インターフェースを通じた疎結合（TS: `interface` / Rust: trait / Python: `typing.Protocol` or ABC / Go: interface）
 - 詳細（UI、DB）はビジネスルールに依存
+
+非フロントエンドでの典型構成（ディレクトリ名は言語慣習に従う）:
+
+```
+src/
+├── domain/          # エンティティ・値オブジェクト・リポジトリ interface（外部依存ゼロ）
+├── application/     # ユースケース（domain のみに依存）
+├── infrastructure/  # DB・外部 API の具象実装
+└── presentation/    # HTTP ハンドラ / CLI / Tauri コマンド（薄いアダプタに保つ）
+```
+
+Tauri では `#[tauri::command]` 関数を presentation 層の薄いアダプタとし、ドメインロジックは Tauri 非依存のクレートに置く（`cargo test` 単体で回せる形が正）。Cloudflare Workers では Hono ハンドラを同様に薄く保ち、Env（バインディング）は infrastructure 層でコンストラクタ注入する。
 
 ```typescript
 // Domain層（entities）— インターフェース定義

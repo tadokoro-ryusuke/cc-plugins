@@ -112,9 +112,10 @@ dev-core の知識スキル（`skills/`）は Agent Skills 標準準拠で、Cla
 
 ## プロジェクト設定
 
-`.claude/dev-core.local.md` でプロジェクト固有の設定（verify スキル・quality-checker が最優先で参照する）:
+`.claude/dev-core.local.md` でプロジェクト固有の設定（verify スキル・quality-checker が最優先で参照する）。コマンドは言語・スタックに合わせて記述する:
 
 ```markdown
+<!-- 例1: Node.js (pnpm) -->
 ---
 package-manager: pnpm
 build-command: pnpm build
@@ -126,6 +127,35 @@ audit-command: npm audit --audit-level=moderate
 
 ## 技術スタック
 - Framework: Laravel 11 + Vue 3
-- UI: Vuetify 3
 - Database: MySQL
 ```
+
+```markdown
+<!-- 例2: Rust (cargo) -->
+---
+build-command: cargo build
+typecheck-command: cargo clippy -- -D warnings
+lint-command: cargo fmt --check
+test-command: cargo test
+audit-command: cargo audit
+---
+
+## 技術スタック
+- Framework: Axum / Tauri 2
+```
+
+```markdown
+<!-- 例3: Python (uv) -->
+---
+build-command: uv sync --locked
+typecheck-command: uv run mypy src/
+lint-command: uv run ruff check . && uv run ruff format --check .
+test-command: uv run pytest
+audit-command: uv run pip-audit
+---
+
+## 技術スタック
+- Framework: FastAPI + Pydantic
+```
+
+複数言語が共存するプロジェクト（例: Tauri = Cargo.toml + package.json）では、**全系統のコマンドを `&&` で連結するか、Makefile / justfile に一本化して指定する**。片方の言語だけ検証して完了扱いにしない。

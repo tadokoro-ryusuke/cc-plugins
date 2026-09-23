@@ -7,7 +7,7 @@
 - **A03 Injection**: SQL/XSS/コマンドインジェクション対策（ORM使用、自動エスケープ）
 - **A04 Insecure Design**: 脅威モデリング、防御の深さ
 - **A05 Misconfiguration**: デフォルト資格情報変更、不要機能無効化
-- **A06 Vulnerable Components**: 依存関係最新、依存監査（`npm audit` 等）クリーン
+- **A06 Vulnerable Components**: 依存関係最新、依存監査（`npm audit` / `cargo audit` / `pip-audit` / `govulncheck` 等、言語に応じて）クリーン
 - **A07 Authentication**: 強力なパスワードポリシー、MFA、安全なセッション管理
 - **A08 Integrity**: CI/CD安全性、依存関係整合性チェック
 - **A09 Logging**: セキュリティイベントのログ記録、改ざん防止

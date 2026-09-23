@@ -67,6 +67,8 @@ class CreateUserUseCase {
 
 ## Result パターン
 
+**言語に標準の Result 機構がある場合はそれを使い、以下の自前定義は不要**: Rust は `std::result::Result` + `thiserror`（Tauri コマンド境界では `Serialize` 可能なエラー型に変換）、Go は `(T, error)`。Python は例外文化が主流のため、業務例外は独自例外クラスか構造化戻り値で表現し、Result ライブラリのフル導入はチーム合意がある場合のみ（適用基準は dev-core:resilience-design Step 2）。以下は TS/JS のように言語標準がない場合の定義例:
+
 ```typescript
 type Result<T, E = Error> =
   | { success: true; value: T }

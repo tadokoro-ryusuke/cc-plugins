@@ -1,11 +1,11 @@
 ---
 name: frontend-patterns
-description: "フロントエンドのコンポーネント設計、状態管理、フォーム、データフェッチ、パフォーマンス最適化のパターンガイド（フレームワーク非依存）。UIコンポーネント・ページ・フォームの実装/設計/レビュー時に使用する。"
+description: "Webフロントエンドのコンポーネント設計、状態管理、フォーム、データフェッチ、パフォーマンス最適化のパターンガイド。原則はフレームワーク非依存、推奨ライブラリ例は React/Vue 中心（Tauri の WebView 側にも適用可）。UIコンポーネント・ページ・フォームの実装/設計/レビュー時に使用する。"
 ---
 
 # Frontend Patterns
 
-フレームワーク非依存のフロントエンド設計パターン。フレームワーク固有のAPI（React hooks, Vue Composition API等）は context7 MCP や .claude/*.local.md を参照してください。
+Web フロントエンドの設計パターン。原則（コンポジション・状態管理・バリデーション戦略・3状態管理）はフレームワーク非依存だが、推奨ライブラリ例は React/Vue 中心。Svelte/Solid 等や Tauri の WebView 側にも原則部分は適用できる。フレームワーク固有のAPI（React hooks, Vue Composition API等）は context7 MCP や .claude/*.local.md を参照してください。
 
 ## コンポーネント設計
 
