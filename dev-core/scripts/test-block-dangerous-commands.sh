@@ -40,7 +40,7 @@ expect() {
     actual="unexpected(exit $code)"
   fi
   if [ "$actual" != "$expected" ]; then
-    echo "FAIL: expected $expected, got $actual: $command_text" >&2
+    echo "FAIL: expected $expected, got $actual: ${command_text:0:200}" >&2
     failures=$((failures + 1))
   fi
 }
@@ -78,6 +78,19 @@ expect block 'echo $(rm -rf /) $(echo safe)'
 expect block 'echo "$(git push -f origin main)"'
 # shellcheck disable=SC2016
 expect block 'echo `git push -f origin main`'
+# 置換の後ろの語も、外側の同じコマンドの引数として見る（置換で外側のコマンドを途切れさせない）
+# shellcheck disable=SC2016
+expect block 'rm -rf $(true) /'
+# shellcheck disable=SC2016
+expect block 'rm -rf "$(pwd)" /'
+# shellcheck disable=SC2016
+expect block 'rm -rf `true` /'
+# shellcheck disable=SC2016
+expect block 'echo $(echo $(rm -rf /))'
+# shellcheck disable=SC2016
+expect block 'echo $(echo ")") && rm -rf /'
+# shellcheck disable=SC2016
+expect block 'echo ${x:-$(rm -rf /)}'
 expect block "printf '%s' '<<EOF'
 rm -rf /
 EOF"
@@ -112,6 +125,11 @@ expect pass "cat <<'EOF'
 EOF"
 expect pass '# rm -rf /'
 expect pass 'command -v rm'
+# 置換の後ろの語は、置換の前のコマンドの引数（新しいコマンドではない）
+# shellcheck disable=SC2016
+expect pass 'echo $(true) rm -rf /'
+# shellcheck disable=SC2016
+expect pass 'echo "$(date)" git push -f origin main'
 # shellcheck disable=SC2016
 expect pass 'echo ${HOME}/build && rm -rf ./dist'
 
@@ -123,6 +141,10 @@ expect ask 'git restore .'
 expect ask 'git checkout -- .'
 expect ask 'git branch -D old-branch'
 expect ask 'git push --force-with-lease origin main'
+
+# 字句解析の時間が長くなる大きな入力は、検査せずに確認に回す（通しも止めもしない）
+expect ask "echo $(head -c 70000 /dev/zero | tr '\0' a)"
+expect pass "echo $(head -c 60000 /dev/zero | tr '\0' a)"
 
 # 今いるブランチが main なら、宛先を書かない強制 push も止める
 git -C "$work" switch -q -c main 2>/dev/null || git -C "$work" switch -q main

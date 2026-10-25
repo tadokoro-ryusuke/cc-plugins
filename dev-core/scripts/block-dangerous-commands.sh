@@ -8,7 +8,8 @@
 # コマンド文字列を1文字ずつ字句解析し（引用符・エスケープ・コメント・heredoc・$( )・バッククォート）、
 # `;` `&` `|` `(` `)` と改行で区切った各コマンドの語の並びを判定する。引用符で囲まれた語は1語として
 # 扱い、実行されない文字列（引用符の中身、引用符付きの heredoc の本文、コメント）はコマンドとして
-# 見ない。$( ) とバッククォート、引用符なしの heredoc の中の $( ) は、コマンドとして見る。
+# 見ない。$( ) とバッククォート、${x:-$( )}、引用符なしの heredoc の中の $( ) は、別のコマンドとして見る。
+# 置換は外側の語の一部として残すので、置換の後ろの語も外側の同じコマンドの引数になる。
 # if・then・sudo・env・command・xargs・nice・timeout などの前置きは、オプションとその値を読み飛ばす。
 # bash -c / -lc など、eval、env -S の中の文字列は2段まで見る。
 #
@@ -16,6 +17,8 @@
 #                    +refspec。宛先を書かないときは今のブランチ）、DB クライアントでの DROP / TRUNCATE
 #   ask（確認）    : 作業ツリーや未追跡ファイルを捨てる git 操作、git branch -D、
 #                    main / master への --force-with-lease
+#
+#   65536 文字を超えるコマンドは、字句解析に時間がかかるので検査せずに確認に回す。
 #
 # jq が無い・入力を解釈できないときは、理由を stderr に出して exit 1 で通す（non-blocking error）。
 set -u
@@ -48,8 +51,37 @@ lex_commands() {
   printf '%s' "$1" | awk '
     function emit() { if (inword) { gsub(/\n/, " ", word); print "W\t" word; word = ""; inword = 0 } }
     function sep() { emit(); print "S" }
-    function push(kind) { sp++; smode[sp] = mode; sdepth[sp] = depth; skind[sp] = kind; mode = "N"; depth = 0; sep() }
-    function pop() { sep(); mode = smode[sp]; depth = sdepth[sp]; sp--; if (mode == "D") inword = 1 }
+    # $( の "(" の位置 i から、対応する ")" の位置を返す（無ければ 0）。引用符・エスケープ・
+    # バッククォートの中の括弧は数えない
+    function close_paren(s, i, n,    d, c) {
+      d = 1
+      for (i = i + 1; i <= n; i++) {
+        c = substr(s, i, 1)
+        if (c == "\\") { i++; continue }
+        if (c == "\047") { while (i < n && substr(s, i + 1, 1) != "\047") i++; i++; continue }
+        if (c == "\"") { while (i < n && substr(s, i + 1, 1) != "\"") { if (substr(s, i + 1, 1) == "\\") i++; i++ } i++; continue }
+        if (c == "`") { while (i < n && substr(s, i + 1, 1) != "`") { if (substr(s, i + 1, 1) == "\\") i++; i++ } i++; continue }
+        if (c == "(") d++
+        else if (c == ")") { d--; if (d == 0) return i }
+      }
+      return 0
+    }
+    # バッククォートの位置 i から、閉じるバッククォートの位置を返す（無ければ 0）
+    function close_tick(s, i, n) {
+      for (i = i + 1; i <= n; i++) {
+        if (substr(s, i, 1) == "\\") { i++; continue }
+        if (substr(s, i, 1) == "`") return i
+      }
+      return 0
+    }
+    # 置換の中身は、後で別のコマンド列として解析する（deferred）。外側の語には置換の原文を置き、
+    # 外側のコマンドを途切れさせない（置換の後ろの語も同じコマンドの引数になる）
+    function subst(s, i, n, j, open) {
+      if (j == 0) j = n + 1
+      nd++; deferred[nd] = substr(s, i + open, j - i - open)
+      word = word substr(s, i, j - i + 1); inword = 1
+      return j
+    }
     function collect(line,    rest) {
       rest = line
       while (match(rest, /\$\([^()]*\)/)) { nd++; deferred[nd] = substr(rest, RSTART + 2, RLENGTH - 3); rest = substr(rest, RSTART + RLENGTH) }
@@ -57,15 +89,15 @@ lex_commands() {
       while (match(rest, /`[^`]*`/)) { nd++; deferred[nd] = substr(rest, RSTART + 1, RLENGTH - 2); rest = substr(rest, RSTART + RLENGTH) }
     }
     function lex(s,    n, i, c, nx, k, d, q, strip, j, line, t) {
-      n = length(s); mode = "N"; depth = 0; sp = 0; word = ""; inword = 0; nh = 0
+      n = length(s); mode = "N"; depth = 0; word = ""; inword = 0; nh = 0
       for (i = 1; i <= n; i++) {
         c = substr(s, i, 1); nx = substr(s, i + 1, 1)
         if (mode == "S") { if (c == "\047") mode = "N"; else word = word c; continue }
         if (mode == "D") {
           if (c == "\"") { mode = "N"; continue }
           if (c == "\\" && index("$`\"\\\n", nx) > 0) { word = word nx; i++; continue }
-          if (c == "$" && nx == "(") { emit(); i++; push("p"); continue }
-          if (c == "`") { emit(); push("b"); continue }
+          if (c == "$" && nx == "(") { i = subst(s, i, n, close_paren(s, i + 1, n), 2); continue }
+          if (c == "`") { i = subst(s, i, n, close_tick(s, i, n), 1); continue }
           word = word c; continue
         }
         # mode N
@@ -88,16 +120,17 @@ lex_commands() {
         if (c == "\\") { if (nx == "\n") { i++; continue } word = word nx; inword = 1; i++; continue }
         if (c == "\047") { mode = "S"; inword = 1; continue }
         if (c == "\"") { mode = "D"; inword = 1; continue }
-        if (c == "`") { if (sp > 0 && skind[sp] == "b") pop(); else { emit(); push("b") } continue }
-        if (c == "$" && nx == "(") { emit(); i++; push("p"); continue }
+        if (c == "`") { i = subst(s, i, n, close_tick(s, i, n), 1); continue }
+        if (c == "$" && nx == "(") { i = subst(s, i, n, close_paren(s, i + 1, n), 2); continue }
         if (c == "$" && nx == "{") {
-          d = 0
-          for (; i <= n; i++) { c = substr(s, i, 1); word = word c; if (c == "{") d++; else if (c == "}") { d--; if (d == 0) break } }
-          inword = 1; continue
+          d = 0; t = ""
+          for (; i <= n; i++) { c = substr(s, i, 1); t = t c; if (c == "{") d++; else if (c == "}") { d--; if (d == 0) break } }
+          # ${x:-$(cmd)} の中の置換もコマンドとして見る
+          word = word t; inword = 1; collect(t); continue
         }
         if (c == ";" || c == "&" || c == "|") { sep(); continue }
         if (c == "(") { depth++; sep(); continue }
-        if (c == ")") { if (depth > 0) { depth--; sep() } else if (sp > 0) pop(); else sep(); continue }
+        if (c == ")") { if (depth > 0) depth--; sep(); continue }
         if (c == "<" && nx == "<" && substr(s, i + 2, 1) != "<") {
           emit(); i += 2; strip = 0
           if (substr(s, i, 1) == "-") { strip = 1; i++ }
@@ -353,7 +386,12 @@ EOF
   return 0
 }
 
-check_text "$CMD" 0
+MAX_COMMAND_CHARS=65536
+if [ "${#CMD}" -gt "$MAX_COMMAND_CHARS" ]; then
+  add_ask "コマンドが大きすぎて検査できません（${#CMD} 文字。上限 ${MAX_COMMAND_CHARS}）"
+else
+  check_text "$CMD" 0
+fi
 
 if [ -n "$BLOCK_REASONS" ]; then
   {
