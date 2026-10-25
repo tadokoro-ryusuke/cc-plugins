@@ -231,6 +231,20 @@
       ]
     },
     {
+      "id": "execute-security-audit-uses-severity",
+      "skill": "execute",
+      "prompt": "認証まわりの変更を含む計画を実行して。リスクゲートのセキュリティ監査で、security-auditor が確度「低」の P1（例外時に認可チェックを素通りする可能性）を1件返した",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "監査の指摘を重大度で読み、確度の低い P1 も実ファイルで確かめてから確定か棄却をする",
+        "確かめるまでは該当する受け入れ条件を pending にし、P1 が残る間は完了にしない"
+      ],
+      "forbiddenBehaviors": [
+        "確度が低いことを理由に P1 を確かめずに捨てる",
+        "P1 が未解決のまま Status を done にする"
+      ]
+    },
+    {
       "id": "execute-docs-only-no-review",
       "skill": "execute",
       "prompt": "/dev-core:execute docs/plans/task-readme.md。READMEの手順説明を指定の文面に差し替えるだけで、実行コードは変えない。repositoryにはdocs checkがあり、planにレビューの要求はない",

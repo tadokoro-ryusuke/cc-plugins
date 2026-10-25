@@ -13,7 +13,7 @@ description: "TDD、SOLID、コーディング規約、FSD/Clean Architecture/DD
 |-------------|------|---------------|
 | [references/coding-standards.md](references/coding-standards.md) | 命名規約、コードスタイル、TypeScript 規約、Git 規約、リファクタリング技法 | コードを書く・直す・コミットする前 |
 | [references/architecture.md](references/architecture.md) | FSD レイヤー構造、Clean Architecture、DDD（エンティティ/VO/集約） | 設計判断・ファイル配置・ドメインモデリング時 |
-| [references/security.md](references/security.md) | OWASP Top 10 チェックリスト、入力検証、機密情報保護、金融システム要件 | セキュリティレビュー・API/認証実装時 |
+| [references/security.md](references/security.md) | OWASP Top 10:2025 チェックリスト、入力検証、機密情報保護、金融システム要件 | セキュリティレビュー・API/認証実装時 |
 | [references/testing.md](references/testing.md) | テストの書き方（構成と名前、期待値の出し方、テストダブルの優先順位、実依存の integration、テストデータ、E2E のロケータ） | テストを書く・直す・レビューする前 |
 | [references/delegation-and-review.md](references/delegation-and-review.md) | 実装の所有と委譲の判断、リスクゲートでの独立レビュー、Zero Trust Review、handoff の契約、無人実行の規律 | 作業を分担・委譲する前、独立レビューの要否を決めるとき、担当の報告を受け入れる前 |
 

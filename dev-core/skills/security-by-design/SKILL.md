@@ -63,7 +63,7 @@ OWASP ASVS（Application Security Verification Standard）5.0（2025年5月リ�
 2. **合意したレベルを契約・提案書に明記する**: 「本件は ASVS レベル N 準拠。ペネトレーションテストは別途」のようにスコープを画定する。無限責任の回避と品質宣言を兼ねる最重要の一手のため。契約条項への落とし込みは法務・弁護士に確認する。
 3. **API 中心の案件では OWASP API Security Top 10 を併用する**: ASVS だけでは API 固有の落とし穴（BOLA 等）の視点が薄いため。
 
-要件の実装レベルのチェックリスト（OWASP Top 10 対応）は `dev-core:best-practices` の references/security.md 参照。非機能要件としての合意の取り方は delivery-core:requirements-definition 参照。
+要件の実装レベルのチェックリスト（OWASP Top 10:2025 対応）は `dev-core:best-practices` の references/security.md 参照。非機能要件としての合意の取り方は delivery-core:requirements-definition 参照。
 
 ## Step 3: アクセスアーキテクチャ — ゼロトラストと閉域代替
 
@@ -146,7 +146,7 @@ AI 機能を組み込む案件でも、自分の開発体制（Claude Code / Cod
 |--------|--------|
 | 実装後の検証実行（依存監査・機密情報チェック） | `dev-core:verify`（Stage 5 security が実行担当） |
 | コードのセキュリティ監査 | security-auditor エージェント（本スキルの方針を監査基準として使う） |
-| OWASP Top 10 の実装チェックリスト・入力検証 | `dev-core:best-practices`（references/security.md） |
+| OWASP Top 10:2025 の実装チェックリスト・入力検証 | `dev-core:best-practices`（references/security.md） |
 | 認可・API・トランザクションの実装パターン | `dev-core:backend-patterns` |
 | CI/CD へのスキャン組み込み・リリースゲート | `dev-core:cicd-release-design` |
 | 非機能要件の引き出しと顧客合意 | delivery-core:requirements-definition / delivery-core:client-alignment |
