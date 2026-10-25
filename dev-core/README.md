@@ -2,6 +2,8 @@
 
 TDD 開発フレームワーク。t-wada 式 TDD、FSD、Clean Architecture、DDD のベストプラクティスを、知識スキル・ワークフロー・専門エージェント・Hooks 自動化の4層で提供します。
 
+5.1.0 では、テストを弱めて通すことの禁止と検出、テストの書き方の正本（best-practices/references/testing.md）、危険コマンドのフックの作り直し、security-auditor と E2E の返却の統一を入れました（[変更点](#510-の変更点)）。
+
 5.0.0 から、親セッションが既定の実装者になりました。サブエージェントへの委譲とレビューは、利得とリスクに当てはまるときだけ行います（[Opus 5.5 での運用](#opus-55-での運用)、[4.x → 5.0.0 への移行](#4x--500-への移行)）。
 
 ## どんな時に使うか
@@ -130,6 +132,15 @@ Agent ツールには呼び出しごとの effort 指定がありません。eff
 - `CLAUDE_CODE_EFFORT_LEVEL`: 親も子もすべて同じ effort にする
 - `maxEffortLevel`（settings）: 上限をかける
 - 親が Fable 5.1 のときに実行系を安くしたい: `CLAUDE_CODE_SUBAGENT_MODEL=opus`（model を省略している実行系にだけ効く。レビュー系は `inherit` なので対象外）
+
+## 5.1.0 の変更点
+
+- **テストの完全性**: 仕様の変更を根拠にしないテストの改変（削除・skip/only・期待値の緩和・テスト入力の特別扱い）で通さない。verify の Diff ステップと Stop フックで検出し、単独の TDD でも完了前に全体テストを回す。flaky の隔離には owner・期限・代替カバレッジを付ける
+- **テストの書き方の正本**: `skills/best-practices/references/testing.md`（期待値の出し方、テストダブルの優先順位、自前の DB の実物での integration、テストデータ、E2E のロケータ）
+- **フック**: 危険コマンドのフックは、引用符と heredoc を除いたコマンドの位置だけを照合する tripwire にし、戻せる操作は確認に回す。Stop フックは未追跡ファイル、focus/skip マーカー、テストファイルの削除も検出する。どちらも回帰テストを CI で回す
+- **委譲先**: security-auditor を重大度（P0〜P3）・確度・file:line の契約に揃え、OWASP Top 10:2025 に更新した。e2e-runner に状態付きの返却を入れ、ロケータを Playwright の推奨順にした
+- **ワークフロー**: refactor は振る舞いを変えず（バグは報告）、テストの薄い対象は特性テストで固定する。debug は赤くなる再現から始める。3回失敗後の別モデルへの委譲は同意か事前許可があるときだけ
+- **data-design-ops**: 本番で `EXPLAIN ANALYZE` を使わない
 
 ## 4.x → 5.0.0 への移行
 
