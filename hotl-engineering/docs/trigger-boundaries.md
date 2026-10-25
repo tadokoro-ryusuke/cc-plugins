@@ -23,7 +23,7 @@ dev-core:code-review は Claude Code 組み込みの `/code-review` とも語彙
 | 品質ゲート・検証 | 「実装できたので**検証して**」→ dev-core:verify（今の作業の6段階検証）。「このリポジトリに**品質ゲートを入れて**」→ hotl-engineering（CI としてのゲート設計・導入） |
 | レビュー | 「この PR を**レビューして**」「この diff の**バグを探して**」→ Claude Code 組み込みの `/code-review`（バグ探索全般）。「FSD / Clean Architecture / DDD の**規約に沿っているか見て**」「セキュリティ規約で**レビューして**」→ dev-core:code-review（規約レンズでのレビュー）。「Codex に**レビューさせて**」→ dev-core:codex-collab。「AI レビューを**パイプラインに組み込みたい**」→ hotl-engineering（レビュー自動化の設計） |
 | CI/CD・GitHub Actions | 「**CI/CD を設計して**」「**デプロイフローを整備して**」→ hotl-engineering。「**CI が落ちてる、直して**」→ dev-core:debug / build-error-resolver（今の障害の調査・修復であり、フロー設計ではない） |
-| テスト・eval | 「この機能の**テストを書いて**」→ dev-core:tdd。「**E2E を実行して**」→ dev-core:e2e。「エージェントの**eval ゲートを作って**」→ hotl-engineering（eval 語彙は hotl が受ける） |
+| テスト・eval | 「この機能の**テストを書いて**」→ dev-core:tdd。「**E2E を実行して**」→ dev-core:e2e。「エージェントの**eval ゲートを作って**」→ hotl-engineering（eval 語彙は hotl が受ける）。「**判事の採点方式や較正をどうするか**」「AI 機能の**品質の測り方**」→ ai-engineering:llm-evals（採点方式と判事の較正の正本。hotl の eval 雛形もこれに従う） |
 | 改善 | 「この**コードを改善/リファクタして**」→ dev-core:refactor。「この**リポジトリの開発フロー/運用を改善したい**」「**リポジトリを引き継いだので開発が回るようにしたい**」→ hotl-engineering |
 | インシデント | 「この**バグの原因を調べて**」→ dev-core:debug。「**インシデント対応を自動化したい**」「アラート時の一次調査をエージェントにやらせたい」→ hotl-engineering |
 | 学習・振り返り | 「同じミスを繰り返さない仕組みを」→ dev-core:continuous-learning（セッション単位の学習抽出）。「失敗を golden set に還流する**運用ルールを設計**」→ hotl-engineering（原則11）。近接領域だが、前者は「今のセッションから抽出」、後者は「チームの仕組み設計」 |

@@ -73,6 +73,10 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
 - [ ] PR 実行時は runner と閾値を trusted base 側に置く。閾値ポリシーの変更は別途レビューし、
       候補が自分のゲートを下げられないようにする
 - [ ] thresholds.json の値はそのまま使わず、初回 full 実行の実測から設定する
+- [ ] 2.0.x から上げるときは、thresholds.json の `judge_total_floor` / `judge_total_drop_allowed` を
+      `judge_axis_pass_rate_floor` / `judge_axis_pass_rate_drop_allowed` と `judge.pass_score` に置き換え、
+      baseline.json は `--baseline` を付けない較正実行で作り直す。古い設定や baseline のままだと、
+      run_evals.py は理由を出して止まる(比較を黙って飛ばさない)
 - [ ] anthropic SDK は major を固定したまま使う(テンプレートは `>=1.17,<2`)。1.x 以降は sampling
       パラメータ(temperature 等)を受け付けないので、judge の分散は票数で抑える。2.x(API 2026-10-21)に
       上げるときは、judge を Bedrock で 2026-10-21 に対応したモデル(Claude 4.7 以降)へ移し、

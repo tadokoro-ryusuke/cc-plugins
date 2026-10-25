@@ -95,7 +95,7 @@ jobs:
             --config p/owasp-top-ten \
             --error --severity ERROR \
             --sarif --output semgrep.sarif || exit_code=$?
-          exit ${exit_code:-0}
+          exit "${exit_code:-0}"
 
       # --- 依存脆弱性 ---
       - uses: pnpm/action-setup@v4
@@ -104,6 +104,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # 閾値は出発点の既定。変えるときの基準と例外の扱い → dev-core:security-by-design Step 5
       - name: Dependency audit (high 以上でfail)
         run: pnpm audit --audit-level high
 

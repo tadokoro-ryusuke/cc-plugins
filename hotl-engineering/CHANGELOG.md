@@ -3,7 +3,24 @@
 このスキルへの変更は必ずここに記録する（HANDOFF の運用ルール）。
 references の内容変更・description の意味的変更は PR で提案し、承認を得てから反映する。
 
-## 2.1.0 — 2026-10-25
+## 2.1.0 — 2026-10-26
+
+**BREAKING（eval の雛形を適用している人向け）**: judge のゲートを、3軸の合計点の平均から、各軸を合格線で
+二値化した軸ごとの合格率に変えた。合計点は、どの軸が落ちたのか分からず、人間との一致も測りにくいため
+（採点方式と判事の較正の正本は ai-engineering:llm-evals）。
+
+- thresholds.json: `judge_total_floor` / `judge_total_drop_allowed` を `judge_axis_pass_rate_floor` /
+  `judge_axis_pass_rate_drop_allowed` に置き換え、`judge.pass_score`（既定 4）を足した。古いキーが残っていれば
+  run_evals.py は評価を始めずに止まる
+- run_evals.py: 合格線を下回った軸があるケースは、軸名を付けて fail として報告する（must-pass は全軸の合格が
+  必要なのは従来どおり）。summary は `judge_axis_pass_rate`・`judge_axis_mean`・`judge_pass_score` を持ち、
+  `judge_total_mean` は無くなった。軸ごとの合格率を持たない baseline や、別の合格線で作った baseline は、
+  理由を出して止まる（比較を黙って飛ばさない）。ADJUST.md に移行手順を足した
+- eval-design.md: L2 は段階尺度を診断に使い、ゲートは合格線での二値化にする理由を書いた。L3 の較正を
+  「±1点一致率 85%」から、合格線で二値化した軸ごとの一致率（明確なケースでおよそ 90%）に変えた
+- judge_rubric.md: 存在しない evals/README.md を指していた較正記録の参照を直した
+- trigger-boundaries.md: 採点方式と判事の較正の相談を ai-engineering:llm-evals に送る行を足した
+- ci.yml: 依存監査の閾値の基準（dev-core:security-by-design Step 5）を指すコメントを足した
 
 **BREAKING（テンプレートを適用する人向け）**: モデル ID をテンプレートに書かず、リポジトリ変数で指定する。
 既定だった Sonnet 4.5 は deprecated（Anthropic 運営基盤での退役は 2026-11-30）で、適用先が気づかないまま

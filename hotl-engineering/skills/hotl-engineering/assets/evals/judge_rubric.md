@@ -1,7 +1,7 @@
 # LLM-as-Judge 採点ルーブリック(検索QAエージェント)
 
 このファイルは run_evals.py が judge プロンプトに埋め込む。改定時は必ず PR を通し、
-較正記録(evals/README.md §5)を残すこと。**ルーブリック変更自体が eval-gate の対象。**
+較正記録(evals/calibration/。手順は hotl-engineering の references/eval-design.md の L3)を残すこと。**ルーブリック変更自体が eval-gate の対象。**
 
 ---
 
