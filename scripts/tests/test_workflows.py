@@ -30,6 +30,20 @@ TRIAGE_READ_ONLY_COMMANDS = ("az monitor activity-log list", "az monitor log-ana
                              "gh pr list", "gh run list")
 
 
+# エージェントを動かす job と、モデル ID を受け取るリポジトリ変数。テンプレートにはモデル ID を書かない
+AGENT_MODEL_VARS = {("incident-triage.yml", "triage"): "HOTL_MODEL_LIGHT",
+                    ("ai-review.yml", "review"): "HOTL_MODEL_LIGHT",
+                    ("ai-review.yml", "deep-review"): "HOTL_MODEL_DEEP",
+                    ("agent-implement.yml", "implement"): "HOTL_MODEL_LIGHT"}
+# レビュー job と判定ファイルの置き場所。エージェントはコメントと判定ファイルの書き込みだけができる
+REVIEW_VERDICT_DIRS = {"review": "review-light", "deep-review": "review-deep"}
+
+
+def agent_step(steps):
+    index = next(i for i, step in enumerate(steps) if "claude-code-action" in step.get("uses", ""))
+    return index, steps[index]
+
+
 def tool_list(claude_args, flag):
     match = re.search(flag + r'\s+"([^"]*)"', claude_args)
     return [tool.strip() for tool in match.group(1).split(",")] if match else []
@@ -258,6 +272,67 @@ echo "https://github.com/fixture/repo/issues/1"
         gates = ROOT / ".github/workflows/hotl-gates.yml"
         self.assertEqual(pinned_sdk(gates), spec)
         self.assertEqual(yaml.safe_load(gates.read_text())["jobs"]["test"]["env"].get("HOTL_REQUIRE_SDK"), "1")
+
+    def test_agent_models_come_from_required_repository_variables(self):
+        # 退役するモデル ID をテンプレートに残さない。未設定なら、エージェントを動かす前に失敗する
+        for path in WORKFLOWS.glob("*.yml"):
+            with self.subTest(workflow=path.name):
+                self.assertNotIn("anthropic.claude-", path.read_text())
+        for (name, job_name), variable in AGENT_MODEL_VARS.items():
+            with self.subTest(workflow=name, job=job_name):
+                steps = workflow(name)["jobs"][job_name]["steps"]
+                index, agent = agent_step(steps)
+                self.assertIn(f"--model ${{{{ vars.{variable} }}}}", agent["with"]["claude_args"])
+                guard = next(step for step in steps[:index] if step.get("id") == "model")
+                self.assertEqual(guard["env"]["MODEL"], f"${{{{ vars.{variable} }}}}")
+                with tempfile.TemporaryDirectory() as directory:
+                    self.assertNotEqual(run_step(guard, {"MODEL": ""}, directory).returncode, 0)
+                    self.assertEqual(run_step(guard, {"MODEL": "fixture-model"}, directory).returncode, 0)
+        gate = workflow("eval-gate.yml")["jobs"]["eval"]
+        self.assertEqual(gate["env"]["JUDGE_MODEL"], "${{ vars.HOTL_JUDGE_MODEL }}")
+
+    def test_review_agents_can_only_comment_and_write_their_verdict(self):
+        jobs = workflow("ai-review.yml")["jobs"]
+        for job_name, folder in REVIEW_VERDICT_DIRS.items():
+            with self.subTest(job=job_name):
+                steps = jobs[job_name]["steps"]
+                index, agent = agent_step(steps)
+                self.assertEqual(agent["with"].get("github_token"), "${{ github.token }}")
+                claude_args = agent["with"]["claude_args"]
+                self.assertLessEqual(set(tool_list(claude_args, "--tools")), {"Read", "Grep", "Glob", "Bash", "Write"})
+                verdict = f"${{{{ runner.temp }}}}/{folder}/verdict.json"
+                # 上流の PR レビュー例と同じコメント手段に、判定ファイル1つへの書き込みだけを足す
+                self.assertEqual(set(tool_list(claude_args, "--allowedTools")), {
+                    "Read", "Grep", "Glob", "mcp__github_inline_comment__create_inline_comment",
+                    "Bash(gh pr comment:*)", "Bash(gh pr diff:*)", "Bash(gh pr view:*)", f"Edit(/{verdict})"})
+                self.assertIn(verdict, agent["with"]["prompt"])
+                prepare = next(step for step in steps[:index] if step.get("id") == "verdict-dir")
+                with tempfile.TemporaryDirectory() as directory:
+                    stale = Path(directory) / folder / "verdict.json"
+                    stale.parent.mkdir()
+                    stale.write_text('{"critical": 0, "high": 0}')
+                    result = run_step(prepare, {"RUNNER_TEMP": directory}, directory)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertTrue(stale.parent.is_dir())
+                    self.assertFalse(stale.exists())
+
+    def test_implementation_agent_tools_are_explicit_and_scoped(self):
+        steps = workflow("agent-implement.yml")["jobs"]["implement"]["steps"]
+        index, agent = agent_step(steps)
+        claude_args = agent["with"]["claude_args"]
+        file_tools = {"Read", "Grep", "Glob", "Edit", "MultiEdit", "Write"}
+        self.assertLessEqual(set(tool_list(claude_args, "--tools")), file_tools | {"Bash"})
+        allowed = tool_list(claude_args, "--allowedTools")
+        issue = "${{ github.event.issue.number }}"
+        branch = f"agent/issue-{issue}"
+        # 計画コメント・ブランチ・検証・commit・push・Draft PR に必要な分だけ。push 先は Issue のブランチに固定する
+        self.assertEqual({tool for tool in allowed if tool.startswith("Bash")}, {
+            f"Bash(gh issue comment {issue}:*)", f"Bash(git switch -c {branch})", "Bash(git status)",
+            "Bash(git diff:*)", "Bash(git add:*)", "Bash(git commit:*)", f"Bash(git push -u origin {branch})",
+            "Bash(pnpm lint)", "Bash(pnpm typecheck)", "Bash(pnpm test:*)", "Bash(gh pr create --draft:*)"})
+        self.assertLessEqual({tool for tool in allowed if not tool.startswith("Bash")}, file_tools)
+        # 依存はエージェントの前にロックファイルどおり入れる(エージェントには install を許さない)
+        self.assertTrue(any("pnpm install --frozen-lockfile" in step.get("run", "") for step in steps[:index]))
 
     def test_ci_does_not_claim_changed_file_coverage(self):
         # jest-coverage-report-action の threshold は全体カバレッジで、入力形式も vitest と合わない

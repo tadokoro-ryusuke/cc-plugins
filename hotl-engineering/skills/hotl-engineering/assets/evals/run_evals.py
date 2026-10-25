@@ -15,7 +15,7 @@ L2: LLM-as-judge(Bedrock 東京 / sampling パラメータは送らない / 3票
 環境変数:
     TARGET_ENDPOINT  評価対象(staging)のベースURL
     TARGET_API_KEY   同 API キー
-    JUDGE_MODEL      Bedrock inference profile ID(既定: Sonnet 東京)
+    JUDGE_MODEL      Bedrock のモデル ID か inference profile ID(必須。既定値なし)
     AWS_REGION       ap-northeast-1
 """
 
@@ -34,9 +34,8 @@ from pathlib import Path
 
 from anthropic import AnthropicBedrock
 
-JUDGE_MODEL = os.environ.get(
-    "JUDGE_MODEL", "apac.anthropic.claude-sonnet-4-5-20250929-v1:0"
-)
+# 既定値を持たない。退役するモデルに黙って依存せず、未設定なら評価を始めない(main を参照)
+JUDGE_MODEL = os.environ.get("JUDGE_MODEL", "")
 RUBRIC_PATH = Path(__file__).parent / "judge_rubric.md"
 AXES = ("correctness", "faithfulness", "completeness")
 
@@ -284,6 +283,10 @@ def main() -> int:
     ap.add_argument("--out", default="evals/out")
     ap.add_argument("--expected-revision", help="対象の全レスポンスがこのデプロイ済み revision を示すことを要求する")
     args = ap.parse_args()
+    if not JUDGE_MODEL:
+        print("JUDGE_MODEL is not set: choose a judge model enabled in your Bedrock account "
+              "(see ADJUST.md)", file=sys.stderr)
+        return 2
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

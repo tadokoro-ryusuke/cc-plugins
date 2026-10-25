@@ -6,7 +6,13 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
 適用時に必ず確認・置換する箇所の一覧。
 
 ## 全ファイル共通
-- [ ] Bedrock モデルID(`apac.anthropic.claude-*`)→ 組織で有効化済みの inference profile に置換
+- [ ] モデル ID はテンプレートに書かれていない。リポジトリ変数に設定する。未設定の job は、エージェントを動かす前に失敗する
+      - `HOTL_MODEL_LIGHT`: ai-review(全 PR)・incident-triage・agent-implement
+      - `HOTL_MODEL_DEEP`: ai-review の Tier 2 深堀りレビュー
+      - `HOTL_JUDGE_MODEL`: eval-gate の judge(生成側と別のモデルが理想)
+      - 値は Bedrock で組織が有効化済みのモデルの ID か inference profile ID にする。現行モデルの ID は Anthropic の
+        「Claude in Amazon Bedrock」と「Claude on Amazon Bedrock(legacy)」のモデル表で確認する。deprecated の
+        モデル(Sonnet 4.5 など)は選ばない。設定した日付と、モデル表を確認した日付を記録する
 - [ ] AWS リージョン(ap-northeast-1)→ 組織のリージョン
 - [ ] secrets 名(GITHUB_OIDC_ROLE / AZURE_CLIENT_ID* / TEAMS_WEBHOOK_URL 等)→ 実在の secrets に合わせ、未作成なら作成手順を成果物に添える
 - [ ] サードパーティ actions(`dorny/paths-filter` / `marocchino/sticky-pull-request-comment` /
@@ -32,6 +38,9 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
       含むことを必須にする。欠落・不正形式・revision 不一致・失敗・skipped の各ケースをテストする
 - [ ] レビュープロバイダの認証情報と許可ツールを制限する。JSON として妥当でも、PR の内容と
       モデル出力は非信頼のまま扱う
+- [ ] レビュー job の `--allowedTools` は、PR へのコメント手段と判定ファイル1つへの書き込み(`Edit(//<絶対パス>)`)
+      だけにする。`github_token: ${{ github.token }}` を外さない。判定ファイルのディレクトリはエージェントの前に
+      新しく作る(前回の判定を残さない)
 
 ## workflows/agent-implement.yml
 - [ ] Issue テンプレート(受入条件必須)を .github/ISSUE_TEMPLATE/ に併設する
@@ -40,6 +49,11 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
       (サンプルは admin 権限を要求し、API エラー時は fail closed)
 - [ ] 自律実装を有効化する前に environment reviewer を設定し、承認時点の Issue 本文/revision を
       保存する。編集可能な Issue 本文は、恒久的な承認スナップショットにならない
+- [ ] `--allowedTools` の lint / typecheck / test のコマンドを、プロジェクトの実在するスクリプトに置き換える。
+      依存のインストールはエージェントの前の step で行い、エージェントには install を許さない。push 先は
+      Issue のブランチに固定したままにし、`gh api`・merge・force push を足さない
+- [ ] テストはリポジトリのコードを実行し、job の認証情報が環境にある。外部者が Issue を起票できる環境では、
+      environment reviewer と CP1 での本文確定を必ず組み合わせる
 
 ## workflows/eval-gate.yml(エージェント系のみ)
 - [ ] 発火 paths(prompts/ 等)→ 実際のプロンプト・検索ロジックの置き場所
@@ -54,8 +68,7 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
       上げるときは、judge を Bedrock で 2026-10-21 に対応したモデル(Claude 4.7 以降)へ移し、
       IAM・エンドポイントの変更をあわせて行う。上げる前にネットワークなしの契約テスト
       (cc-plugins の scripts/tests/test_hotl_sdk_contract.py が例)を新しい版で通す
-- [ ] JUDGE_MODEL の既定(Sonnet 4.5)は deprecated の旧世代。組織で有効化済みの後継モデルに置換し、
-      置換した日付とモデル一覧を確認した日付を記録する
+- [ ] judge のモデル(`HOTL_JUDGE_MODEL`)を変えるときは、eval-gate の結果と L3 の人間較正を新旧で比べてから切り替える
 - [ ] レビュー済み baseline は、`--baseline` を付けない較正実行で明示的に初期化し、workflow を
       有効化する前に保存する。通常運用でのダウンロード欠落・失敗で比較を無効化しない
 - [ ] レポート/artifact の出力先はランナーの新しい一時ディレクトリ(`$RUNNER_TEMP` 配下)にする。

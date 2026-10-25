@@ -99,9 +99,22 @@ class EvalGateTests(unittest.TestCase):
             scores = {axis: {"score": 5, "reason": "fixture"} for axis in self.runner.AXES}
             with patch.object(sys, "argv", args), patch.object(self.runner, "call_target", side_effect=target), \
                  patch.object(self.runner, "eval_l2", side_effect=judge, return_value=scores), \
+                 patch.object(self.runner, "JUDGE_MODEL", "fixture-judge-model"), \
                  contextlib.redirect_stdout(io.StringIO()):
                 result = self.runner.main()
             return result, json.loads((root / "out/results.json").read_text())
+
+    def test_judge_model_is_required(self):
+        # 既定のモデル ID を持たない(退役するモデルに黙って依存しない)。未設定なら評価を始めない
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            args = ["evals", "--dataset", str(root / "missing.jsonl"), "--thresholds",
+                    str(root / "missing.json"), "--out", str(root / "out")]
+            with patch.object(sys, "argv", args), patch.object(self.runner, "JUDGE_MODEL", ""), \
+                 patch("sys.stderr", new_callable=io.StringIO) as stderr:
+                self.assertEqual(self.runner.main(), 2)
+            self.assertIn("JUDGE_MODEL", stderr.getvalue())
+            self.assertFalse((root / "out").exists())
 
     def cases(self):
         return [{"id": "must", "category": "answer", "query": "fixture", "suite": ["smoke"], "must_pass": True},

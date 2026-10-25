@@ -17,6 +17,12 @@
 #     届く経路)。外部者が Issue を起票できる環境では、environment approval の追加・
 #     起票者の trusted 判定・CP1 で人間が本文を確定してからラベルを付ける運用を
 #     必ず組み合わせること
+#   - エージェントに与えるコマンドは --allowedTools で明示したものだけ(計画コメント、
+#     Issue のブランチの作成と push、lint / typecheck / test、Draft PR の作成)。
+#     push 先は Issue のブランチに固定し、gh api・merge・force push・依存の追加は与えない
+#   - 残るリスク: lint / typecheck / test はリポジトリのコードを実行し、この job の
+#     認証情報(書き込み可能なトークン、Bedrock 用の AWS 認証)が環境にある。Issue 経由の
+#     prompt injection で書かれたテストが、それを読み出しうる。上の承認運用で抑える
 # =============================================================================
 name: Agent Implement
 
@@ -71,11 +77,31 @@ jobs:
         with:
           fetch-depth: 0
 
+      # ADAPT: 依存はエージェントの前にロックファイルどおり入れる(エージェントには install を許さない)。
+      # パッケージマネージャと Node の版は ci.yml と揃える
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE }}
           aws-region: ap-northeast-1
+
+      # モデル ID はリポジトリ変数で指定する(テンプレートには書かない)。未設定ならエージェントを動かす前に止める
+      - name: Require the model variable
+        id: model
+        env:
+          MODEL: ${{ vars.HOTL_MODEL_LIGHT }}
+        run: |
+          if [ -z "$MODEL" ]; then
+            echo "::error::Set the repository variable HOTL_MODEL_LIGHT (see ADJUST.md)"
+            exit 1
+          fi
 
       - uses: anthropics/claude-code-action@v1
         with:
@@ -84,14 +110,16 @@ jobs:
             Issue #${{ github.event.issue.number }} を実装してください。
 
             ## 手順(SDD: plan → implement → verify)
-            1. Issue 本文の受入条件を読み、実装計画を Issue にコメント投稿
-               (影響ファイル・アプローチ・リスク)。受入条件が曖昧・矛盾して
+            1. Issue 本文の受入条件を読み、実装計画を `gh issue comment ${{ github.event.issue.number }}`
+               で投稿(影響ファイル・アプローチ・リスク)。受入条件が曖昧・矛盾して
                いる場合は実装せず、質問コメントを投稿して終了すること
-            2. ブランチ `agent/issue-${{ github.event.issue.number }}` を作成
+            2. `git switch -c agent/issue-${{ github.event.issue.number }}` でブランチを作成
             3. CLAUDE.md の規約に従い実装。受入条件ごとに対応するテストを先に
-               書く(TDD)。テストなしの実装は不可
-            4. lint / typecheck / test をローカル実行し、全部通るまで修正
-            5. Draft PR を作成。PR 本文には以下を必ず含める:
+               書く(TDD)。テストなしの実装は不可。テストを消す・skip する・期待値を
+               緩めて通すことはしない
+            4. `pnpm lint`・`pnpm typecheck`・`pnpm test` を実行し、全部通るまで修正
+            5. `git add`・`git commit` の後、`git push -u origin agent/issue-${{ github.event.issue.number }}`
+               で push し、`gh pr create --draft` で Draft PR を作成。PR 本文には以下を必ず含める:
                - `Closes #${{ github.event.issue.number }}`
                - 受入条件と検証結果の対応表
                - 自己申告のリスクポイント(人間レビュアーが見るべき箇所)
@@ -102,4 +130,6 @@ jobs:
             - migration を含む変更での既存カラム削除
           claude_args: |
             --max-turns 30
-            --model apac.anthropic.claude-sonnet-4-5-20250929-v1:0
+            --model ${{ vars.HOTL_MODEL_LIGHT }}
+            --tools "Read,Grep,Glob,Edit,MultiEdit,Write,Bash"
+            --allowedTools "Read,Grep,Glob,Edit,MultiEdit,Write,Bash(gh issue comment ${{ github.event.issue.number }}:*),Bash(git switch -c agent/issue-${{ github.event.issue.number }}),Bash(git status),Bash(git diff:*),Bash(git add:*),Bash(git commit:*),Bash(git push -u origin agent/issue-${{ github.event.issue.number }}),Bash(pnpm lint),Bash(pnpm typecheck),Bash(pnpm test:*),Bash(gh pr create --draft:*)"
