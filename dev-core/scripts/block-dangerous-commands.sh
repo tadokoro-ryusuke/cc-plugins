@@ -10,13 +10,17 @@
 # 扱い、実行されない文字列（引用符の中身、引用符付きの heredoc の本文、コメント）はコマンドとして
 # 見ない。$( ) とバッククォート、${x:-$( )}、引用符なしの heredoc の中の $( ) は、別のコマンドとして見る。
 # $( ) の終わりは、本体を同じ字句解析で走査して探す（引用符・コメント・heredoc の中の括弧は数えない）。
-# case の「パターン)」を含む $( ) は終わりを早く見誤る（既知の制約）。
+# 既知の制約: case の「パターン)」を含む $( ) は終わりを早く見誤る。パイプで渡した SQL やスクリプト
+# （cat <<EOF | psql など）は見ない。SQL の文字列リテラルの中の DROP / TRUNCATE も止める（止める側の誤検知）。
+# 関数の中で IFS を空にしてから検査を呼ぶような使い方は想定しない。
 # 置換は外側の語の一部として残すので、置換の後ろの語も外側の同じコマンドの引数になる。
 # if・then・sudo・env・command・xargs・nice・timeout などの前置きは、オプションとその値を読み飛ばす。
 # bash -c / -lc など、eval、env -S の中の文字列は2段まで見る。
 #
 #   block（exit 2）: rm -r で / ・ ~ ・ $HOME を消す、main / master への強制 push（-f / --force /
 #                    +refspec。宛先を書かないときは今のブランチ）、DB クライアントでの DROP / TRUNCATE
+#                    （heredoc で渡した SQL を含む）。-c もスクリプトのファイルも無いシェルに heredoc で
+#                    渡したスクリプトの中も見る
 #   ask（確認）    : 作業ツリーや未追跡ファイルを捨てる git 操作、git branch -D、
 #                    main / master への --force-with-lease
 #
@@ -41,6 +45,9 @@ fi
 PROTECTED_BRANCH_PATTERN='^(main|master)$'
 MAX_DEPTH=2
 TAB=$(printf '\t')
+US=$(printf '\037')
+NL='
+'
 BLOCK_REASONS=""
 ASK_REASONS=""
 
@@ -53,20 +60,21 @@ add_ask() { ASK_REASONS="${ASK_REASONS}- $1
 lex_commands() {
   printf '%s' "$1" | awk '
     # 語と区切りを出す。quiet のとき（置換の終わりを探すための走査）は何も出さない
-    function emit() { if (inword) { if (!quiet) { gsub(/\n/, " ", word); print "W\t" word } word = ""; inword = 0 } }
-    function sep() { emit(); if (!quiet) print "S" }
+    function emit() { if (inword) { if (!quiet) { gsub(/\n/, " ", word); outbuf = outbuf "W\t" word "\n" } word = ""; inword = 0 } }
+    function sep() { emit(); if (!quiet) outbuf = outbuf "S\n" }
+    function flush() { if (!quiet && outbuf != "") { printf "%s", outbuf; outbuf = "" } }
     # "$(" の "(" の位置 p から、対応する ")" の位置を返す（無ければ 0）。本体を同じ字句解析で
     # 走査するので、引用符・エスケープ・コメント・heredoc・入れ子の置換の中の括弧は数えない
-    function close_paren(s, p, n,    sv_mode, sv_depth, sv_word, sv_inword, sv_nh, sv_quiet, k, hd, hq, hs, j) {
+    function close_paren(s, p, n,    sv_mode, sv_depth, sv_word, sv_inword, sv_nh, sv_quiet, k, hd, hq, hs, hp, j) {
       # 入れ子が深すぎる入力は検査しきれない（awk の再帰の深さと処理量を抑える）
       if (nest >= MAX_NEST) { overflow = 1; return 0 }
       nest++
       sv_mode = mode; sv_depth = depth; sv_word = word; sv_inword = inword; sv_nh = nh; sv_quiet = quiet
-      for (k = 1; k <= nh; k++) { hd[k] = hdelim[k]; hq[k] = hquoted[k]; hs[k] = hstrip[k] }
+      for (k = 1; k <= nh; k++) { hd[k] = hdelim[k]; hq[k] = hquoted[k]; hs[k] = hstrip[k]; hp[k] = hpos[k] }
       quiet = 1
       j = lex(s, p + 1, n, 1)
       mode = sv_mode; depth = sv_depth; word = sv_word; inword = sv_inword; nh = sv_nh; quiet = sv_quiet
-      for (k = 1; k <= nh; k++) { hdelim[k] = hd[k]; hquoted[k] = hq[k]; hstrip[k] = hs[k] }
+      for (k = 1; k <= nh; k++) { hdelim[k] = hd[k]; hquoted[k] = hq[k]; hstrip[k] = hs[k]; hpos[k] = hp[k] }
       nest--
       return j
     }
@@ -149,8 +157,17 @@ lex_commands() {
               body = body line "\n"
             }
             if (!hquoted[k]) collect(body)
+            hbody[k] = body
+          }
+          # 本文を、区切り語を読んだ位置に後ろから差し込む（前の位置がずれないように）
+          if (!quiet) {
+            for (k = nh; k >= 1; k--) {
+              t = hbody[k]; gsub(/\n/, "\037", t)
+              outbuf = substr(outbuf, 1, hpos[k]) "H\t" t "\n" substr(outbuf, hpos[k] + 1)
+            }
           }
           nh = 0
+          flush()
           continue
         }
         if (c == "#" && !inword) { while (i < n && substr(s, i + 1, 1) != "\n") i++; continue }
@@ -190,18 +207,19 @@ lex_commands() {
             d = d c
           }
           i--
-          if (d != "") { nh++; hdelim[nh] = d; hquoted[nh] = q; hstrip[nh] = strip }
+          if (d != "") { nh++; hdelim[nh] = d; hquoted[nh] = q; hstrip[nh] = strip; hpos[nh] = length(outbuf) }
           continue
         }
         if (c == "<" || c == ">") { emit(); continue }
         word = word c; inword = 1
       }
       sep()
+      flush()
       return 0
     }
     { text = (NR == 1) ? $0 : text "\n" $0 }
     END {
-      nd = 0; quiet = 0; nest = 0; work = 0; overflow = 0
+      nd = 0; quiet = 0; nest = 0; work = 0; overflow = 0; outbuf = ""
       MAX_NEST = 32; MAX_WORK = 2000000
       lex(text, 1, length(text), 0)
       for (m = 1; m <= nd && !overflow; m++) lex(deferred[m], 1, length(deferred[m]), 0)
@@ -397,22 +415,37 @@ check_words() {
   [ "$i" -lt "$n" ] || return 0
   local cmd="${w[$i]##*/}"
   local -a args=("${w[@]:$((i + 1))}")
-  local arg next
+  # このコマンドに heredoc で渡した本文（check_text が用意する）。入れ子の検査で上書きされる前に写す
+  local -a bodies=(${HEREDOCS[@]+"${HEREDOCS[@]}"})
+  local arg next script body
   case "$cmd" in
     rm) check_rm "${args[@]+"${args[@]}"}" ;;
     git) check_git "${args[@]+"${args[@]}"}" ;;
-    psql|mysql|mariadb|sqlite3|sqlcmd) check_sql "${args[*]+"${args[*]}"}" ;;
+    psql|mysql|mariadb|sqlite3|sqlcmd)
+      # 引数の SQL と、heredoc で渡した SQL の両方を見る
+      check_sql "${args[*]+"${args[*]}"}"
+      for body in ${bodies[@]+"${bodies[@]}"}; do check_sql "$body"; done ;;
     eval) check_text "${args[*]+"${args[*]}"}" "$((depth + 1))" ;;
     bash|sh|zsh|dash|ksh)
-      # -c、-lc、-ec など c を含むオプションの次の語が、実行する文字列
+      # -c、-lc、-ec など c を含むオプションの次の語が、実行する文字列。-c もスクリプトのファイルも無ければ、
+      # heredoc で渡した本文をスクリプトとして実行する
       next=0
+      script=0
       for arg in "${args[@]+"${args[@]}"}"; do
         if [ "$next" -eq 1 ]; then
           check_text "$arg" "$((depth + 1))"
           break
         fi
-        case "$arg" in --*) ;; -*c*) next=1 ;; esac
-      done ;;
+        case "$arg" in
+          --*) ;;
+          -*c*) next=1 ;;
+          -*) ;;
+          *) script=1 ;;
+        esac
+      done
+      if [ "$next" -eq 0 ] && [ "$script" -eq 0 ]; then
+        for body in ${bodies[@]+"${bodies[@]}"}; do check_text "$body" "$((depth + 1))"; done
+      fi ;;
   esac
   return 0
 }
@@ -439,13 +472,20 @@ check_text() {
   lines=($lexed)
   IFS="$old_ifs"
   [ "$noglob" -eq 1 ] || set +f
+  # HEREDOCS は、今のコマンドに渡す heredoc の本文（check_words が読む）
+  local -a HEREDOCS=()
+  local body
   for line in ${lines[@]+"${lines[@]}"}; do
-    if [ "$line" = "S" ]; then
-      [ "${#seg[@]}" -gt 0 ] && check_words "$depth" "${seg[@]}"
-      seg=()
-    else
-      seg+=("${line#W"$TAB"}")
-    fi
+    case "$line" in
+      S)
+        [ "${#seg[@]}" -gt 0 ] && check_words "$depth" "${seg[@]}"
+        seg=()
+        HEREDOCS=() ;;
+      H"$TAB"*)
+        body="${line#H"$TAB"}"
+        HEREDOCS+=("${body//$US/$NL}") ;;
+      *) seg+=("${line#W"$TAB"}") ;;
+    esac
   done
   [ "${#seg[@]}" -gt 0 ] && check_words "$depth" "${seg[@]}"
   return 0

@@ -142,6 +142,25 @@ expect block 'cat <<EOF
 $(rm -rf /)
 EOF'
 
+# heredoc の本文を、それを受け取るコマンドに渡して検査する（DB クライアントの SQL、シェルのスクリプト）
+# shellcheck disable=SC2016
+expect block 'psql "$DATABASE_URL" <<'"'"'SQL'"'"'
+DROP TABLE users;
+SQL'
+expect block "mysql app_db <<'SQL'
+TRUNCATE TABLE users;
+SQL"
+expect block 'psql -h db <<SQL; echo done
+drop table users;
+SQL'
+expect block "bash <<'EOF'
+echo start
+rm -rf /
+EOF"
+expect block "sh -s <<'EOF'
+git push -f origin main
+EOF"
+
 # --- must-pass（以前は誤って止めていた形を含む） ---
 expect pass 'echo "rm -rf /"'
 expect pass "grep -rn 'drop table' ."
@@ -168,6 +187,20 @@ expect pass "cat <<'EOF'
 EOF"
 expect pass '# rm -rf /'
 expect pass 'command -v rm'
+# heredoc の本文を渡す先が DB クライアントやシェルでなければ、本文は実行されない
+expect pass "cat <<'SQL'
+DROP TABLE users;
+SQL"
+expect pass "cat <<'EOF' > cleanup.sh
+rm -rf /
+EOF"
+# スクリプトのファイルを渡したシェルでは、heredoc はそのスクリプトの標準入力で、シェルは実行しない
+expect pass "bash deploy.sh <<'EOF'
+rm -rf /
+EOF"
+expect pass "psql -c 'select 1' <<'SQL'
+select 2;
+SQL"
 # 置換の後ろの語は、置換の前のコマンドの引数（新しいコマンドではない）
 # shellcheck disable=SC2016
 expect pass 'echo $(true) rm -rf /'
