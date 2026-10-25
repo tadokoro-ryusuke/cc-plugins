@@ -19,6 +19,9 @@ set -u
 
 INPUT=$(cat)
 
+# jq が無いと stop_hook_active を読めず、2 周目も止め続けてしまう。ヘッダのとおり何もしない
+command -v jq >/dev/null 2>&1 || exit 0
+
 # 無限ループ防止: 既にこのフックのフィードバックを受けた後の停止は通す
 ACTIVE=$(printf '%s' "$INPUT" | jq -r '.stop_hook_active // false' 2>/dev/null)
 [ "$ACTIVE" = "true" ] && exit 0

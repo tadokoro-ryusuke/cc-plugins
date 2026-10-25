@@ -102,6 +102,24 @@ git -C "$repo" init -q
 printf '%s\n' 'console.log("x");' >"$repo/first.ts"
 expect 0 "repository without commits does not fail"
 
+# jq が無いときは何もしない（停止を通す）。jq を除いた PATH を作って確かめる
+new_repo
+printf '%s\n' 'console.log("debug");' >>"$repo/src/app.ts"
+nojq="$(mktemp -d)"
+for tool in git grep sed awk cat head tail wc find tr cut sort mktemp rm dirname basename env ls stat xargs; do
+  tool_path="$(command -v "$tool" 2>/dev/null)" || continue
+  case "$tool_path" in /*) ln -s "$tool_path" "$nojq/$tool" ;; esac
+done
+set +e
+(cd "$repo" && printf '{"stop_hook_active":false}' | PATH="$nojq" /bin/bash "$hook" >/dev/null 2>&1)
+actual=$?
+set -e
+if [ "$actual" != 0 ]; then
+  echo "FAIL: jq が無いときは停止を通す (expected exit 0, got $actual)" >&2
+  failures=$((failures + 1))
+fi
+rm -rf "$repo" "$nojq"
+
 if [ "$failures" -ne 0 ]; then
   echo "$failures stop-quality-gate case(s) failed" >&2
   exit 1
