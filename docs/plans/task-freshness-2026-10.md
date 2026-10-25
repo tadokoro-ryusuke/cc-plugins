@@ -44,15 +44,16 @@
 
 | PR | リポジトリ | ブランチ | base | 範囲 | 状態 |
 |---|---|---|---|---|---|
-| 1 | cc | `feature/freshness-b0` | main | ui-ux-pro-max の削除（marketplace 6.0.0）、hotl 2.0.2（C03・C04・カバレッジゲート）、監査レポートと本計画 | 実装済み |
-| 2 | codex | `codex/hotl-2.0.2-freshness` | codex main | hotl 2.0.2 の翻案（#8 を置き換え）、ui-ux-pro-max の LICENSE と来歴（C02） | 未着手 |
-| 3 | cc | `feature/hotl-2.1.0` | 1 | モデル ID の vars 化と fail-fast、judge の SDK 2.x・4.7 以降への移行、agent-implement / ai-review のツール付与（新規の発見） | 未着手 |
-| 4 | codex | `codex/hotl-2.1.0` | 2 | 3 の翻案 | 未着手 |
-| 5 | cc | `feature/dev-core-5.1.0` | 1 | 実装まわり（下記の commit 順）、github-tools の C29 | 未着手 |
+| 1 | cc | `feature/freshness-b0` | main | ui-ux-pro-max の削除（marketplace 6.0.0）、hotl 2.0.2（C03・C04・カバレッジゲート）、監査レポートと本計画 | draft PR #13 |
+| 2 | codex | `codex/hotl-2.0.2-freshness` | codex main | hotl 2.0.2 の翻案（#8 を置き換え）、ui-ux-pro-max の LICENSE と来歴（C02） | draft PR #10（#8 は close） |
+| 3 | cc | `feature/hotl-2.1.0` | 1 | モデル ID の vars 化と fail-fast、agent-implement / ai-review のツール付与（新規の発見）。SDK は 1.x に固定（2.x と 4.7 以降の judge への移行は見送り） | draft PR #14（Codex GO） |
+| 3b | cc | `feature/hotl-2.1.0-evals` | 3 | C14 の hotl 側（judge を軸ごとの合格率でゲート）、C47 の hotl 側（actions のメジャー版、ADJUST） | 実装中 |
+| 4 | codex | `codex/hotl-2.1.0` | 2 | 3・3b の翻案 | 3 の翻案をコミット済み（46f3ab2、未 push） |
+| 5 | cc | `feature/dev-core-5.1.0` | 1 | 実装まわり（下記の commit 順）、github-tools の C29 | 実装済み。フックの作り直し（78f9cb1）の Codex 再レビュー待ち |
 | 6 | codex | `codex/dev-core-freshness` | codex main | 5 のうち知識層の変更の翻案 | 未着手 |
 | 7 | cc | `feature/skill-reachability` | 5 | C18 の測定、C35、C17 | 未着手 |
-| 8 | cc | `feature/knowledge-freshness` | 5 | C46・C47・C51・C52・C53・C21・C14 | 未着手 |
-| 9 | cc | `feature/design-frontend` | 5 | C38・C40・C41・C45 | 未着手 |
+| 8 | cc | `feature/knowledge-freshness` | 5 | C46・C47・C51・C52・C53・C21・C14（9 を含む） | 実装済み（worktree ~/work/cc-plugins-knowledge）。Codex レビュー待ち |
+| 9 | cc | （8 に統合） | - | C38・C40・C41・C45 | 8 に含めた |
 | 10 | codex | 必要な分 | codex main | 8・9 のうち知識層の変更の翻案 | 未着手 |
 
 マージ順は 1 → 3、1 → 5 → 7・8・9。先の PR がマージされたら、後続 PR の base を main に切り替える。
@@ -94,7 +95,14 @@
 ## Progress Log
 
 - 2026-10-25: 監査、カルテ、PR 1 の実装と Codex レビュー（NO-GO 2回、指摘はすべて反映）まで完了。
+- 2026-10-26: PR 1（#13）・3（#14）・2（codex #10）を draft で作成し、codex #8 を close。PR 3 は Codex の NO-GO 4回を経て GO。
+  PR 5 は実装済みで、フックを字句解析で作り直した（78f9cb1）。PR 8 は 7 担当で実装し、内部レビューの指摘（中4・低6）を反映した。
+  C14 の hotl 側は PR 3 に載せず、PR 3b として judge のゲートを軸ごとの合格率に変えた（84dfa03、テスト 47 件 OK）。
+  PR 4 は 3 の翻案をコミット済み（codex のテスト 92 件 OK、validate OK を手元で再確認）。
 
 ## Current Next Action
 
-PR 1 の最終確認（Codex による空白要約の修正の再確認と、検証一式）をして、3つの commit に分けて push し、draft PR を作る。
+1. Codex の3件のレビュー（PR 5 のフック、PR 8、PR 3b）を読み、指摘を実ファイルで確かめて直す。
+2. PR 3b に C47 の hotl 側（actions のメジャー版。版と破壊的変更は調査中）を足し、PR 4 に 3b を翻案する。
+3. PR 5・8・3b・4 を push して draft PR にする。
+4. PR 6/10（dev-core と知識層の翻案）、PR 7（C18 の測定）。
