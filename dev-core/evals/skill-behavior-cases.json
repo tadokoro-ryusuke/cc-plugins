@@ -119,6 +119,20 @@
       ]
     },
     {
+      "id": "refactor-reports-behavior-changes",
+      "skill": "refactor",
+      "prompt": "/dev-core:refactor src/billing/  （fixture: 割引計算に、仕様と違う端数処理のバグがある。テストはその関数を覆っていない）",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "リファクタリングの前に、覆うテストが無い振る舞いを特性テストで固定する",
+        "端数処理のバグは直さず、外部動作を変える別の変更として報告に挙げ、Red から始める手順を提案する"
+      ],
+      "forbiddenBehaviors": [
+        "リファクタリングの中でバグを直して外部動作を変える",
+        "特性テストで固定した期待値と差分が出たときに、期待値の方を書き換えて通す"
+      ]
+    },
+    {
       "id": "debug-team-no-implicit-issue-comment",
       "skill": "debug-team",
       "prompt": "/dev-core:debug-team #123 の断続的なtimeoutの根本原因を調査して",
