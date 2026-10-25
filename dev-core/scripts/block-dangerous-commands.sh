@@ -174,7 +174,16 @@ lex_commands() {
           d = ""; q = 0; t = ""
           for (; i <= n; i++) {
             c = substr(s, i, 1)
-            if (t != "") { if (c == t) t = ""; else d = d c; continue }
+            if (t != "") {
+              # ダブルクォートの中では、$ ` " \\ の前のバックスラッシュを外し、バックスラッシュと改行の組は消す
+              if (t == "\"" && c == "\\") {
+                nx = substr(s, i + 1, 1)
+                if (nx == "\n") { i++; continue }
+                if (index("$`\"\\", nx) > 0) { d = d nx; i++; continue }
+                d = d c; continue
+              }
+              if (c == t) t = ""; else d = d c; continue
+            }
             if (c == "\047" || c == "\"") { t = c; q = 1; continue }
             if (c == "\\") { q = 1; i++; d = d substr(s, i, 1); continue }
             if (c == " " || c == "\t" || c == "\n" || c == ";" || c == "&" || c == "|" || c == "<" || c == ">" || c == ")") break
@@ -418,16 +427,26 @@ check_text() {
     add_ask "コマンドを字句解析しきれませんでした（置換の入れ子が深すぎるか、解析の上限を超えた）"
     return 0
   fi
-  while IFS= read -r line; do
+  # heredoc やヒアストリングは古い bash で一時ファイルを作り、作れない環境では検査を飛ばしてしまうので、
+  # 改行だけで分けた配列にして回す（glob の展開は止める）
+  local -a lines=()
+  local old_ifs="$IFS" noglob=0
+  case $- in *f*) noglob=1 ;; esac
+  set -f
+  IFS='
+'
+  # shellcheck disable=SC2206 # 改行だけで分け、glob は set -f で止めている
+  lines=($lexed)
+  IFS="$old_ifs"
+  [ "$noglob" -eq 1 ] || set +f
+  for line in ${lines[@]+"${lines[@]}"}; do
     if [ "$line" = "S" ]; then
       [ "${#seg[@]}" -gt 0 ] && check_words "$depth" "${seg[@]}"
       seg=()
     else
       seg+=("${line#W"$TAB"}")
     fi
-  done <<EOF
-$lexed
-EOF
+  done
   [ "${#seg[@]}" -gt 0 ] && check_words "$depth" "${seg[@]}"
   return 0
 }

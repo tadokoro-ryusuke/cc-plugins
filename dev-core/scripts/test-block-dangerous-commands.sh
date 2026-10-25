@@ -108,6 +108,25 @@ rm -rf /
 )"
 # shellcheck disable=SC2016
 expect block 'echo ${x:-$(echo $(true); rm -rf /)}'
+# ダブルクォートの区切り語の中のエスケープを外して読む（区切り語は A$B・A\B・A"B になる）
+# shellcheck disable=SC2016
+expect block 'echo $(cat <<"A\$B"
+hello
+A$B
+rm -rf /
+)'
+# shellcheck disable=SC2016
+expect block 'echo $(cat <<"A\\B"
+hello
+A\B
+rm -rf /
+)'
+# shellcheck disable=SC2016
+expect block 'echo $(cat <<"A\"B"
+hello
+A"B
+rm -rf /
+)'
 # 引用符で囲んだ heredoc の区切り語の中の ")" を、置換の終わりと見誤らない（Codex の3回目の再レビュー）
 # shellcheck disable=SC2016
 expect block "echo \$(cat <<')'
@@ -159,6 +178,13 @@ expect pass 'echo "$(date)" git push -f origin main'
 expect pass 'echo ${x:-'"'"'$(rm -rf /)'"'"'}'
 # shellcheck disable=SC2016
 expect pass 'echo ${x:-\$(rm -rf /)}'
+# ダブルクォートの区切り語は A$B なので、A\$B の行は本文のまま（本文は実行されない）
+# shellcheck disable=SC2016
+expect pass 'echo $(cat <<"A\$B"
+A\$B
+rm -rf /
+A$B
+)'
 # 引用符付きの heredoc の本文は実行されない（区切り語に ")" と引用符を含む）
 # shellcheck disable=SC2016
 expect pass "echo \$(cat <<'A)B'
