@@ -108,6 +108,13 @@ rm -rf /
 )"
 # shellcheck disable=SC2016
 expect block 'echo ${x:-$(echo $(true); rm -rf /)}'
+# 引用符で囲んだ heredoc の区切り語の中の ")" を、置換の終わりと見誤らない（Codex の3回目の再レビュー）
+# shellcheck disable=SC2016
+expect block "echo \$(cat <<')'
+hello
+)
+rm -rf /
+)"
 expect block "printf '%s' '<<EOF'
 rm -rf /
 EOF"
@@ -152,6 +159,13 @@ expect pass 'echo "$(date)" git push -f origin main'
 expect pass 'echo ${x:-'"'"'$(rm -rf /)'"'"'}'
 # shellcheck disable=SC2016
 expect pass 'echo ${x:-\$(rm -rf /)}'
+# 引用符付きの heredoc の本文は実行されない（区切り語に ")" と引用符を含む）
+# shellcheck disable=SC2016
+expect pass "echo \$(cat <<'A)B'
+'
+rm -rf /
+A)B
+)"
 # shellcheck disable=SC2016
 expect pass 'echo ${HOME}/build && rm -rf ./dist'
 
@@ -165,6 +179,15 @@ expect ask 'git branch -D old-branch'
 expect ask 'git push --force-with-lease origin main'
 
 # 字句解析の時間が長くなる大きな入力は、検査せずに確認に回す（通しも止めもしない）
+# 置換の入れ子が深すぎる入力も、awk の再帰の深さと処理量を抑えるため確認に回す
+# shellcheck disable=SC2016 # $( を展開せずに並べる
+deep_open=$(printf '$(%.0s' $(seq 1 100))
+deep_close=$(printf ')%.0s' $(seq 1 100))
+expect ask "echo ${deep_open}true${deep_close}; rm -rf /"
+# shellcheck disable=SC2016 # $( を展開せずに並べる
+deep_open=$(printf '$(%.0s' $(seq 1 4096))
+deep_close=$(printf ')%.0s' $(seq 1 4096))
+expect ask "echo ${deep_open}true${deep_close}; rm -rf /"
 expect ask "echo $(head -c 70000 /dev/zero | tr '\0' a)"
 expect pass "echo $(head -c 60000 /dev/zero | tr '\0' a)"
 

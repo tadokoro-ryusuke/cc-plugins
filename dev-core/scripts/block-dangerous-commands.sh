@@ -20,7 +20,8 @@
 #   ask（確認）    : 作業ツリーや未追跡ファイルを捨てる git 操作、git branch -D、
 #                    main / master への --force-with-lease
 #
-#   65536 文字を超えるコマンドは、字句解析に時間がかかるので検査せずに確認に回す。
+#   65536 文字を超えるコマンド、置換の入れ子が 32 段を超えるコマンド、字句解析が上限を超えたり
+#   異常終了したりしたコマンドは、検査しきれないので確認に回す。
 #
 # jq が無い・入力を解釈できないときは、理由を stderr に出して exit 1 で通す（non-blocking error）。
 set -u
@@ -57,12 +58,16 @@ lex_commands() {
     # "$(" の "(" の位置 p から、対応する ")" の位置を返す（無ければ 0）。本体を同じ字句解析で
     # 走査するので、引用符・エスケープ・コメント・heredoc・入れ子の置換の中の括弧は数えない
     function close_paren(s, p, n,    sv_mode, sv_depth, sv_word, sv_inword, sv_nh, sv_quiet, k, hd, hq, hs, j) {
+      # 入れ子が深すぎる入力は検査しきれない（awk の再帰の深さと処理量を抑える）
+      if (nest >= MAX_NEST) { overflow = 1; return 0 }
+      nest++
       sv_mode = mode; sv_depth = depth; sv_word = word; sv_inword = inword; sv_nh = nh; sv_quiet = quiet
       for (k = 1; k <= nh; k++) { hd[k] = hdelim[k]; hq[k] = hquoted[k]; hs[k] = hstrip[k] }
       quiet = 1
       j = lex(s, p + 1, n, 1)
       mode = sv_mode; depth = sv_depth; word = sv_word; inword = sv_inword; nh = sv_nh; quiet = sv_quiet
       for (k = 1; k <= nh; k++) { hdelim[k] = hd[k]; hquoted[k] = hq[k]; hstrip[k] = hs[k] }
+      nest--
       return j
     }
     # バッククォートの位置 i から、閉じるバッククォートの位置を返す（無ければ 0）
@@ -119,6 +124,8 @@ lex_commands() {
     function lex(s, start, n, stopclose,    i, c, nx, k, d, q, strip, j, line, t, body) {
       mode = "N"; depth = 0; word = ""; inword = 0; nh = 0
       for (i = start; i <= n; i++) {
+        if (overflow) return 0
+        if (++work > MAX_WORK) { overflow = 1; return 0 }
         c = substr(s, i, 1); nx = substr(s, i + 1, 1)
         if (mode == "S") { if (c == "\047") mode = "N"; else word = word c; continue }
         if (mode == "D") {
@@ -164,10 +171,12 @@ lex_commands() {
           emit(); i += 2; strip = 0
           if (substr(s, i, 1) == "-") { strip = 1; i++ }
           while (substr(s, i, 1) == " " || substr(s, i, 1) == "\t") i++
-          d = ""; q = 0
+          d = ""; q = 0; t = ""
           for (; i <= n; i++) {
             c = substr(s, i, 1)
-            if (c == "\047" || c == "\"" || c == "\\") { q = 1; continue }
+            if (t != "") { if (c == t) t = ""; else d = d c; continue }
+            if (c == "\047" || c == "\"") { t = c; q = 1; continue }
+            if (c == "\\") { q = 1; i++; d = d substr(s, i, 1); continue }
             if (c == " " || c == "\t" || c == "\n" || c == ";" || c == "&" || c == "|" || c == "<" || c == ">" || c == ")") break
             d = d c
           }
@@ -183,9 +192,11 @@ lex_commands() {
     }
     { text = (NR == 1) ? $0 : text "\n" $0 }
     END {
-      nd = 0; quiet = 0
+      nd = 0; quiet = 0; nest = 0; work = 0; overflow = 0
+      MAX_NEST = 32; MAX_WORK = 2000000
       lex(text, 1, length(text), 0)
-      for (m = 1; m <= nd; m++) lex(deferred[m], 1, length(deferred[m]), 0)
+      for (m = 1; m <= nd && !overflow; m++) lex(deferred[m], 1, length(deferred[m]), 0)
+      if (overflow) exit 3
     }
   '
 }
@@ -402,6 +413,11 @@ check_text() {
   local text="$1" depth="$2" line
   [ "$depth" -le "$MAX_DEPTH" ] || return 0
   local -a seg=()
+  local lexed
+  if ! lexed=$(lex_commands "$text"); then
+    add_ask "コマンドを字句解析しきれませんでした（置換の入れ子が深すぎるか、解析の上限を超えた）"
+    return 0
+  fi
   while IFS= read -r line; do
     if [ "$line" = "S" ]; then
       [ "${#seg[@]}" -gt 0 ] && check_words "$depth" "${seg[@]}"
@@ -410,7 +426,7 @@ check_text() {
       seg+=("${line#W"$TAB"}")
     fi
   done <<EOF
-$(lex_commands "$text")
+$lexed
 EOF
   [ "${#seg[@]}" -gt 0 ] && check_words "$depth" "${seg[@]}"
   return 0
