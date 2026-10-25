@@ -57,7 +57,10 @@ test("自動発火の正例は、Skill が呼ばれたかだけを無料の grad
     assert.match(grader, /tool: Skill/);
     const pattern = new RegExp(grader.match(/input_match: '(.*)'/)[1]);
     assert.ok(pattern.test('{"skill":"fixture:auto-skill"}'));
-    assert.ok(pattern.test('{"skill": "auto-skill"}'));
+    assert.ok(pattern.test('{"skill": "fixture:auto-skill"}'));
+    // 正例は対象のプラグインの名前で呼ばれたときだけ数える（名前空間の無い名前は組み込みや別のスキルかもしれない）
+    assert.ok(!pattern.test('{"skill":"auto-skill"}'));
+    assert.ok(!pattern.test('{"skill":"other:auto-skill"}'));
     assert.ok(!pattern.test('{"skill":"fixture:auto-skill-extra"}'));
     assert.ok(!existsSync(join(dir, "graders/behavior.md")), "既定では有料の llm grader を作らない");
   } finally {
@@ -73,6 +76,11 @@ test("負例は、両方のアームで Skill が一度も呼ばれないこと�
     assert.match(grader, /min: 0/);
     assert.match(grader, /max: 0/);
     assert.match(grader, /arm: both/);
+    // 負例は、名前空間の無い同名の呼び出しも対象の発火とみなす（安全側に倒す）
+    const pattern = new RegExp(grader.match(/input_match: '(.*)'/)[1]);
+    assert.ok(pattern.test('{"skill":"fixture:auto-skill"}'));
+    assert.ok(pattern.test('{"skill":"auto-skill"}'));
+    assert.ok(!pattern.test('{"skill":"other:auto-skill"}'));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -107,6 +115,45 @@ test("手動起動専用のスキルを、スラッシュなしで自動発火�
     // 同じスキルの負例は、割り込まないことを確かめる行動ガードとして振る舞いの grader だけで作る
     assert.ok(existsSync(join(root, "evals/plugin/manual-guard/graders/behavior.md")));
     assert.ok(!existsSync(join(root, "evals/plugin/manual-guard/graders/skill-not-fired.md")));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+function writeSuite(root, mutate) {
+  const path = join(root, "suite.json");
+  const suite = JSON.parse(readFileSync(path, "utf8"));
+  mutate(suite);
+  writeFileSync(path, JSON.stringify(suite));
+}
+
+test("ケースの id が kebab-case でない・重複する場合は、何も書かずに止める", () => {
+  for (const mutate of [
+    (suite) => { suite.cases[0].id = "../outside"; },
+    (suite) => { suite.cases[1].id = suite.cases[0].id; },
+  ]) {
+    const root = fixturePlugin();
+    try {
+      writeSuite(root, mutate);
+      const result = generate(root);
+      assert.equal(result.status, 1);
+      assert.ok(!existsSync(join(root, "evals/plugin")), "検証の前に書き始めない");
+      assert.ok(!existsSync(join(root, "evals/outside")));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("同じ id の手書きのケースがあれば、上書きせずに止める", () => {
+  const root = fixturePlugin();
+  try {
+    mkdirSync(join(root, "evals/plugin/auto-pos"), { recursive: true });
+    writeFileSync(join(root, "evals/plugin/auto-pos/prompt.md"), "hand written\n");
+    const result = generate(root);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /auto-pos/);
+    assert.equal(readFileSync(join(root, "evals/plugin/auto-pos/prompt.md"), "utf8"), "hand written\n");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -11,7 +11,9 @@
 //
 // 生成の規則:
 //   - 自動発火のケース（プロンプトが /<plugin>: で始まらない）: Skill ツールが呼ばれたかを tool_used で見る。
-//     正例は1回以上、負例は両方のアームで0回（arm: both）。無料の grader だけを使う
+//     正例は <plugin>:<skill> の呼び出しが1回以上、負例は名前空間の無い同名も含めて両方のアームで0回
+//     （arm: both）。無料の grader だけを使う
+//   - 書き始める前に、id（kebab-case・一意）、スキルの実在、同じ id の手書きのケースが無いことを確かめる
 //   - 明示起動のケース（/<plugin>:<skill> で始まる）: Skill ツールを経由しないので発火は見られない。
 //     --behavior のときだけ、expectedBehaviors / forbiddenBehaviors から llm grader を作って生成する
 //   - --behavior: すべてのケースに llm grader を足す（判事の呼び出しで費用がかかる）
@@ -19,7 +21,7 @@
 //     作らずに stderr へ出す。同じスキルの負例は行動ガードとして、--behavior のときだけ作る
 // 作り直すときは、前に生成したケース（.generated がある）だけを消す。results/ と手書きのケースは残す。
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -65,8 +67,13 @@ function escapeRegex(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function skillGrader(skill, shouldTrigger) {
-  const match = `'"skill"\\s*:\\s*"(?:[\\w-]+:)?${escapeRegex(skill)}"'`;
+// 正例は対象のプラグインの名前（plugin:skill）で呼ばれたときだけ数える。名前空間の無い同名の呼び出しは、
+// 組み込みや別のスキルかもしれないため。負例は名前空間の無い呼び出しも対象の発火とみなす（安全側に倒す）
+function skillGrader(plugin, skill, shouldTrigger) {
+  const name = `${escapeRegex(plugin)}:${escapeRegex(skill)}`;
+  const match = shouldTrigger
+    ? `'"skill"\\s*:\\s*"${name}"'`
+    : `'"skill"\\s*:\\s*"(?:${escapeRegex(plugin)}:)?${escapeRegex(skill)}"'`;
   return shouldTrigger
     ? `---\ntype: tool_used\ntool: Skill\ninput_match: ${match}\n---\n`
     : `---\ntype: tool_used\ntool: Skill\ninput_match: ${match}\nmin: 0\nmax: 0\narm: both\n---\n`;
@@ -83,10 +90,39 @@ function behaviorGrader(testCase) {
   return lines.join("\n");
 }
 
+function isSymlink(path) {
+  try {
+    return lstatSync(path).isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+// 書き始める前に全ケースを確かめる。id は kebab-case で一意（出力先の外へ書かない）、スキルが実在し、
+// 同じ id の手書きのケース（.generated が無い）を上書きしない。出力先とケースのディレクトリは symlink を拒む
+function validate(cases, out, pluginRoot, pluginName) {
+  const seen = new Set();
+  if (isSymlink(out)) fail(`${out} は symlink なので書かない`);
+  for (const testCase of cases) {
+    if (typeof testCase.id !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(testCase.id)) {
+      fail(`ケースの id は kebab-case でなければならない: ${JSON.stringify(testCase.id)}`);
+    }
+    if (seen.has(testCase.id)) fail(`ケースの id が重複している: ${testCase.id}`);
+    seen.add(testCase.id);
+    if (!skillFile(pluginRoot, testCase.skill)) fail(`${testCase.id}: スキル ${testCase.skill} が ${pluginName} に無い`);
+    const dir = join(out, testCase.id);
+    if (isSymlink(dir)) fail(`${dir} は symlink なので書かない`);
+    if (existsSync(dir) && !existsSync(join(dir, ".generated"))) {
+      fail(`${testCase.id}: 同じ id の手書きのケースが ${dir} にあるので上書きしない`);
+    }
+  }
+}
+
 function cleanGenerated(out) {
   if (!existsSync(out)) return;
   for (const name of readdirSync(out)) {
-    if (existsSync(join(out, name, ".generated"))) rmSync(join(out, name), { recursive: true, force: true });
+    const dir = join(out, name);
+    if (!isSymlink(dir) && existsSync(join(dir, ".generated"))) rmSync(dir, { recursive: true, force: true });
   }
 }
 
@@ -98,12 +134,12 @@ const suitePath = args.suite ? resolve(args.suite) : join(pluginRoot, "evals/ski
 const out = args.out ? resolve(args.out) : join(pluginRoot, "evals/plugin");
 const suite = JSON.parse(readFileSync(suitePath, "utf8"));
 
+validate(suite.cases, out, pluginRoot, pluginName);
 cleanGenerated(out);
 const generated = [];
 const skippedExplicit = [];
 for (const testCase of suite.cases) {
   const path = skillFile(pluginRoot, testCase.skill);
-  if (!path) fail(`${testCase.id}: スキル ${testCase.skill} が ${pluginName} に無い`);
   const explicit = testCase.prompt.startsWith(`/${pluginName}:`);
   // 手動起動専用のスキルは Skill ツールで発火しないので、発火の grader は意味を持たない。負例は普段の作業に
   // 割り込まないことを確かめる行動ガードとして、明示起動と同じく振る舞いの grader だけで扱う
@@ -133,7 +169,7 @@ for (const testCase of suite.cases) {
   ].join("\n"));
   if (!behaviorOnly) {
     writeFileSync(join(dir, "graders", testCase.shouldTrigger ? "skill-fired.md" : "skill-not-fired.md"),
-      skillGrader(testCase.skill, testCase.shouldTrigger));
+      skillGrader(pluginName, testCase.skill, testCase.shouldTrigger));
   }
   if (args.behavior) writeFileSync(join(dir, "graders/behavior.md"), behaviorGrader(testCase));
   writeFileSync(join(dir, ".generated"), "");

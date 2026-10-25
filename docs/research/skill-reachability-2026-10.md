@@ -9,7 +9,7 @@
 
 ## 1. 隔離した環境での自動発火（`claude plugin eval`）
 
-対象のプラグインだけを読み込んだ環境で、行動ケース（`dev-core/evals/skill-behavior-cases.json`）のうち自動発火のケースを流した。ケースは `scripts/gen-plugin-evals.mjs` で生成し、Skill ツールが呼ばれたかだけを無料の grader で見た。
+対象のプラグインだけを読み込んだ環境で、行動ケース（`dev-core/evals/skill-behavior-cases.json`）のうち自動発火のケースを流した。ケースは `scripts/gen-plugin-evals.mjs` で生成し、Skill ツールが呼ばれたかだけを無料の grader で見た。この計測の grader は、名前空間の無い同名の呼び出しも発火に数える版だった（今の生成スクリプトは、正例では `dev-core:<skill>` の呼び出しだけを数える）。
 
 - 対象: dev-core 5.1.0（このブランチの作業ツリー）。正例 11 件、負例 5 件
 - 実行: `claude plugin eval ./dev-core --eval-dir evals/plugin --runs 1 --ablation none --no-publish --trust-plugin --max-cost-usd 5 --model claude-opus-5-5 -j 4`
@@ -43,6 +43,8 @@
 - 対象: **インストール済みの版**（dev-core 5.0.0、hotl-engineering 2.0.1 など）。作業ツリーの版ではない
 - 安全のため、使えるツールを Skill と読み取り系（Read・Glob・Grep）に絞り、MCP を読み込まなかった（`--tools`、`--strict-mcp-config`）。起動直後の init イベントで、それ以外のツールが無いことを確かめてから流した
 - `--max-turns 2`
+- **この計測では hooks が有効だった**（スクリプトの初版）。動いたのは、利用者の SessionStart（セッションの状態の記録）、インストール済みの dev-core 5.0.0・codex companion・compact-plus の SessionStart / UserPromptSubmit / Stop / SessionEnd など。どれもセッションの記録やコンテキストの注入で、外部への送信や破壊的な操作をするものは無かった。ただし dev-core の SessionStart が注入する規律の文面は、スキルの選び方に影響しうる。hooks はツールの一覧に出ず、利用者の権限で書き込みや通信ができるので、スクリプトは今は既定で hooks を切る（`--settings '{"disableAllHooks":true}'`。`--with-hooks` で有効にする）
+- 判定は `dev-core:<skill>` の発火だけを対象の発火として数えた。組み込みの `run`・`code-review` のように名前空間の無い名前は別のスキルとして扱った
 
 | ケース | 期待 | 発火したスキル | 判定 |
 |---|---|---|---|
