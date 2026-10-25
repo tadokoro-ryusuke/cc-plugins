@@ -232,6 +232,13 @@ if [ "$code" -ne 1 ]; then
   failures=$((failures + 1))
 fi
 
+# heredoc の区切り語の書き方ごとに、bash 自身の動作（実行されるか）と判定が一致するかを突き合わせる
+if command -v python3 >/dev/null 2>&1; then
+  if ! (cd "$work" && python3 "$script_dir/test-heredoc-grid.py" "$hook" >&2); then
+    failures=$((failures + 1))
+  fi
+fi
+
 if [ "$failures" -ne 0 ]; then
   echo "$failures block-dangerous-commands case(s) failed" >&2
   exit 1
