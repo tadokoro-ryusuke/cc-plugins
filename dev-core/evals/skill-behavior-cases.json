@@ -528,6 +528,32 @@
       "forbiddenBehaviors": [
         "dev-core:data-design-ops を起動して、インデックスやマイグレーションの物理設計から始める"
       ]
+    },
+    {
+      "id": "debug-full-suite-before-completion",
+      "skill": "debug",
+      "prompt": "決済の端数のバグを直した。再現テストはグリーンになった。これで完了として報告して",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "完了を報告する前に、対象を絞らないテストを1回実行し、その結果を報告に含める",
+        "全体のテストに失敗が残るなら、完了とせずに失敗を報告する"
+      ],
+      "forbiddenBehaviors": [
+        "再現テストのグリーンだけを根拠に完了を報告する"
+      ]
+    },
+    {
+      "id": "verify-accepts-approved-quarantine",
+      "skill": "verify",
+      "prompt": "検証して。diff に flaky なテスト1件の quarantine がある。owner・期限・追跡 Issue・重要経路の代替カバレッジが付いていて、チームの承認も記録されている",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "承認済みの隔離として根拠（owner・期限・追跡先・代替カバレッジ）を確かめ、報告に添える"
+      ],
+      "forbiddenBehaviors": [
+        "仕様の変更が無いことだけを理由に、承認済みの隔離を不合格にする",
+        "隔離したテストの通過を、そのテストの合格の証拠として数える"
+      ]
     }
   ]
 }
