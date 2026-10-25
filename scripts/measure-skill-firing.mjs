@@ -30,6 +30,7 @@ const SAFE_TOOLS = new Set(["Read", "Glob", "Grep", "Skill"]);
 const INIT_TIMEOUT_MS = 60_000;
 const RUN_TIMEOUT_MS = 300_000;
 const STDERR_LIMIT = 8_192;
+const CLOSE_TIMEOUT_MS = 10_000;
 
 // stream-json の1行を調べる。init ならツールの一覧の中で安全でないものを、Skill の呼び出しなら
 // スキルの名前を、result なら終わり方を返す。関係のない行は null
@@ -71,7 +72,13 @@ export function verdict(testCase, fired, plugin) {
   return testCase.shouldTrigger ? "fail" : "pass";
 }
 
-function runCase(prompt, options) {
+// 1件のプロンプトを流す。状態（status）は ok・error（この run だけ判定から外す）・unsafe と abort
+// （測定全体を中止する）・dry-run のどれか。どの終わり方でも、一時ディレクトリを消してから1回だけ返す
+export function runCase(prompt, options) {
+  const command = options.command ?? "claude";
+  const initTimeoutMs = options.initTimeoutMs ?? INIT_TIMEOUT_MS;
+  const runTimeoutMs = options.runTimeoutMs ?? RUN_TIMEOUT_MS;
+  const closeTimeoutMs = options.closeTimeoutMs ?? CLOSE_TIMEOUT_MS;
   return new Promise((resolvePromise) => {
     const cwd = mkdtempSync(join(tmpdir(), "skill-firing-"));
     const args = ["-p", "--output-format", "stream-json", "--verbose",
@@ -79,38 +86,61 @@ function runCase(prompt, options) {
       "--model", options.model];
     if (!options.withHooks) args.push("--settings", JSON.stringify({ disableAllHooks: true }));
     args.push(prompt);
-    const state = { fired: [], result: null, status: null, detail: "", stderr: "" };
+    const state = { fired: [], result: null, status: null, detail: "", stderr: "", initSeen: false, cwd };
+    const timers = [];
     let buffer = "";
     let settled = false;
+    let stopping = false;
     let child;
 
-    // どの終わり方でも、子が閉じてから一時ディレクトリを消し、結果を1回だけ返す
-    const stop = (status, detail) => {
+    const setStatus = (status, detail) => {
       if (state.status === null) { state.status = status; state.detail = detail; }
-      if (child && child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
     };
     const finish = () => {
       if (settled) return;
       settled = true;
-      clearTimeout(initTimer);
-      clearTimeout(runTimer);
+      for (const timer of timers) clearTimeout(timer);
       rmSync(cwd, { recursive: true, force: true });
       resolvePromise(state);
     };
-    const initTimer = setTimeout(() => stop("error", "init が時間内に来なかった"), INIT_TIMEOUT_MS);
-    const runTimer = setTimeout(() => stop("error", "run が時間内に終わらなかった"), RUN_TIMEOUT_MS);
+    // 止めるのは1回だけ。子のプロセスグループごと止め（孫も含む）、close を待つ。close が来なければ
+    // （グループの外の子孫が出力を持ち続けるなど）、出力を閉じて中止として返す
+    const stop = (status, detail) => {
+      setStatus(status, detail);
+      if (stopping) return;
+      stopping = true;
+      try {
+        process.kill(-child.pid, "SIGKILL");
+      } catch {
+        try { child.kill("SIGKILL"); } catch { /* 既に終わっている */ }
+      }
+      timers.push(setTimeout(() => {
+        state.status = "abort";
+        state.detail = `${state.detail}（子の終了を確認できなかった）`;
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+        finish();
+      }, closeTimeoutMs));
+    };
 
     try {
-      child = spawn("claude", args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+      child = spawn(command, args, { cwd, stdio: ["ignore", "pipe", "pipe"], detached: true });
     } catch (error) {
-      stop("error", `claude を起動できなかった: ${error.message}`);
+      setStatus("abort", `${command} を起動できなかった: ${error.message}`);
       finish();
       return;
     }
     child.on("error", (error) => {
-      stop("error", `claude を起動できなかった: ${error.message}`);
-      finish();
+      // 起動できなかった（pid が無い）なら中止。動いている子のエラーは記録だけして、止め直さない
+      if (child.pid === undefined) {
+        setStatus("abort", `${command} を起動できなかった: ${error.message}`);
+        finish();
+      } else {
+        setStatus("error", `子プロセスのエラー: ${error.message}`);
+      }
     });
+    timers.push(setTimeout(() => { if (!state.initSeen) stop("abort", "init が時間内に来なかった"); }, initTimeoutMs));
+    timers.push(setTimeout(() => stop("error", "run が時間内に終わらなかった"), runTimeoutMs));
     // stderr は詰まらないように読み続け、診断用に先頭だけ残す
     child.stderr.on("data", (chunk) => {
       if (state.stderr.length < STDERR_LIMIT) state.stderr = (state.stderr + chunk).slice(0, STDERR_LIMIT);
@@ -123,9 +153,12 @@ function runCase(prompt, options) {
         buffer = buffer.slice(newline + 1);
         const found = inspectEvent(line);
         if (found?.kind === "init") {
-          clearTimeout(initTimer);
-          if (found.unsafe.length > 0) stop("unsafe", `安全でないツールが使える状態だった: ${found.unsafe.join(", ")}`);
-          else if (options.dryRun) stop("dry-run", "");
+          if (found.unsafe.length > 0) {
+            stop("unsafe", `安全でないツールが使える状態だった: ${found.unsafe.join(", ")}`);
+          } else {
+            state.initSeen = true;
+            if (options.dryRun) stop("dry-run", "");
+          }
         } else if (found?.kind === "skills") {
           state.fired.push(...found.skills);
         } else if (found?.kind === "result") {
@@ -134,9 +167,14 @@ function runCase(prompt, options) {
       }
     });
     child.on("close", () => {
-      if (state.status === null) {
-        state.status = observation(state.result);
-        if (state.status === "error") state.detail = `result: ${state.result?.subtype ?? "無し"}`;
+      if (!state.initSeen) {
+        // ツールの一覧を確かめていない run は、result が成功でも数えず、測定全体を中止する
+        if (state.status === null || state.status === "dry-run") {
+          state.status = "abort";
+          state.detail = "init を受け取らないまま終わった";
+        }
+      } else if (state.status === null) {
+        setStatus(observation(state.result), state.result ? `result: ${state.result.subtype}` : "result が無い");
       }
       finish();
     });
@@ -173,7 +211,7 @@ async function main() {
   console.log("| id | 期待 | 発火したスキル | 判定 | 費用(USD) |\n|---|---|---|---|---|");
   for (const testCase of cases) {
     const state = await runCase(testCase.prompt, options);
-    if (state.status === "unsafe") {
+    if (state.status === "unsafe" || state.status === "abort") {
       console.error(`中止: ${testCase.id}: ${state.detail}`);
       process.exitCode = 1;
       return;
