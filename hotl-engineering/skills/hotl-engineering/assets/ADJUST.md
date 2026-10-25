@@ -41,6 +41,9 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
 - [ ] レビュー job の `--allowedTools` は、PR へのコメント手段と判定ファイル1つへの書き込み(`Edit(//<絶対パス>)`)
       だけにする。`github_token: ${{ github.token }}` を外さない。判定ファイルのディレクトリはエージェントの前に
       新しく作る(前回の判定を残さない)
+- [ ] エージェントの `claude_args` から `--setting-sources user` と `--strict-mcp-config` を外さない。`--allowedTools` は
+      事前承認の追加で上限ではないため、外すとリポジトリ(PR の head を含む)の `.claude/settings.json` の allow や
+      `.mcp.json` で権限が広がる
 
 ## workflows/agent-implement.yml
 - [ ] Issue テンプレート(受入条件必須)を .github/ISSUE_TEMPLATE/ に併設する
@@ -50,10 +53,12 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
 - [ ] 自律実装を有効化する前に environment reviewer を設定し、承認時点の Issue 本文/revision を
       保存する。編集可能な Issue 本文は、恒久的な承認スナップショットにならない
 - [ ] `--allowedTools` の lint / typecheck / test のコマンドを、プロジェクトの実在するスクリプトに置き換える。
-      依存のインストールはエージェントの前の step で行い、エージェントには install を許さない。push 先は
-      Issue のブランチに固定したままにし、`gh api`・merge・force push を足さない
-- [ ] テストはリポジトリのコードを実行し、job の認証情報が環境にある。外部者が Issue を起票できる環境では、
-      environment reviewer と CP1 での本文確定を必ず組み合わせる
+      依存のインストールはエージェントの前の step で行い、エージェントには install を直接のコマンドとして許さない。
+      push 先は Issue のブランチに固定したままにし、`gh api`・merge・force push を足さない。`gh pr create` への
+      `--repo` / `--head` / `--draft=` を拒む `--disallowedTools` と、PR を Draft に戻す step は外さない
+- [ ] テストと git commit(フック)はリポジトリのコードを実行し、job の認証情報が環境にある。その子プロセスの中の
+      操作は事前承認の範囲では制限されない。外部者が Issue を起票できる環境では、environment reviewer と CP1 での
+      本文確定を必ず組み合わせる
 
 ## workflows/eval-gate.yml(エージェント系のみ)
 - [ ] 発火 paths(prompts/ 等)→ 実際のプロンプト・検索ロジックの置き場所

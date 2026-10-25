@@ -44,9 +44,23 @@ def agent_step(steps):
     return index, steps[index]
 
 
+# エージェントごとに使えるツールの集合（--tools）。上流の action は同じフラグの複数回指定を累積するので、
+# 検査も全部の指定を合わせて行う
+AGENT_TOOLS = {("incident-triage.yml", "triage"): {"Read", "Grep", "Glob", "Bash"},
+               ("ai-review.yml", "review"): {"Read", "Grep", "Glob", "Bash", "Write"},
+               ("ai-review.yml", "deep-review"): {"Read", "Grep", "Glob", "Bash", "Write"},
+               ("agent-implement.yml", "implement"): {"Read", "Grep", "Glob", "Edit", "MultiEdit", "Write", "Bash"}}
+FLAG_ALIASES = {"--allowedTools": ("--allowedTools", "--allowed-tools"),
+                "--disallowedTools": ("--disallowedTools", "--disallowed-tools"),
+                "--tools": ("--tools",)}
+
+
 def tool_list(claude_args, flag):
-    match = re.search(flag + r'\s+"([^"]*)"', claude_args)
-    return [tool.strip() for tool in match.group(1).split(",")] if match else []
+    tools = []
+    for alias in FLAG_ALIASES.get(flag, (flag,)):
+        for match in re.finditer(re.escape(alias) + r'\s+"([^"]*)"', claude_args):
+            tools += [tool.strip() for tool in match.group(1).split(",") if tool.strip()]
+    return tools
 
 
 def is_read_only_triage_tool(tool):
@@ -291,6 +305,19 @@ echo "https://github.com/fixture/repo/issues/1"
         gate = workflow("eval-gate.yml")["jobs"]["eval"]
         self.assertEqual(gate["env"]["JUDGE_MODEL"], "${{ vars.HOTL_JUDGE_MODEL }}")
 
+    def test_agents_get_only_their_tools_and_ignore_repository_settings(self):
+        # --allowedTools は事前承認の追加で、上限ではない。リポジトリ（PR の head を含む）の
+        # .claude/settings.json の allow や .mcp.json で権限が広がらないよう、user 設定だけを読む
+        for (name, job_name), expected in AGENT_TOOLS.items():
+            with self.subTest(workflow=name, job=job_name):
+                _, agent = agent_step(workflow(name)["jobs"][job_name]["steps"])
+                claude_args = agent["with"]["claude_args"]
+                self.assertIn("--setting-sources user", claude_args)
+                self.assertIn("--strict-mcp-config", claude_args)
+                self.assertEqual(set(tool_list(claude_args, "--tools")), expected)
+                bare_disallowed = {tool for tool in tool_list(claude_args, "--disallowedTools") if "(" not in tool}
+                self.assertFalse(bare_disallowed & expected)
+
     def test_review_agents_can_only_comment_and_write_their_verdict(self):
         jobs = workflow("ai-review.yml")["jobs"]
         for job_name, folder in REVIEW_VERDICT_DIRS.items():
@@ -331,8 +358,38 @@ echo "https://github.com/fixture/repo/issues/1"
             "Bash(git diff:*)", "Bash(git add:*)", "Bash(git commit:*)", f"Bash(git push -u origin {branch})",
             "Bash(pnpm lint)", "Bash(pnpm typecheck)", "Bash(pnpm test:*)", "Bash(gh pr create --draft:*)"})
         self.assertLessEqual({tool for tool in allowed if not tool.startswith("Bash")}, file_tools)
+        # gh pr create の後ろに付けられる引数で、別リポジトリ・別ブランチ・Draft 解除をさせない
+        disallowed = set(tool_list(claude_args, "--disallowedTools"))
+        self.assertLessEqual({"Bash(gh pr create *--repo*)", "Bash(gh pr create * -R *)",
+                              "Bash(gh pr create *--head*)", "Bash(gh pr create * -H *)",
+                              "Bash(gh pr create *--draft=*)"}, disallowed)
         # 依存はエージェントの前にロックファイルどおり入れる(エージェントには install を許さない)
         self.assertTrue(any("pnpm install --frozen-lockfile" in step.get("run", "") for step in steps[:index]))
+
+    def test_agent_pull_request_is_kept_in_draft(self):
+        # 許可の照合をすり抜けて Ready にされても、信頼側の step で Draft に戻す
+        steps = workflow("agent-implement.yml")["jobs"]["implement"]["steps"]
+        index, _ = agent_step(steps)
+        guard = next(step for step in steps[index + 1:] if step.get("id") == "keep-draft")
+        self.assertEqual(guard.get("if"), "always()")
+        mock_gh = """#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$GH_CALLS"
+case "$*" in "pr list"*) printf '%s\\n' 12;; esac
+"""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            (bin_dir / "gh").write_text(mock_gh)
+            (bin_dir / "gh").chmod(0o755)
+            calls = root / "calls"
+            calls.write_text("")
+            result = run_step(guard, {"GH_CALLS": str(calls), "BRANCH": "agent/issue-7"}, root,
+                              path_prefix=str(bin_dir))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            lines = calls.read_text().splitlines()
+            self.assertIn("agent/issue-7", lines[0])
+            self.assertIn("pr ready 12 --undo", lines)
 
     def test_ci_does_not_claim_changed_file_coverage(self):
         # jest-coverage-report-action の threshold は全体カバレッジで、入力形式も vitest と合わない

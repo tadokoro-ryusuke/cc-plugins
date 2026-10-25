@@ -19,7 +19,7 @@
 - named export を基本とする(default export は Next.js の規約ファイルのみ)
 - サーバー側の入力検証は zod。クライアント側の検証だけで済ませない
 - エラーは握りつぶさない。`src/lib/logger.ts` 経由で構造化ログに出す
-- テスト: Vitest。受入条件1つにつき最低1テスト。外部I/Oは MSW でモック
+- テスト: Vitest。受入条件1つにつき最低1テスト。外部 HTTP は MSW でモック。自前の DB(PostgreSQL)はモックせず、Testcontainers 等の実物で integration テストする
 
 ## 開発コマンド
 ```bash

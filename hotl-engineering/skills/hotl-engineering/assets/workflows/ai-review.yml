@@ -106,7 +106,8 @@ jobs:
         with:
           use_bedrock: "true"
           # 使えるのは読み取り、PR へのコメント(上流の PR レビュー例と同じ手段)、判定ファイル1つへの書き込みだけ。
-          # github_token を明示し、書き込み権限を持つ Claude GitHub App トークンを渡さない
+          # github_token を明示し、書き込み権限を持つ Claude GitHub App トークンを渡さない。
+          # リポジトリ(PR の head を含む)の .claude/settings.json や .mcp.json で権限が広がらないよう、user 設定だけを読む
           github_token: ${{ github.token }}
           prompt: |
             このPRをレビューしてください。CLAUDE.md のレビュー規範に従うこと。
@@ -134,6 +135,8 @@ jobs:
           claude_args: |
             --max-turns 5
             --model ${{ vars.HOTL_MODEL_LIGHT }}
+            --setting-sources user
+            --strict-mcp-config
             --tools "Read,Grep,Glob,Bash,Write"
             --allowedTools "Read,Grep,Glob,mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Edit(/${{ runner.temp }}/review-light/verdict.json)"
 
@@ -223,6 +226,8 @@ jobs:
           claude_args: |
             --max-turns 8
             --model ${{ vars.HOTL_MODEL_DEEP }}
+            --setting-sources user
+            --strict-mcp-config
             --tools "Read,Grep,Glob,Bash,Write"
             --allowedTools "Read,Grep,Glob,mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Edit(/${{ runner.temp }}/review-deep/verdict.json)"
 

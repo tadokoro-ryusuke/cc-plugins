@@ -17,12 +17,16 @@
 #     届く経路)。外部者が Issue を起票できる環境では、environment approval の追加・
 #     起票者の trusted 判定・CP1 で人間が本文を確定してからラベルを付ける運用を
 #     必ず組み合わせること
-#   - エージェントに与えるコマンドは --allowedTools で明示したものだけ(計画コメント、
-#     Issue のブランチの作成と push、lint / typecheck / test、Draft PR の作成)。
-#     push 先は Issue のブランチに固定し、gh api・merge・force push・依存の追加は与えない
-#   - 残るリスク: lint / typecheck / test はリポジトリのコードを実行し、この job の
-#     認証情報(書き込み可能なトークン、Bedrock 用の AWS 認証)が環境にある。Issue 経由の
-#     prompt injection で書かれたテストが、それを読み出しうる。上の承認運用で抑える
+#   - エージェントに直接のコマンドとして事前承認するのは --allowedTools で明示したものだけ
+#     (計画コメント、Issue のブランチの作成と push、lint / typecheck / test、Draft PR の作成)。
+#     push 先は Issue のブランチに固定し、gh api・merge・force push・依存の追加は与えない。
+#     gh pr create に --repo / --head / --draft= を付けることは --disallowedTools で拒み、
+#     作られた PR はエージェントの後の step で Draft に戻す。リポジトリ側の settings と
+#     .mcp.json は読まない(--setting-sources user / --strict-mcp-config)
+#   - 残るリスク: lint / typecheck / test と git commit(フック)はリポジトリのコードを実行し、
+#     この job の認証情報(書き込み可能なトークン、Bedrock 用の AWS 認証)が環境にある。
+#     Issue 経由の prompt injection で書かれたコードが、それを読み出しうる。その子プロセスの
+#     中の操作は上の事前承認では制限されない。上の承認運用で抑える
 # =============================================================================
 name: Agent Implement
 
@@ -115,21 +119,44 @@ jobs:
                いる場合は実装せず、質問コメントを投稿して終了すること
             2. `git switch -c agent/issue-${{ github.event.issue.number }}` でブランチを作成
             3. CLAUDE.md の規約に従い実装。受入条件ごとに対応するテストを先に
-               書く(TDD)。テストなしの実装は不可。テストを消す・skip する・期待値を
-               緩めて通すことはしない
-            4. `pnpm lint`・`pnpm typecheck`・`pnpm test` を実行し、全部通るまで修正
+               書く(TDD)。テストなしの実装は不可
+            4. `pnpm lint`・`pnpm typecheck`・`pnpm test` を実行し、全部通るまで修正。
+               仕様とテストが矛盾して通せないと判断したら、テストも実装も曲げず、根拠を
+               書いた質問コメントを Issue に投稿して終了すること
             5. `git add`・`git commit` の後、`git push -u origin agent/issue-${{ github.event.issue.number }}`
                で push し、`gh pr create --draft` で Draft PR を作成。PR 本文には以下を必ず含める:
                - `Closes #${{ github.event.issue.number }}`
                - 受入条件と検証結果の対応表
                - 自己申告のリスクポイント(人間レビュアーが見るべき箇所)
+               - 変更・削除した既存テストとその根拠(無ければ「なし」)
 
             ## 禁止事項
             - Issue に書かれていないスコープの変更(気づいた改善は別Issueを起票)
             - 依存パッケージの追加(必要なら計画コメントで承認を求める)
             - migration を含む変更での既存カラム削除
+            - 既存のテスト・スナップショット・カバレッジ閾値を、Issue の受入条件に根拠のない形で
+              削除・skip 化・緩和して通すこと
           claude_args: |
             --max-turns 30
             --model ${{ vars.HOTL_MODEL_LIGHT }}
+            --setting-sources user
+            --strict-mcp-config
             --tools "Read,Grep,Glob,Edit,MultiEdit,Write,Bash"
             --allowedTools "Read,Grep,Glob,Edit,MultiEdit,Write,Bash(gh issue comment ${{ github.event.issue.number }}:*),Bash(git switch -c agent/issue-${{ github.event.issue.number }}),Bash(git status),Bash(git diff:*),Bash(git add:*),Bash(git commit:*),Bash(git push -u origin agent/issue-${{ github.event.issue.number }}),Bash(pnpm lint),Bash(pnpm typecheck),Bash(pnpm test:*),Bash(gh pr create --draft:*)"
+            --disallowedTools "Bash(gh pr create *--repo*),Bash(gh pr create * -R *),Bash(gh pr create *--head*),Bash(gh pr create * -H *),Bash(gh pr create *--draft=*)"
+
+      # エージェントが作った PR を、信頼側の step で Draft に揃える
+      # (許可の照合をすり抜けて Ready にされても、Ready にするのは人間の仕事のままにする)
+      - name: Keep the agent pull request in draft
+        id: keep-draft
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: agent/issue-${{ github.event.issue.number }}
+        run: |
+          gh pr list --head "$BRANCH" --state open --json number,isDraft \
+            --jq '.[] | select(.isDraft == false) | .number' |
+            while read -r number; do
+              gh pr ready "$number" --undo
+            done

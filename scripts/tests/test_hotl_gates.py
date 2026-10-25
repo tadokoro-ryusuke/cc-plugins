@@ -116,6 +116,21 @@ class EvalGateTests(unittest.TestCase):
             self.assertIn("JUDGE_MODEL", stderr.getvalue())
             self.assertFalse((root / "out").exists())
 
+    def test_cli_without_judge_model_exits_before_evaluating(self):
+        # import 時の既定値も含めて確かめるため、環境変数を外した別プロセスで CLI として実行する
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "anthropic.py").write_text("def AnthropicBedrock(**kwargs):\n    return None\n")
+            env = {key: value for key, value in os.environ.items() if key != "JUDGE_MODEL"}
+            env["PYTHONPATH"] = str(root)
+            result = subprocess.run(
+                [sys.executable, str(ASSETS / "evals/run_evals.py"), "--dataset", str(root / "missing.jsonl"),
+                 "--thresholds", str(root / "missing.json"), "--out", str(root / "out")],
+                env=env, capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn("JUDGE_MODEL", result.stderr)
+            self.assertFalse((root / "out").exists())
+
     def cases(self):
         return [{"id": "must", "category": "answer", "query": "fixture", "suite": ["smoke"], "must_pass": True},
                 {"id": "ordinary", "category": "answer", "query": "fixture", "suite": ["smoke"]}]
