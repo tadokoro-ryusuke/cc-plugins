@@ -16,6 +16,8 @@ references の内容変更・description の意味的変更は PR で提案し�
   必要なのは従来どおり）。summary は `judge_axis_pass_rate`・`judge_axis_mean`・`judge_pass_score` を持ち、
   `judge_total_mean` は無くなった。軸ごとの合格率を持たない baseline や、別の合格線で作った baseline は、
   理由を出して止まる（比較を黙って飛ばさない）。ADJUST.md に移行手順を足した
+- run_evals.py: 率の閾値（下限・許容低下幅など）と baseline の軸ごとの合格率は、0〜1 の有限の数だけを受け付ける。
+  NaN・null・範囲外は、比較を黙って偽にしてゲートを開けるので、評価を始める前に止める
 - eval-design.md: L2 は段階尺度を診断に使い、ゲートは合格線での二値化にする理由を書いた。L3 の較正を
   「±1点一致率 85%」から、合格線で二値化した軸ごとの一致率（明確なケースでおよそ 90%）に変えた
 - judge_rubric.md: 存在しない evals/README.md を指していた較正記録の参照を直した

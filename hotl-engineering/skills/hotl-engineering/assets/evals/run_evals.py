@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import statistics
@@ -52,9 +53,17 @@ def ignored_sampling_keys(cfg: dict) -> list[str]:
 
 
 # 2.1.0 で合計点のゲートから軸ごとの合格率のゲートに変えた。古いキーは黙って無視せず止める
-THRESHOLD_KEYS = ("must_pass_rate", "must_not_violations", "recall_at_5_drop_allowed",
-                  "judge_axis_pass_rate_floor", "judge_axis_pass_rate_drop_allowed")
+RATE_THRESHOLD_KEYS = ("must_pass_rate", "recall_at_5_drop_allowed",
+                       "judge_axis_pass_rate_floor", "judge_axis_pass_rate_drop_allowed")
+THRESHOLD_KEYS = (*RATE_THRESHOLD_KEYS, "must_not_violations")
 LEGACY_THRESHOLD_KEYS = ("judge_total_floor", "judge_total_drop_allowed")
+# 境界ちょうどの値(例: 0.9 と 1.0 - 0.1)を浮動小数点の誤差で落とさないための許容
+EPSILON = 1e-9
+
+
+def is_fraction(value) -> bool:
+    """0 以上 1 以下の有限の数か。bool・文字列・None・NaN・無限大は認めない(比較を黙って偽にするため)"""
+    return type(value) in (int, float) and math.isfinite(value) and 0 <= value <= 1
 
 
 def validate_thresholds(thresholds: dict) -> None:
@@ -64,6 +73,12 @@ def validate_thresholds(thresholds: dict) -> None:
             "judge_axis_pass_rate_floor / judge_axis_pass_rate_drop_allowed (see CHANGELOG)")
     if missing := [key for key in THRESHOLD_KEYS if key not in thresholds]:
         raise ValueError(f"thresholds are missing {missing}")
+    for key in RATE_THRESHOLD_KEYS:
+        if not is_fraction(thresholds[key]):
+            raise ValueError(f"threshold {key} must be a finite number from 0 to 1, got {thresholds[key]!r}")
+    violations = thresholds["must_not_violations"]
+    if type(violations) is not int or violations < 0:
+        raise ValueError(f"threshold must_not_violations must be a non-negative integer, got {violations!r}")
 
 
 def judge_pass_score(cfg: dict) -> int:
@@ -82,6 +97,10 @@ def load_baseline(path: str, pass_score: int) -> dict:
         raise ValueError(
             "baseline has no per-axis judge pass rates (it was written before hotl 2.1.0, which "
             "gated on judge_total_mean): regenerate the baseline with this run_evals.py")
+    # 欠けた軸(judge まで進んだケースが無い失敗実行など)を baseline にすると、その軸の回帰比較が消える
+    if bad := {axis: rate for axis, rate in rates.items() if not is_fraction(rate)}:
+        raise ValueError(f"baseline judge pass rates must be finite numbers from 0 to 1, got {bad!r}: "
+                         "regenerate the baseline from a complete run")
     if baseline.get("judge_pass_score") != pass_score:
         raise ValueError(
             f"baseline was scored with judge pass_score {baseline.get('judge_pass_score')}, "
@@ -255,7 +274,7 @@ def gate(summary: dict, thresholds: dict, baseline: dict | None) -> tuple[bool, 
         failures.append("judge まで進んだケースが0件")
     for axis in AXES:
         rate = rates[axis]
-        if rate is not None and rate < thresholds["judge_axis_pass_rate_floor"]:
+        if rate is not None and rate < thresholds["judge_axis_pass_rate_floor"] - EPSILON:
             failures.append(
                 f"judge {axis} の合格率 {rate:.0%} < 絶対下限 {thresholds['judge_axis_pass_rate_floor']:.0%}"
             )
@@ -273,7 +292,7 @@ def gate(summary: dict, thresholds: dict, baseline: dict | None) -> tuple[bool, 
         drop = thresholds["judge_axis_pass_rate_drop_allowed"]
         for axis in AXES:
             rate, b_rate = rates[axis], baseline["judge_axis_pass_rate"][axis]
-            if rate is not None and b_rate is not None and rate < b_rate - drop:
+            if rate is not None and rate < b_rate - drop - EPSILON:
                 failures.append(
                     f"judge {axis} の回帰: 合格率 {rate:.0%} < baseline {b_rate:.0%} - {drop:.0%}"
                 )
