@@ -59,21 +59,26 @@ ACCUMULATED_FLAGS = ("--allowedTools", "--disallowedTools")
 
 def parse_claude_args(claude_args):
     """claude_args を shell と同じ規則で読み、累積するフラグと最後の指定が効くフラグに分ける。"""
-    tokens = shlex.split(claude_args)
+    # 上流と同じく、# で始まる行を除き、累積するフラグは後ろに続く値をすべて取り込む
+    text = "\n".join(line for line in claude_args.splitlines() if not line.strip().startswith("#"))
+    tokens = shlex.split(text)
     accumulated = {flag: [] for flag in ACCUMULATED_FLAGS}
     last = {}
     i = 0
     while i < len(tokens):
         name = FLAG_ALIASES.get(tokens[i], tokens[i])
-        value = None
-        if i + 1 < len(tokens) and not tokens[i + 1].startswith("--"):
-            value = tokens[i + 1]
+        values = []
+        while i + 1 < len(tokens) and not tokens[i + 1].startswith("--"):
+            values.append(tokens[i + 1])
             i += 1
+            if name not in accumulated:
+                break
         i += 1
         if name in accumulated:
-            accumulated[name] += [tool.strip() for tool in (value or "").split(",") if tool.strip()]
+            for value in values:
+                accumulated[name] += [tool.strip() for tool in value.split(",") if tool.strip()]
         else:
-            last[name] = value
+            last[name] = values[0] if values else None
     return accumulated, last
 
 
