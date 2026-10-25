@@ -84,13 +84,13 @@
 | ID | 基準 | 必要な証拠 | 状態 |
 |---|---|---|---|
 | AC-1 | ui-ux-pro-max が cc-plugins から外れ、参照が壊れていない | drift・validate の出力、grep | satisfied（ローカル。PR 1 の CI は未確認） |
-| AC-2 | hotl のテンプレートが固定した SDK で動き、エージェントが GitHub に書き込めない | scripts/tests の 30 件、契約テストが旧実装と SDK 2.3.0 で落ちること、Codex レビュー | satisfied（ローカル。action の中での実挙動は未確認） |
-| AC-3 | codex-plugins の hotl が同じ修正を持つ | codex の validate と tests | pending |
-| AC-4 | Sonnet 4.5 の退役（2026-11-30）前に、テンプレートが既定のモデル ID に依存しない | hotl 2.1.0 の差分とテスト | pending |
-| AC-5 | テストを弱めて通した変更が、実装の返却・レビュー・Stop のどこかで表に出る | 行動ケース、Stop フックのテスト | pending |
-| AC-6 | refactor・security-auditor・フック・E2E・data-design-ops の指摘が直っている | 差分、テスト、行動ケース | pending |
-| AC-7 | スキルの発火を、実際のインストール構成で測った結果がある | plugin eval の結果と費用 | pending |
-| AC-8 | P1 の知識の鮮度（OWASP・MCP・サプライチェーン・UUIDv7・法令）が更新され、出典 URL と確認日が付いている | 差分 | pending |
+| AC-2 | hotl のテンプレートが固定した SDK で動き、エージェントが GitHub に書き込めない | scripts/tests の 30 件、契約テストが旧実装と SDK 2.3.0 で落ちること、Codex レビュー | satisfied（ローカル。Bedrock の認証情報を持つ Actions での実挙動は未確認） |
+| AC-3 | codex-plugins の hotl が同じ修正を持つ | codex の validate と tests | satisfied（codex #10・#11。tests 111 件 OK、6 つの workflow の構造が cc と一致） |
+| AC-4 | Sonnet 4.5 の退役（2026-11-30）前に、テンプレートが既定のモデル ID に依存しない | hotl 2.1.0 の差分とテスト | satisfied（#14・#15。変数が未設定なら止まるテスト。Actions での実挙動は未確認） |
+| AC-5 | テストを弱めて通した変更が、実装の返却・レビュー・Stop のどこかで表に出る | 行動ケース、Stop フックのテスト | partial（#16。Stop フックのテスト 16 件は通る。行動ケースはスキーマの検証だけで、モデルでは未実行） |
+| AC-6 | refactor・security-auditor・フック・E2E・data-design-ops の指摘が直っている | 差分、テスト、行動ケース | satisfied（#16。フックの回帰テスト 91 件と heredoc の差分テスト 78 件。Codex レビューの最終回の後の 1479250 は独立レビュー無し） |
+| AC-7 | スキルの発火を、実際のインストール構成で測った結果がある | plugin eval の結果と費用 | partial（#18。隔離環境は 5.1.0、実際の構成はインストール済みの 5.0.0 で hooks が有効なまま。費用は約 5.8〜5.95 USD。マージ後に 5.1.0 で取り直す） |
+| AC-8 | P1 の知識の鮮度（OWASP・MCP・サプライチェーン・UUIDv7・法令）が更新され、出典 URL と確認日が付いている | 差分 | satisfied（#17・codex #12。Codex GO の後の ee87fd9・f9eab13 は独立レビュー無し） |
 
 ## Progress Log
 
