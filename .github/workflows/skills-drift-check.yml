@@ -88,6 +88,8 @@ jobs:
         run: bash dev-core/scripts/test-session-start-context.sh
       - name: Test Stop quality gate hook
         run: bash dev-core/scripts/test-stop-quality-gate.sh
+      - name: Test dangerous-command hook
+        run: bash dev-core/scripts/test-block-dangerous-commands.sh
 
   validate:
     runs-on: ubuntu-latest

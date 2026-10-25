@@ -79,9 +79,21 @@ TDD 開発フレームワーク。t-wada 式 TDD、FSD、Clean Architecture、DD
 | タイミング | 処理 | 実体 |
 |-----------|------|------|
 | SessionStart | allowlist済みrepository metadata + 未完了planのpath/status + 作業規律（リスクに応じた検証、証拠の再利用条件、同じ経路での Three Strikes）の注入 | scripts/session-start-context.sh |
-| PreToolUse:Bash | 危険コマンドブロック（rm -rf、force push等） | scripts/block-dangerous-commands.sh |
+| PreToolUse:Bash | 代表的な誤操作の tripwire。止める: rm -r でのルート・ホームの削除、main/master への強制 push、DB クライアントでの DROP/TRUNCATE。確認に回す: 作業ツリーを捨てる git 操作（reset の hard、clean の force、restore . など）。引用符の中身と heredoc の本文は照合しない | scripts/block-dangerous-commands.sh |
 | PostToolUse:Write\|Edit | Prettier自動フォーマット（設定があるプロジェクトのみ） | scripts/format-changed-file.sh |
 | Stop | 停止前の検出: 追加行のデバッグ残骸（console.log/debugger 等）、テストファイルに追加された focus/skip マーカー、テストファイルの削除。未追跡の新規ファイルも対象 | scripts/stop-quality-gate.sh |
+
+危険コマンドのフックは best-effort の tripwire で、完全なセキュリティ境界ではない。rm の重要パス（/、~、作業ディレクトリとその親）は Claude Code 本体が全モードで自動承認しない。プラグインからは permissions.deny を配布できないので、厳密に止めたい操作は利用者の settings に書き、main への強制 push はサーバー側の branch protection でも止める。例:
+
+```json
+{
+  "permissions": {
+    "deny": ["Bash(git push --force *)", "Bash(git push -f *)", "Bash(terraform destroy *)"]
+  }
+}
+```
+
+フックの回帰テストは `scripts/test-block-dangerous-commands.sh`（止める・通す・確認に回すの3つの表）で、CI で実行する。jq が無いときは止めずに通し（non-blocking error）、SessionStart で一度だけ知らせる。
 
 Claude Code の現行hook仕様では SessionStart/PreCompact は prompt handler 非対応。planの永続化は `/execute` が各iteration・停止・圧縮前に行い、SessionStart command hook はplan本文をdeveloper contextへ流さず再開対象だけを知らせる。`scripts/validate-claude-hooks.mjs` がevent/type互換性をCIで検証する。
 
