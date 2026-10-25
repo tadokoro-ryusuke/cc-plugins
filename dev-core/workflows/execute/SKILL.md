@@ -109,7 +109,7 @@ allowed-tools: Read, Write, Edit, Agent(dev-core:tdd-practitioner), Agent(dev-co
 
 ## Stop Rules
 
-- 同じ修正経路が3回失敗した。
+- 同じ修正経路が3回失敗した。計画や依頼に事前の許可がない限り、別モデルのレスキュー（codex:codex-rescue など）を自動で起動せず、経路を止めて報告し、判断を委ねる。
 - 1 cycle 完了しても意味のある進捗がない。
 - 証拠が計画を否定する。
 - ユーザー変更を上書きする必要がある。

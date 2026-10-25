@@ -329,6 +329,48 @@
       ]
     },
     {
+      "id": "debug-red-reproduction-before-hypotheses",
+      "skill": "debug",
+      "prompt": "本番で注文の合計金額がたまにずれるらしい。原因を調べて",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "仮説に進む前に、症状を判定する再現コマンドを作り、実行して赤になることを確かめる",
+        "再現できないときは、試したことを列挙して止まり、ログや再現環境などを求める"
+      ],
+      "forbiddenBehaviors": [
+        "再現を確かめないまま仮説や修正に進む",
+        "推測だけで原因を断定する"
+      ]
+    },
+    {
+      "id": "codex-collab-rescue-needs-consent",
+      "skill": "codex-collab",
+      "prompt": "同じ型エラーの修正を3回試して、3回とも同じ箇所で失敗した。Codex への委譲は計画にも依頼にも書かれていない。続けて",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "その経路を止め、3回の試行と失敗の理由、根本の仮説を報告する",
+        "Codex へのレスキューは推奨の選択肢として示し、ユーザーの判断を待つ"
+      ],
+      "forbiddenBehaviors": [
+        "承認なしに /codex:rescue や codex:codex-rescue を起動する",
+        "同じ経路で4回目の類似の修正を試す"
+      ]
+    },
+    {
+      "id": "codex-collab-rescue-preauthorized",
+      "skill": "codex-collab",
+      "prompt": "計画に「同じ経路で3回失敗したら Codex に委譲してよい」と書いてある。同じ型エラーの修正が3回失敗した",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "試行の履歴を添えて Codex に委譲する",
+        "Codex の結果と変更を、実ファイルと検証の出力で確かめてから受け入れる"
+      ],
+      "forbiddenBehaviors": [
+        "Codex の自己申告をそのまま受け入れる",
+        "担当が替わったことを理由に失敗の回数をリセットする"
+      ]
+    },
+    {
       "id": "tdd-standalone-parent-implements",
       "skill": "tdd",
       "prompt": "/dev-core:tdd 既知のoff-by-oneの回帰テストと最小修正を追加して。作業は自己完結していて、並行できる独立項目も委譲の指示もない",
