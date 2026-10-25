@@ -17,12 +17,25 @@ t-wada 式 TDD、FSD、Clean Architecture、DDD に基づいた開発をハー�
 | [dev-core](./dev-core/) | TDD 開発フレームワーク。開発原則のスキル、ワークフロー、専門エージェント、Hooks 自動化を提供 |
 | [github-tools](./github-tools/) | GitHub 連携ワークフロー支援。PR 作成とドキュメント更新を効率化 |
 | [hotl-engineering](./hotl-engineering/) | Human-on-the-Loop 開発ワークフローの設計・適用と開発運営の CTO 判断支援。リポジトリ引き継ぎ・品質ゲート段階導入・自律性の昇格判断・監査対応 |
-| [ui-ux-pro-max](./ui-ux-pro-max/) | UI/UX デザインインテリジェンス（[nextlevelbuilder/ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) のベンダリング） |
 | [delivery-core](./delivery-core/) | 受託開発のデリバリー上流。PM 運営、要件定義（RDRA・受入基準）、顧客との合意形成、業務設計・サービス設計・システム化範囲の線引き |
 | [ai-engineering](./ai-engineering/) | LLM / AI エージェントを含むシステムの設計。エージェント構成、ツール・コンテキスト設計、RAG、LLM の評価、人間の介在点設計 |
 | [compliance-core](./compliance-core/) | 受託開発の法規制コンプライアンス。個人情報保護法の実務、OSS ライセンス監査（SBOM）、生成 AI 利用の権利処理。法的助言ではなく実務の型 |
 | [design-core](./design-core/) | ノンデザイナー向けのデザイン品質。デザイン4原則による UI / 資料の審査と、提案書・スライド・図解の作成 |
 | [indie-product-marketing](./indie-product-marketing/) | 個人開発プロダクトの機会発見、需要検証、海外・多言語向け LP の設計、ローンチ、集客、定着、ユニットエコノミクス（codex-plugins が正本の日本語翻案） |
+
+### 外部プラグインとの併用
+
+ui-ux-pro-max は 6.0.0 でこのマーケットプレイスから削除した。使う場合は上流の公式プラグインを入れる。
+旧版（`ui-ux-pro-max@cc-plugins`）を入れている場合は、同じ名前空間 `ui-ux-pro-max:*` が重ならないよう先に外す。
+
+```
+/plugin uninstall ui-ux-pro-max@cc-plugins
+/plugin marketplace add nextlevelbuilder/ui-ux-pro-max-skill
+/plugin install ui-ux-pro-max@ui-ux-pro-max-skill
+```
+
+スキル ID `ui-ux-pro-max:ui-ux-pro-max` は公式版でも同じなので、各スキルからの参照（「導入されていれば」）はそのまま使える。
+公式版はスキルを複数同梱する。design-core と発火が重なりうるので、使わないスキルは無効化を検討する。
 
 ## リポジトリ構成
 
@@ -34,7 +47,6 @@ cc-plugins/
 ├── dev-core/                         # メインプラグイン
 ├── github-tools/
 ├── hotl-engineering/                 # HOTL 開発運営スキル（テンプレ・eval 雛形同梱）
-├── ui-ux-pro-max/
 ├── delivery-core/                    # 受託開発のデリバリー上流（PM・要件定義・合意形成）
 ├── ai-engineering/                   # LLM / AI エージェントを含むシステムの設計
 ├── compliance-core/                  # 法規制コンプライアンスの実務
@@ -68,4 +80,4 @@ claude plugin validate dev-core --strict
 
 ## ライセンス
 
-[MIT](./LICENSE)（ui-ux-pro-max は upstream のライセンスに従う）
+[MIT](./LICENSE)
