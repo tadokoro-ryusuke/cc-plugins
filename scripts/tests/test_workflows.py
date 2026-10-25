@@ -406,49 +406,107 @@ echo "https://github.com/fixture/repo/issues/1"
             "Bash(git diff:*)", "Bash(git add:*)", "Bash(git commit:*)", f"Bash(git push -u origin {branch})",
             "Bash(pnpm lint)", "Bash(pnpm typecheck)", "Bash(pnpm test:*)"})
         pr_dir = "${{ runner.temp }}/agent-pr"
+        # 何も付けない Edit / Write は作業ツリーの外(Actions の環境ファイルなど)への書き込みも承認するので使わない
         self.assertEqual({tool for tool in allowed if not tool.startswith("Bash")},
-                         file_tools | {f"Edit(/{pr_dir}/title.txt)", f"Edit(/{pr_dir}/body.md)"})
+                         {"Read", "Grep", "Glob", "Edit(/${{ github.workspace }}/**)",
+                          f"Edit(/{pr_dir}/title.txt)", f"Edit(/{pr_dir}/body.md)"})
         self.assertIn(f"{pr_dir}/title.txt", agent["with"]["prompt"])
         # 依存はエージェントの前にロックファイルどおり入れる(エージェントには install を許さない)
         self.assertTrue(any("pnpm install --frozen-lockfile" in step.get("run", "") for step in steps[:index]))
 
-    def test_trusted_step_opens_the_draft_pull_request(self):
+    def test_pull_request_is_opened_by_a_separate_trusted_job(self):
+        # エージェントもリポジトリのコードも動かない新しいランナーで作る(前の job の環境ファイルの影響を受けない)
+        jobs = workflow("agent-implement.yml")["jobs"]
+        opener_job = jobs["open-pr"]
+        self.assertEqual(opener_job["needs"], "implement")
+        self.assertEqual(opener_job["permissions"], {"contents": "read", "pull-requests": "write"})
+        for step in opener_job["steps"]:
+            with self.subTest(step=step.get("name") or step.get("uses")):
+                self.assertNotIn("claude-code-action", step.get("uses", ""))
+                self.assertNotIn("actions/checkout", step.get("uses", ""))
+                self.assertNotIn("pnpm", step.get("run", ""))
+        self.assertEqual(jobs["implement"]["outputs"]["before"], "${{ steps.before.outputs.sha }}")
+        self.assertEqual(next(s for s in opener_job["steps"] if s.get("id") == "open-pr")["env"]["BEFORE"],
+                         "${{ needs.implement.outputs.before }}")
+
+    def test_branch_head_is_recorded_before_the_agent(self):
         steps = workflow("agent-implement.yml")["jobs"]["implement"]["steps"]
         index, _ = agent_step(steps)
-        opener = next(step for step in steps[index + 1:] if step.get("id") == "open-pr")
+        before = next(step for step in steps[:index] if step.get("id") == "before")
+        mock = """#!/usr/bin/env bash
+case "$MODE" in
+  found) echo abc123 ;;
+  missing) echo 'gh: Not Found (HTTP 404)' >&2; exit 1 ;;
+  error) echo 'gh: Bad credentials (HTTP 401)' >&2; exit 1 ;;
+esac
+"""
+        for mode, code, expected in (("found", 0, "sha=abc123"), ("missing", 0, "sha=none"), ("error", 1, None)):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                bin_dir = root / "bin"
+                bin_dir.mkdir()
+                (bin_dir / "gh").write_text(mock)
+                (bin_dir / "gh").chmod(0o755)
+                outputs = root / "outputs"
+                outputs.write_text("")
+                result = run_step(before, {"MODE": mode, "RUNNER_TEMP": str(root), "GITHUB_OUTPUT": str(outputs),
+                                           "GH_REPO": "fixture/repo", "BRANCH": "agent/issue-7"}, root,
+                                  path_prefix=str(bin_dir))
+                if code == 0:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn(expected, outputs.read_text())
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+
+    def test_trusted_step_opens_the_draft_pull_request(self):
+        steps = workflow("agent-implement.yml")["jobs"]["open-pr"]["steps"]
+        opener = next(step for step in steps if step.get("id") == "open-pr")
         self.assertEqual(opener["env"]["BRANCH"], "agent/issue-${{ github.event.issue.number }}")
         self.assertEqual(opener["env"]["BASE"], "${{ github.event.repository.default_branch }}")
         mock = """#!/usr/bin/env bash
-printf '%s %s\\n' "$(basename "$0")" "$*" >> "$CALLS"
-case "$(basename "$0") $*" in
-  "git ls-remote"*) [ "$PUSHED" = 1 ] || exit 2 ;;
-  "gh pr list"*) [ "$EXISTING" = 1 ] && printf '%s\\n' 5 ;;
+printf '%s\\n' "$*" >> "$CALLS"
+case "$*" in
+  "api "*)
+    case "$HEAD_MODE" in
+      missing) echo 'gh: Not Found (HTTP 404)' >&2; exit 1 ;;
+      error) echo 'gh: Bad credentials (HTTP 401)' >&2; exit 1 ;;
+      *) echo "$HEAD_MODE" ;;
+    esac ;;
+  "pr list"*) [ "$EXISTING" = 1 ] && printf '%s\\n' 5 ;;
 esac
 exit 0
 """
-        for case, pushed, existing, body_text in (("not-pushed", "0", "0", "body"), ("existing", "1", "1", "body"),
-                                                  ("created", "1", "0", "受入条件の対応表"),
-                                                  ("empty-body", "1", "0", "  \n")):
+        cases = (
+            ("not-pushed", "missing", "none", "0", "body", 0, False),
+            ("auth-error", "error", "none", "0", "body", 1, False),
+            ("unchanged", "abc", "abc", "0", "body", 0, False),
+            ("existing", "def", "abc", "1", "body", 0, False),
+            ("created", "def", "none", "0", "受入条件の対応表", 0, True),
+            ("empty-body", "def", "abc", "0", "  \n", 0, True),
+        )
+        for case, head_mode, before, existing, body_text, code, creates in cases:
             with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 bin_dir = root / "bin"
                 bin_dir.mkdir()
-                for name in ("gh", "git"):
-                    (bin_dir / name).write_text(mock)
-                    (bin_dir / name).chmod(0o755)
+                (bin_dir / "gh").write_text(mock)
+                (bin_dir / "gh").chmod(0o755)
                 pr_dir = root / "agent-pr"
                 pr_dir.mkdir()
                 (pr_dir / "title.txt").write_text("feat: fixture\n")
                 (pr_dir / "body.md").write_text(body_text)
                 calls = root / "calls"
                 calls.write_text("")
-                env = {"CALLS": str(calls), "PUSHED": pushed, "EXISTING": existing, "GH_REPO": "fixture/repo",
-                       "BRANCH": "agent/issue-7", "BASE": "main", "ISSUE": "7", "PR_DIR": str(pr_dir),
-                       "RUN_URL": "https://example.invalid/run"}
+                env = {"CALLS": str(calls), "HEAD_MODE": head_mode, "EXISTING": existing, "BEFORE": before,
+                       "GH_REPO": "fixture/repo", "BRANCH": "agent/issue-7", "BASE": "main", "ISSUE": "7",
+                       "PR_DIR": str(pr_dir), "RUNNER_TEMP": str(root), "RUN_URL": "https://example.invalid/run"}
                 result = run_step(opener, env, root, path_prefix=str(bin_dir))
-                self.assertEqual(result.returncode, 0, result.stderr)
-                create = [line for line in calls.read_text().splitlines() if line.startswith("gh pr create")]
-                if case in ("not-pushed", "existing"):
+                if code == 0:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+                create = [line for line in calls.read_text().splitlines() if line.startswith("pr create")]
+                if not creates:
                     self.assertEqual(create, [])
                     continue
                 self.assertEqual(len(create), 1)
