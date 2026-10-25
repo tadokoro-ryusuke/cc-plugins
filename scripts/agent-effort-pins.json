@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "description": "プラグイン agent の frontmatter に固定してよい effort の allowlist。ここに無い agent は effort を持たず、セッションの effort に従う。検査は scripts/check-plugin-agents.mjs。固定値はユーザー側で上書きできないため、追加・変更には理由を書く。",
+  "description": "プラグイン agent の frontmatter に置く effort の既定値の allowlist。ここに無い agent は effort を持たず、セッションの effort に従う。検査は scripts/check-plugin-agents.mjs。既定値は、Agent ツールの呼び出しごとの effort（Claude Code 2.1.292 以上）と CLAUDE_CODE_EFFORT_LEVEL で上書きされうるが、プラグインの設定では変えられず、指定が無ければすべての利用者に効くので、追加・変更には理由を書く。出典は https://code.claude.com/docs/en/sub-agents#choose-an-effort-level（2026-10-26 確認）。",
   "pins": {
     "dev-core:tdd-practitioner": {
       "effort": "medium",

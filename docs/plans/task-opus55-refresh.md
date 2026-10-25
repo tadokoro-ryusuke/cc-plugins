@@ -1,9 +1,10 @@
 # Task: Opus 5.5 対応のプラグイン刷新（hotl 2.0.0 / dev-core 5.0.0 / indie 0.1.0）
 
-- Status: done（draft PR まで。merge とインストールはユーザーが行う）
+- Status: done
+- 結果: cc-plugins #9〜#12 を 2026-09-23 に main へ merge 済み。codex-plugins は「Current Next Action」を参照。未達の完了条件は「未達の完了条件（バックログ）」に移した
 - Plan file: docs/plans/task-opus55-refresh.md
 - 設計書: docs/research/opus-5-5-plugin-strategy.md
-- Last updated: 2026-09-23
+- Last updated: 2026-10-26
 
 ## 目的と権限
 
@@ -62,6 +63,17 @@
 | AC-C2 | 公開データが一般化されている | grep で 0 件 | satisfied（codex-plugins#7、cc の PR C とも。作者のメタデータは既存プラグインと同じ公開表記） |
 | AC-X | 各 PR が Codex の diff レビューを通っている | 指摘を検証した記録 | satisfied（#9 と codex#7・#8 は指摘なし。#10 は P2 が1件で、未コミットの変更があるときの検証対象を実ファイルで確認して修正した。#11 は指摘なし。hosted CI は #9〜#11 とも全 pass） |
 
+## 未達の完了条件（バックログ）
+
+上の AC は、本計画の範囲（定義とスキーマ検証、固定 effort の live 確認）では満たした。設計書 §5・§8 の完了条件のうち、次は未達のまま残っている。本計画では扱わず、別の計画か Issue で扱う。
+
+| 出典 | 未達の条件 | 現状 |
+|---|---|---|
+| 設計書 §8 A-1 | 変更した契約を代表する行動ケースを実行し、記録する | dev-core の行動ケースはスキーマ検証だけ（AC-B1） |
+| 設計書 §8 A-2 | 代表的な行動ケースで spawn 数が減り、合格率が下がらない | 未測定 |
+| 設計書 §5 indie のリリース条件4 | 追加した契約を代表する行動ケースを実際に実行し、観測した行動と判定を記録する | 未実行。indie の README の「検証」節どおり pending として扱う |
+| 設計書 §8 Phase C | 固定するすべての effort に eval ケースと計測日が紐づいている | 未着手。レビュアーの high は暫定値のまま。測定で effort の差を作るときは frontmatter の変種で作り、呼び出しごとの effort は使わない（設計書の追記3） |
+
 ## 各 PR の提出前ゲート
 
 1. 検証コマンド一式（AGENTS.md）
@@ -91,6 +103,8 @@
 - 2026-09-23: draft PR: cc-plugins #9（hotl 2.0.0）、#10（dev-core 5.0.0）、#11（indie 0.1.0）、codex-plugins #7（indie 0.3.1）、#8（hotl 2.0.2）。hosted CI は cc の3本とも全 pass。
 - 2026-09-23: PR C: indie 0.1.0 を追加した。references と assets は codex 68322c9 と同一で、SKILL.md は日本語へ翻案した。Claude 固有の実行ノートを加えた。design-core は lang の規定を直して 0.2.1 に、marketplace は 5.1.0 にした。validator と全9プラグインの validate が pass し、live のトリガー確認も通った。
 - 2026-09-23: PR B のワークフローはセッション上限で4担当が中断した。再ログインの後、作業ツリーを項目ごとに監査し、AGENTS.md の索引行と dev-core README の「Opus 5.5 での運用」節・移行節を補った。検証一式と全8プラグインの validate が pass し、固定 effort を live で確認した。
+- 2026-09-23: cc-plugins #9 を main へ、#10・#11 を `feature/hotl-2.0.0` へ merge し、#12 でそれを main へ merge した（GitHub の PR の記録で確認）。
+- 2026-10-26: 2026-10 の鮮度監査を受けて、状態を merge 済みに合わせた。Claude Code 2.1.284（ultracode を effort から分離）と 2.1.292（Agent ツールの呼び出しごとの effort）による effort の前提の変化を、設計書の追記、dev-core README、`scripts/agent-effort-pins.json` の description に反映した。未達の完了条件をバックログの表に移した。
 
 ## Decision Log
 
@@ -103,4 +117,9 @@
 
 ## Current Next Action
 
-ユーザーが draft PR をレビューして merge する。順序は cc-plugins #9 → #10 → #11 と codex-plugins #7・#8 で、前の PR が merge されたら次の PR の base を main に切り替える。merge 後は `/plugin marketplace update cc-plugins` で更新し、dev-core・github-tools・indie-product-marketing を install / 更新して、新しいセッションで確認する。codex 側は `codex plugin add <plugin>@codex-plugins` を実行し、新しいスレッドを開始する。残りの作業は設計書の Phase C（effort の比較測定、行動ケースの live 評価）と Phase D。
+本計画で行う作業は残っていない（2026-10-26 時点）。
+
+- cc-plugins: #9〜#12 は 2026-09-23 に merge 済み。
+- codex-plugins: #7（indie 0.3.1）は open のまま。#8（hotl 2.0.2）は 2026-10-25 に close され、#10（open）に引き継がれた。merge するかどうかはユーザーが判断する。
+- インストール済みプラグインの更新（`/plugin marketplace update cc-plugins`、`codex plugin add <plugin>@codex-plugins`）が済んだかは、この計画では確認していない。
+- 残りの作業は「未達の完了条件（バックログ）」と、設計書の Phase C（effort の比較測定、行動ケースの live 評価）と Phase D。
