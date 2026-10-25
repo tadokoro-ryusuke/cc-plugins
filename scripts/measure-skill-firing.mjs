@@ -18,6 +18,7 @@
 //   - 自動発火のケース（プロンプトが /<plugin>: で始まらない）だけを測る。外部への投稿などを頼むケースは
 //     --case で除く。手動起動専用のスキルは自動では発火しないので測らない
 //   - --dry-run は最初のケースの init だけを確かめて止める（モデルの応答を待たない）
+//   - 子はプロセスグループの先頭として起こし、グループごと止める（POSIX 前提。Windows は対象外）
 // 測るのはインストール済みの版。作業ツリーの版ではない（結果に版を書く）。
 
 import { spawn } from "node:child_process";
@@ -79,6 +80,9 @@ export function runCase(prompt, options) {
   const initTimeoutMs = options.initTimeoutMs ?? INIT_TIMEOUT_MS;
   const runTimeoutMs = options.runTimeoutMs ?? RUN_TIMEOUT_MS;
   const closeTimeoutMs = options.closeTimeoutMs ?? CLOSE_TIMEOUT_MS;
+  // 止め方（テストで失敗を模せるように差し替えられる）。POSIX のプロセスグループが前提
+  const killGroup = options.killGroup ?? ((pid) => process.kill(-pid, "SIGKILL"));
+  const killChild = options.killChild ?? ((target) => target.kill("SIGKILL"));
   return new Promise((resolvePromise) => {
     const cwd = mkdtempSync(join(tmpdir(), "skill-firing-"));
     const args = ["-p", "--output-format", "stream-json", "--verbose",
@@ -110,21 +114,24 @@ export function runCase(prompt, options) {
       if (stopping) return;
       stopping = true;
       try {
-        process.kill(-child.pid, "SIGKILL");
+        killGroup(child.pid);
       } catch {
-        try { child.kill("SIGKILL"); } catch { /* 既に終わっている */ }
+        try { killChild(child); } catch { /* 止められない。下の上限で打ち切る */ }
       }
       timers.push(setTimeout(() => {
         state.status = "abort";
         state.detail = `${state.detail}（子の終了を確認できなかった）`;
+        // 出力を閉じ、子への参照を外して、測定する側のプロセスが子を待たずに終われるようにする
         child.stdout?.destroy();
         child.stderr?.destroy();
+        child.unref();
         finish();
       }, closeTimeoutMs));
     };
 
     try {
       child = spawn(command, args, { cwd, stdio: ["ignore", "pipe", "pipe"], detached: true });
+      state.pid = child.pid;
     } catch (error) {
       setStatus("abort", `${command} を起動できなかった: ${error.message}`);
       finish();
@@ -168,10 +175,11 @@ export function runCase(prompt, options) {
     });
     child.on("close", () => {
       if (!state.initSeen) {
-        // ツールの一覧を確かめていない run は、result が成功でも数えず、測定全体を中止する
-        if (state.status === null || state.status === "dry-run") {
+        // ツールの一覧を確かめていない run は、result が成功でも、先に error になっていても数えず、
+        // 測定全体を中止する（unsafe と abort はそのまま）
+        if (state.status !== "unsafe" && state.status !== "abort") {
           state.status = "abort";
-          state.detail = "init を受け取らないまま終わった";
+          state.detail = `init を受け取らないまま終わった${state.detail ? `（${state.detail}）` : ""}`;
         }
       } else if (state.status === null) {
         setStatus(observation(state.result), state.result ? `result: ${state.result.subtype}` : "result が無い");
