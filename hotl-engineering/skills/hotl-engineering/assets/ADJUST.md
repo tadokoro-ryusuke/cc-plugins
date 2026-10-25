@@ -38,7 +38,8 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
 - [ ] Tier 2 paths-filter → アセスメントで特定したリスクパスに全面書き換え(最重要)
 - [ ] CODEOWNERS と paths 定義を同期させる
 - [ ] workflow を有効化する前に、`assets/scripts/check_review_verdicts.py` を trusted base 側の
-      `.github/scripts/check_review_verdicts.py` にコピーする
+      `.github/scripts/check_review_verdicts.py` にコピーする。テンプレを更新するときは、この validator と
+      ai-review.yml を同じ版に揃える(validator は workflow が渡す `LIGHT_DOWNLOAD` / `DEEP_DOWNLOAD` を前提にする)
 - [ ] 観測中は `AI_REVIEW_ENFORCE` を未設定のままにする。不完全な証拠は不完全として記録し、
       較正後に強制化する
 - [ ] light/deep の verdict は、その実行で新たに作られ、非負の件数と、レビュー対象の head SHA を

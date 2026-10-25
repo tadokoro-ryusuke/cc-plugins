@@ -17,7 +17,8 @@ references の内容変更・description の意味的変更は PR で提案し�
   `judge_total_mean` は無くなった。軸ごとの合格率を持たない baseline や、別の合格線で作った baseline は、
   理由を出して止まる（比較を黙って飛ばさない）。ADJUST.md に移行手順を足した
 - run_evals.py: 率の閾値（下限・許容低下幅など）と baseline の軸ごとの合格率は、0〜1 の有限の数だけを受け付ける。
-  NaN・null・範囲外は、比較を黙って偽にしてゲートを開けるので、評価を始める前に止める
+  NaN・null・範囲外は、比較を黙って偽にしてゲートを開けるので、評価を始める前に止める。baseline の
+  `recall_at_5_mean` も、null（対象外）か 0〜1 の有限の数だけを受け付ける
 - eval-design.md: L2 は段階尺度を診断に使い、ゲートは合格線での二値化にする理由を書いた。L3 の較正を
   「±1点一致率 85%」から、合格線で二値化した軸ごとの一致率（明確なケースでおよそ 90%）に変えた
 - judge_rubric.md: 存在しない evals/README.md を指していた較正記録の参照を直した
@@ -29,7 +30,10 @@ references の内容変更・description の意味的変更は PR で提案し�
   sticky-pull-request-comment v3、pnpm/action-setup v6.1.0。claude-code-action は v1 のまま（v2 は無い）
   - **ai-review**: download-artifact v5 以降は、pattern が1件だけに当たると path の直下に展開する。通常の PR では
     light の判定ファイルだけなので、validator が読む `verdicts/ai-review-verdict-light/` から外れ、ゲートが常に
-    「欠落」と判定する。判定ファイルを名前で1つずつ、tier ごとのディレクトリに取得するようにした
+    「欠落」と判定する。判定ファイルを名前で1つずつ、tier ごとのディレクトリに取得するようにした。
+    download-artifact v8 は展開した後に digest の不一致をエラーにするので、取得の結果（outcome）を validator に
+    渡し、success でなければ不完全な証拠として扱う。**check_review_verdicts.py と ai-review.yml は一緒に更新する**
+    （新しい validator は `LIGHT_DOWNLOAD` / `DEEP_DOWNLOAD` が無いと不完全として扱う）
   - **agent-implement**: App トークンは `app-id` のまま（v3.1 以降は `client-id` が推奨だが、actionlint 1.7.12 が
     未対応でエラーになるため）
   - Node の既定版を 24 にした（v22 は 2027-04-30 に EOL）。deploy.yml の shellcheck の指摘を直し、

@@ -19,13 +19,16 @@ def main():
         errors.append("classify が未実行または失敗")
     if not re.fullmatch(r"[0-9a-f]{40}", expected_sha):
         errors.append("期待する PR revision が未設定または不正")
-    tiers = [("light", "REVIEW_RESULT")]
+    tiers = [("light", "REVIEW_RESULT", "LIGHT_DOWNLOAD")]
     if tier2 == "true":
-        tiers.append(("deep", "DEEP_RESULT"))
+        tiers.append(("deep", "DEEP_RESULT", "DEEP_DOWNLOAD"))
     root = Path(os.environ.get("VERDICT_DIR", "verdicts"))
-    for tier, result_key in tiers:
+    for tier, result_key, download_key in tiers:
         if os.environ.get(result_key) != "success":
             errors.append(f"{tier}: job が success でない")
+        # download-artifact は展開した後に digest の不一致をエラーにするので、ファイルがあっても取得の結果を見る
+        if os.environ.get(download_key) != "success":
+            errors.append(f"{tier}: verdict の取得が success でない(整合性の検証の失敗を含む)")
         path = root / f"ai-review-verdict-{tier}" / "verdict.json"
         try:
             verdict = json.loads(path.read_text(encoding="utf-8"))

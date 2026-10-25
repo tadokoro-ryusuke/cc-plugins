@@ -550,6 +550,11 @@ exit 0
                 self.assertEqual(step["with"]["path"], f"verdicts/{tier}")
                 self.assertTrue(step.get("continue-on-error"))
         self.assertIn("needs.classify.outputs.tier2 == 'true'", by_name["ai-review-verdict-deep"]["if"])
+        # 取得の結果(digest の不一致を含む)を validator に渡す
+        gate_env = next(step for step in steps if step.get("name") == "Enforce gate")["env"]
+        for tier, key in (("ai-review-verdict-light", "LIGHT_DOWNLOAD"), ("ai-review-verdict-deep", "DEEP_DOWNLOAD")):
+            with self.subTest(tier=tier):
+                self.assertEqual(gate_env[key], "${{ steps.%s.outcome }}" % by_name[tier]["id"])
 
     def test_actions_are_on_majors_that_run_on_node24(self):
         # GitHub のホストランナーから Node 20 は 2026-09-23 に外れた。node20 宣言の版を新しく書かない

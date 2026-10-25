@@ -98,6 +98,9 @@ def load_baseline(path: str, pass_score: int) -> dict:
             "baseline has no per-axis judge pass rates (it was written before hotl 2.1.0, which "
             "gated on judge_total_mean): regenerate the baseline with this run_evals.py")
     # 欠けた軸(judge まで進んだケースが無い失敗実行など)を baseline にすると、その軸の回帰比較が消える
+    recall = baseline.get("recall_at_5_mean")
+    if recall is not None and not is_fraction(recall):
+        raise ValueError(f"baseline recall_at_5_mean must be null or a finite number from 0 to 1, got {recall!r}")
     if bad := {axis: rate for axis, rate in rates.items() if not is_fraction(rate)}:
         raise ValueError(f"baseline judge pass rates must be finite numbers from 0 to 1, got {bad!r}: "
                          "regenerate the baseline from a complete run")
