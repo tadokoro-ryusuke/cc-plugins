@@ -1,9 +1,11 @@
 """配布する YAML を構文解析し、埋め込まれた認可・preflight コードをオフラインで実行する。"""
 
+from fnmatch import fnmatchcase
 import json
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -50,17 +52,53 @@ AGENT_TOOLS = {("incident-triage.yml", "triage"): {"Read", "Grep", "Glob", "Bash
                ("ai-review.yml", "review"): {"Read", "Grep", "Glob", "Bash", "Write"},
                ("ai-review.yml", "deep-review"): {"Read", "Grep", "Glob", "Bash", "Write"},
                ("agent-implement.yml", "implement"): {"Read", "Grep", "Glob", "Edit", "MultiEdit", "Write", "Bash"}}
-FLAG_ALIASES = {"--allowedTools": ("--allowedTools", "--allowed-tools"),
-                "--disallowedTools": ("--disallowedTools", "--disallowed-tools"),
-                "--tools": ("--tools",)}
+FLAG_ALIASES = {"--allowed-tools": "--allowedTools", "--disallowed-tools": "--disallowedTools"}
+# 上流の action は、この2つのフラグは複数回の指定を累積し、それ以外のフラグは最後の指定を使う
+ACCUMULATED_FLAGS = ("--allowedTools", "--disallowedTools")
+
+
+def parse_claude_args(claude_args):
+    """claude_args を shell と同じ規則で読み、累積するフラグと最後の指定が効くフラグに分ける。"""
+    tokens = shlex.split(claude_args)
+    accumulated = {flag: [] for flag in ACCUMULATED_FLAGS}
+    last = {}
+    i = 0
+    while i < len(tokens):
+        name = FLAG_ALIASES.get(tokens[i], tokens[i])
+        value = None
+        if i + 1 < len(tokens) and not tokens[i + 1].startswith("--"):
+            value = tokens[i + 1]
+            i += 1
+        i += 1
+        if name in accumulated:
+            accumulated[name] += [tool.strip() for tool in (value or "").split(",") if tool.strip()]
+        else:
+            last[name] = value
+    return accumulated, last
 
 
 def tool_list(claude_args, flag):
-    tools = []
-    for alias in FLAG_ALIASES.get(flag, (flag,)):
-        for match in re.finditer(re.escape(alias) + r'\s+"([^"]*)"', claude_args):
-            tools += [tool.strip() for tool in match.group(1).split(",") if tool.strip()]
-    return tools
+    accumulated, last = parse_claude_args(claude_args)
+    if flag in accumulated:
+        return accumulated[flag]
+    return [tool.strip() for tool in (last.get(flag) or "").split(",") if tool.strip()]
+
+
+def rule_matches(rule, tool):
+    """Claude Code の許可ルール(Tool または Tool(pattern))が、ツールの呼び出しに当たるかを近似する。"""
+    rule_name, _, rule_pattern = rule.partition("(")
+    tool_name, _, tool_argument = tool.partition("(")
+    if rule_name != tool_name:
+        return False
+    if not rule_pattern:
+        return True
+    pattern = rule_pattern[:-1]
+    if pattern.endswith(":*"):
+        pattern = pattern[:-2] + " *"
+    argument = tool_argument[:-1] if tool_argument else ""
+    if argument.endswith(":*"):
+        argument = argument[:-2] + " x"
+    return fnmatchcase(argument, pattern) or fnmatchcase(argument + " x", pattern)
 
 
 def is_read_only_triage_tool(tool):
@@ -312,11 +350,15 @@ echo "https://github.com/fixture/repo/issues/1"
             with self.subTest(workflow=name, job=job_name):
                 _, agent = agent_step(workflow(name)["jobs"][job_name]["steps"])
                 claude_args = agent["with"]["claude_args"]
-                self.assertIn("--setting-sources user", claude_args)
-                self.assertIn("--strict-mcp-config", claude_args)
+                _, last = parse_claude_args(claude_args)
+                self.assertEqual(last.get("--setting-sources"), "user")
+                self.assertIn("--strict-mcp-config", last)
                 self.assertEqual(set(tool_list(claude_args, "--tools")), expected)
-                bare_disallowed = {tool for tool in tool_list(claude_args, "--disallowedTools") if "(" not in tool}
-                self.assertFalse(bare_disallowed & expected)
+                # 必要なツールと、事前承認したツールが、拒否のルールに当たっていない
+                denied = tool_list(claude_args, "--disallowedTools")
+                for tool in sorted(expected) + tool_list(claude_args, "--allowedTools"):
+                    with self.subTest(tool=tool):
+                        self.assertFalse(any(rule_matches(rule, tool) for rule in denied))
 
     def test_review_agents_can_only_comment_and_write_their_verdict(self):
         jobs = workflow("ai-review.yml")["jobs"]
@@ -353,43 +395,65 @@ echo "https://github.com/fixture/repo/issues/1"
         issue = "${{ github.event.issue.number }}"
         branch = f"agent/issue-{issue}"
         # 計画コメント・ブランチ・検証・commit・push・Draft PR に必要な分だけ。push 先は Issue のブランチに固定する
+        # PR の作成は事前承認しない(後の step が固定の引数で作る)
         self.assertEqual({tool for tool in allowed if tool.startswith("Bash")}, {
             f"Bash(gh issue comment {issue}:*)", f"Bash(git switch -c {branch})", "Bash(git status)",
             "Bash(git diff:*)", "Bash(git add:*)", "Bash(git commit:*)", f"Bash(git push -u origin {branch})",
-            "Bash(pnpm lint)", "Bash(pnpm typecheck)", "Bash(pnpm test:*)", "Bash(gh pr create --draft:*)"})
-        self.assertLessEqual({tool for tool in allowed if not tool.startswith("Bash")}, file_tools)
-        # gh pr create の後ろに付けられる引数で、別リポジトリ・別ブランチ・Draft 解除をさせない
-        disallowed = set(tool_list(claude_args, "--disallowedTools"))
-        self.assertLessEqual({"Bash(gh pr create *--repo*)", "Bash(gh pr create * -R *)",
-                              "Bash(gh pr create *--head*)", "Bash(gh pr create * -H *)",
-                              "Bash(gh pr create *--draft=*)"}, disallowed)
+            "Bash(pnpm lint)", "Bash(pnpm typecheck)", "Bash(pnpm test:*)"})
+        pr_dir = "${{ runner.temp }}/agent-pr"
+        self.assertEqual({tool for tool in allowed if not tool.startswith("Bash")},
+                         file_tools | {f"Edit(/{pr_dir}/title.txt)", f"Edit(/{pr_dir}/body.md)"})
+        self.assertIn(f"{pr_dir}/title.txt", agent["with"]["prompt"])
         # 依存はエージェントの前にロックファイルどおり入れる(エージェントには install を許さない)
         self.assertTrue(any("pnpm install --frozen-lockfile" in step.get("run", "") for step in steps[:index]))
 
-    def test_agent_pull_request_is_kept_in_draft(self):
-        # 許可の照合をすり抜けて Ready にされても、信頼側の step で Draft に戻す
+    def test_trusted_step_opens_the_draft_pull_request(self):
         steps = workflow("agent-implement.yml")["jobs"]["implement"]["steps"]
         index, _ = agent_step(steps)
-        guard = next(step for step in steps[index + 1:] if step.get("id") == "keep-draft")
-        self.assertEqual(guard.get("if"), "always()")
-        mock_gh = """#!/usr/bin/env bash
-printf '%s\\n' "$*" >> "$GH_CALLS"
-case "$*" in "pr list"*) printf '%s\\n' 12;; esac
+        opener = next(step for step in steps[index + 1:] if step.get("id") == "open-pr")
+        self.assertEqual(opener["env"]["BRANCH"], "agent/issue-${{ github.event.issue.number }}")
+        self.assertEqual(opener["env"]["BASE"], "${{ github.event.repository.default_branch }}")
+        mock = """#!/usr/bin/env bash
+printf '%s %s\\n' "$(basename "$0")" "$*" >> "$CALLS"
+case "$(basename "$0") $*" in
+  "git ls-remote"*) [ "$PUSHED" = 1 ] || exit 2 ;;
+  "gh pr list"*) [ "$EXISTING" = 1 ] && printf '%s\\n' 5 ;;
+esac
+exit 0
 """
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            bin_dir = root / "bin"
-            bin_dir.mkdir()
-            (bin_dir / "gh").write_text(mock_gh)
-            (bin_dir / "gh").chmod(0o755)
-            calls = root / "calls"
-            calls.write_text("")
-            result = run_step(guard, {"GH_CALLS": str(calls), "BRANCH": "agent/issue-7"}, root,
-                              path_prefix=str(bin_dir))
-            self.assertEqual(result.returncode, 0, result.stderr)
-            lines = calls.read_text().splitlines()
-            self.assertIn("agent/issue-7", lines[0])
-            self.assertIn("pr ready 12 --undo", lines)
+        for case, pushed, existing, body_text in (("not-pushed", "0", "0", "body"), ("existing", "1", "1", "body"),
+                                                  ("created", "1", "0", "受入条件の対応表"),
+                                                  ("empty-body", "1", "0", "  \n")):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                bin_dir = root / "bin"
+                bin_dir.mkdir()
+                for name in ("gh", "git"):
+                    (bin_dir / name).write_text(mock)
+                    (bin_dir / name).chmod(0o755)
+                pr_dir = root / "agent-pr"
+                pr_dir.mkdir()
+                (pr_dir / "title.txt").write_text("feat: fixture\n")
+                (pr_dir / "body.md").write_text(body_text)
+                calls = root / "calls"
+                calls.write_text("")
+                env = {"CALLS": str(calls), "PUSHED": pushed, "EXISTING": existing, "GH_REPO": "fixture/repo",
+                       "BRANCH": "agent/issue-7", "BASE": "main", "ISSUE": "7", "PR_DIR": str(pr_dir),
+                       "RUN_URL": "https://example.invalid/run"}
+                result = run_step(opener, env, root, path_prefix=str(bin_dir))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                create = [line for line in calls.read_text().splitlines() if line.startswith("gh pr create")]
+                if case in ("not-pushed", "existing"):
+                    self.assertEqual(create, [])
+                    continue
+                self.assertEqual(len(create), 1)
+                for expected in ("--repo fixture/repo", "--draft", "--head agent/issue-7", "--base main",
+                                 "--title feat: fixture"):
+                    self.assertIn(expected, create[0])
+                body = (pr_dir / "body.md").read_text()
+                self.assertIn("Closes #7", body)
+                if case == "empty-body":
+                    self.assertIn("https://example.invalid/run", body)
 
     def test_ci_does_not_claim_changed_file_coverage(self):
         # jest-coverage-report-action の threshold は全体カバレッジで、入力形式も vitest と合わない

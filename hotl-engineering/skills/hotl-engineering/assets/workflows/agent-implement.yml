@@ -18,11 +18,12 @@
 #     起票者の trusted 判定・CP1 で人間が本文を確定してからラベルを付ける運用を
 #     必ず組み合わせること
 #   - エージェントに直接のコマンドとして事前承認するのは --allowedTools で明示したものだけ
-#     (計画コメント、Issue のブランチの作成と push、lint / typecheck / test、Draft PR の作成)。
-#     push 先は Issue のブランチに固定し、gh api・merge・force push・依存の追加は与えない。
-#     gh pr create に --repo / --head / --draft= を付けることは --disallowedTools で拒み、
-#     作られた PR はエージェントの後の step で Draft に戻す。リポジトリ側の settings と
-#     .mcp.json は読まない(--setting-sources user / --strict-mcp-config)
+#     (計画コメント、Issue のブランチの作成と push、lint / typecheck / test)。push 先は
+#     Issue のブランチに固定し、gh api・merge・force push・依存の追加は与えない。
+#     リポジトリ側の settings と .mcp.json は読まない(--setting-sources user / --strict-mcp-config)
+#   - PR はエージェントに作らせない。エージェントはタイトルと本文をファイルに書くだけにし、
+#     信頼側の step が repo・head・base・Draft を固定して作る(gh pr create の引数の組み合わせは
+#     接頭辞の許可では縛りきれないため)
 #   - 残るリスク: lint / typecheck / test と git commit(フック)はリポジトリのコードを実行し、
 #     この job の認証情報(書き込み可能なトークン、Bedrock 用の AWS 認証)が環境にある。
 #     Issue 経由の prompt injection で書かれたコードが、それを読み出しうる。その子プロセスの
@@ -107,6 +108,13 @@ jobs:
             exit 1
           fi
 
+      # PR のタイトルと本文の置き場所を、エージェントの前に新しく用意する
+      - name: Prepare the pull request draft directory
+        id: pr-dir
+        run: |
+          rm -rf "$RUNNER_TEMP/agent-pr"
+          mkdir -p "$RUNNER_TEMP/agent-pr"
+
       - uses: anthropics/claude-code-action@v1
         with:
           use_bedrock: "true"
@@ -124,7 +132,9 @@ jobs:
                仕様とテストが矛盾して通せないと判断したら、テストも実装も曲げず、根拠を
                書いた質問コメントを Issue に投稿して終了すること
             5. `git add`・`git commit` の後、`git push -u origin agent/issue-${{ github.event.issue.number }}`
-               で push し、`gh pr create --draft` で Draft PR を作成。PR 本文には以下を必ず含める:
+               で push する。PR は作らない(後の step が Draft で作る)。代わりに、PR のタイトルを1行で
+               `${{ runner.temp }}/agent-pr/title.txt` に、本文を `${{ runner.temp }}/agent-pr/body.md` に
+               Write で書く。本文には以下を必ず含める:
                - `Closes #${{ github.event.issue.number }}`
                - 受入条件と検証結果の対応表
                - 自己申告のリスクポイント(人間レビュアーが見るべき箇所)
@@ -142,21 +152,50 @@ jobs:
             --setting-sources user
             --strict-mcp-config
             --tools "Read,Grep,Glob,Edit,MultiEdit,Write,Bash"
-            --allowedTools "Read,Grep,Glob,Edit,MultiEdit,Write,Bash(gh issue comment ${{ github.event.issue.number }}:*),Bash(git switch -c agent/issue-${{ github.event.issue.number }}),Bash(git status),Bash(git diff:*),Bash(git add:*),Bash(git commit:*),Bash(git push -u origin agent/issue-${{ github.event.issue.number }}),Bash(pnpm lint),Bash(pnpm typecheck),Bash(pnpm test:*),Bash(gh pr create --draft:*)"
-            --disallowedTools "Bash(gh pr create *--repo*),Bash(gh pr create * -R *),Bash(gh pr create *--head*),Bash(gh pr create * -H *),Bash(gh pr create *--draft=*)"
+            --allowedTools "Read,Grep,Glob,Edit,MultiEdit,Write,Bash(gh issue comment ${{ github.event.issue.number }}:*),Bash(git switch -c agent/issue-${{ github.event.issue.number }}),Bash(git status),Bash(git diff:*),Bash(git add:*),Bash(git commit:*),Bash(git push -u origin agent/issue-${{ github.event.issue.number }}),Bash(pnpm lint),Bash(pnpm typecheck),Bash(pnpm test:*),Edit(/${{ runner.temp }}/agent-pr/title.txt),Edit(/${{ runner.temp }}/agent-pr/body.md)"
 
-      # エージェントが作った PR を、信頼側の step で Draft に揃える
-      # (許可の照合をすり抜けて Ready にされても、Ready にするのは人間の仕事のままにする)
-      - name: Keep the agent pull request in draft
-        id: keep-draft
-        if: always()
+      # PR は信頼側の step で、repo・head・base・Draft を固定して作る。
+      # ADAPT: GITHUB_TOKEN で作った PR では pull_request の workflow が自動では走らない。PR 上で CI や
+      # ai-review を走らせたいなら、独自の GitHub App を用意して vars.HOTL_APP_ID と
+      # secrets.HOTL_APP_PRIVATE_KEY を設定する(ADJUST.md 参照)
+      - name: Create a GitHub App token for the pull request
+        id: app-token
+        if: vars.HOTL_APP_ID != ''
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.HOTL_APP_ID }}
+          private-key: ${{ secrets.HOTL_APP_PRIVATE_KEY }}
+          # PR の作成に必要な権限だけに絞る(App に付与された権限すべてを引き継がない)
+          permission-contents: read
+          permission-pull-requests: write
+
+      - name: Open the draft pull request
+        id: open-pr
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
           GH_REPO: ${{ github.repository }}
           BRANCH: agent/issue-${{ github.event.issue.number }}
+          BASE: ${{ github.event.repository.default_branch }}
+          ISSUE: ${{ github.event.issue.number }}
+          PR_DIR: ${{ runner.temp }}/agent-pr
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          gh pr list --head "$BRANCH" --state open --json number,isDraft \
-            --jq '.[] | select(.isDraft == false) | .number' |
-            while read -r number; do
-              gh pr ready "$number" --undo
-            done
+          # エージェントがブランチを push していなければ作らない(質問コメントで終了した場合など)
+          if ! git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "No branch $BRANCH was pushed; no pull request is created"
+            exit 0
+          fi
+          # 既にある PR は、人間が Ready にしたものも含めて変えない
+          if [ -n "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
+            echo "A pull request for $BRANCH already exists; it is left unchanged"
+            exit 0
+          fi
+          title=$(head -n 1 "$PR_DIR/title.txt" 2>/dev/null || true)
+          [ -n "$title" ] || title="Implement #$ISSUE"
+          body="$PR_DIR/body.md"
+          if ! [ -f "$body" ] || ! grep -q '[^[:space:]]' "$body"; then
+            printf 'エージェントが本文を書かなかった。Actions run を参照: %s\n' "$RUN_URL" > "$body"
+          fi
+          grep -qE "Closes #${ISSUE}([^0-9]|$)" "$body" || printf '\nCloses #%s\n' "$ISSUE" >> "$body"
+          gh pr create --repo "$GH_REPO" --draft --head "$BRANCH" --base "$BASE" \
+            --title "$title" --body-file "$body"

@@ -54,8 +54,12 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
       保存する。編集可能な Issue 本文は、恒久的な承認スナップショットにならない
 - [ ] `--allowedTools` の lint / typecheck / test のコマンドを、プロジェクトの実在するスクリプトに置き換える。
       依存のインストールはエージェントの前の step で行い、エージェントには install を直接のコマンドとして許さない。
-      push 先は Issue のブランチに固定したままにし、`gh api`・merge・force push を足さない。`gh pr create` への
-      `--repo` / `--head` / `--draft=` を拒む `--disallowedTools` と、PR を Draft に戻す step は外さない
+      push 先は Issue のブランチに固定したままにし、`gh api`・merge・force push を足さない。PR の作成をエージェントに
+      許さない(`gh pr create` の引数は接頭辞の許可では縛りきれない)。PR は後の step が repo・head・base・Draft を
+      固定して作る
+- [ ] PR を作る step は既定で GITHUB_TOKEN を使うので、その PR では pull_request の workflow が自動では走らない。
+      PR 上で CI や ai-review を走らせるなら、独自の GitHub App を作り(Contents・Pull requests の書き込み)、
+      `vars.HOTL_APP_ID` と `secrets.HOTL_APP_PRIVATE_KEY` を設定する
 - [ ] テストと git commit(フック)はリポジトリのコードを実行し、job の認証情報が環境にある。その子プロセスの中の
       操作は事前承認の範囲では制限されない。外部者が Issue を起票できる環境では、environment reviewer と CP1 での
       本文確定を必ず組み合わせる
