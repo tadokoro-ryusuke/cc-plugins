@@ -17,10 +17,17 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
 - [ ] secrets 名(GITHUB_OIDC_ROLE / AZURE_CLIENT_ID* / TEAMS_WEBHOOK_URL 等)→ 実在の secrets に合わせ、未作成なら作成手順を成果物に添える
 - [ ] サードパーティ actions(`dorny/paths-filter` / `marocchino/sticky-pull-request-comment` /
       `gitleaks/gitleaks-action` 等)をタグでなく commit SHA に pin する
-      (テンプレは可読性のため `@vN` で書いてある。CI 自体が Tier 2 である以上、適用時に pin が既定)
+      (テンプレは可読性のため `@vN` で書いてある。CI 自体が Tier 2 である以上、適用時に pin が既定)。
+      Organization / enterprise の allowed actions policy で SHA ピンを強制している場合、pin していない
+      workflow は実行時に失敗する。pin と更新は Renovate などで機械化し、手作業にしない
+- [ ] actions はどれも Node 24 で動く版にしてある(GitHub のホストランナーから Node 20 は 2026-09-23 に外れた)。
+      self-hosted runner なら v2.327.1 以上にする。版を下げて Node 20 の版に戻さない
 
 ## workflows/ci.yml
 - [ ] pnpm → 実際のパッケージマネージャ(npm/yarn/uv/poetry)。Python系ならL1-L5を ruff / mypy / pip-audit / pytest に読み替え
+- [ ] `pnpm/action-setup` は pnpm 11 以降なら v6.1.0 以降、pnpm 10 以下なら v5 にする(`@v6` の浮動タグは
+      2026-10-26 時点で v6.0.10 を指し、pnpm 12 に対応していない)
+- [ ] `NODE_VERSION` は現行の LTS から選ぶ(2026-10-26 時点で v24。v22 は 2027-04-30 に EOL、v26 は 2026-10-28 に LTS 入り)
 - [ ] `pnpm lint` / `pnpm test` / `pnpm build` → 実在するスクリプト名
 - [ ] カバレッジ閾値 → vitest.config の `coverage.thresholds`(全体)に、既存カバレッジ実績に合わせた
       現実的な値から設定し、段階的に上げる。変更ファイルだけに要求したい場合は、差分を実際に判定する
@@ -60,7 +67,8 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
       何も付けない Edit / Write を足さない(作業ツリーの外の Actions の環境ファイルを書き換えられるため)
 - [ ] PR を作る step は既定で GITHUB_TOKEN を使うので、その PR では pull_request の workflow が自動では走らない。
       PR 上で CI や ai-review を走らせるなら、独自の GitHub App を作り(Contents・Pull requests の書き込み)、
-      `vars.HOTL_APP_ID` と `secrets.HOTL_APP_PRIVATE_KEY` を設定する
+      `vars.HOTL_APP_ID` と `secrets.HOTL_APP_PRIVATE_KEY` を設定する。create-github-app-token v3.1 以降は
+      `client-id`(App の Client ID)が推奨だが、actionlint 1.7.12 が未対応なので、テンプレは `app-id` のまま
 - [ ] テストと git commit(フック)はリポジトリのコードを実行し、job の認証情報が環境にある。その子プロセスの中の
       操作は事前承認の範囲では制限されない。外部者が Issue を起票できる環境では、environment reviewer と CP1 での
       本文確定を必ず組み合わせる

@@ -52,7 +52,7 @@ jobs:
     outputs:
       authorized: ${{ steps.actor.outputs.authorized }}
     steps:
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@v9
         id: actor
         with:
           script: |
@@ -82,21 +82,21 @@ jobs:
     # environment を未設定のままなら保護なしで従来どおり即実行される
     environment: agent-implement
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       # ADAPT: 依存はエージェントの前にロックファイルどおり入れる(エージェントには install を許さない)。
       # パッケージマネージャと Node の版は ci.yml と揃える
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6.1.0 # pnpm 10 以下なら @v5(ci.yml の ADAPT 参照)
+      - uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version: "24"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE }}
           aws-region: ap-northeast-1
@@ -177,7 +177,7 @@ jobs:
 
       # PR のタイトルと本文を、PR を作る job に渡す(エージェントが書いたデータとして扱う)
       - name: Keep the pull request draft for the next job
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: agent-pr
           path: ${{ runner.temp }}/agent-pr/
@@ -199,7 +199,7 @@ jobs:
     steps:
       - name: Fetch the pull request draft
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: agent-pr
           path: ${{ runner.temp }}/agent-pr
@@ -207,8 +207,10 @@ jobs:
       - name: Create a GitHub App token for the pull request
         id: app-token
         if: vars.HOTL_APP_ID != ''
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@v3
         with:
+          # v3.1 以降は client-id が推奨で app-id は非推奨(動作はする)。actionlint 1.7.12 が client-id を
+          # 知らずエラーにするので、actionlint が対応するまで app-id のままにする
           app-id: ${{ vars.HOTL_APP_ID }}
           private-key: ${{ secrets.HOTL_APP_PRIVATE_KEY }}
           # PR の作成に必要な権限だけに絞る(App に付与された権限すべてを引き継がない)

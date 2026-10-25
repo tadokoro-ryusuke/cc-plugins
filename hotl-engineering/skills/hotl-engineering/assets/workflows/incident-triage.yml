@@ -57,20 +57,20 @@ jobs:
       actions: read # gh run list
       id-token: write # Bedrock / Azure の OIDC
     steps:
-      - uses: actions/checkout@v4 # CLAUDE.md / runbooks/ を読ませるため
+      - uses: actions/checkout@v7 # CLAUDE.md / runbooks/ を読ませるため
         with:
           persist-credentials: false
 
       # --- Bedrock(推論)用 AWS OIDC ---
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE }}
           aws-region: ap-northeast-1
 
       # --- 調査対象(Azure)用 Read-Only OIDC ---
       - name: Azure login (Reader only)
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID_READER }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -153,7 +153,7 @@ jobs:
       # 最終回答だけを report job に artifact で渡す(書き込み権限を持つ job でエージェントを動かさない)
       - name: Keep triage summary for the report job
         if: always() && steps.summary.outputs.path != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: triage-summary
           path: ${{ steps.summary.outputs.path }}
@@ -171,7 +171,7 @@ jobs:
       - name: Fetch triage summary
         if: needs.triage.result == 'success'
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: triage-summary
           path: ${{ runner.temp }}/triage
