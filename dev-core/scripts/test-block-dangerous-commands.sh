@@ -91,6 +91,23 @@ expect block 'echo $(echo $(rm -rf /))'
 expect block 'echo $(echo ")") && rm -rf /'
 # shellcheck disable=SC2016
 expect block 'echo ${x:-$(rm -rf /)}'
+# 置換の終わりを、引用符の入れ子・コメント・heredoc の中の ")" で見誤らない（Codex の再レビュー）
+# shellcheck disable=SC2016
+expect block 'echo $(echo "$(echo ")"; rm -rf /)")'
+# shellcheck disable=SC2016
+expect block 'echo $(echo "$(echo ")"; git push --force origin main)")'
+# shellcheck disable=SC2016
+expect block 'echo $(true # )"
+rm -rf /
+)'
+# shellcheck disable=SC2016
+expect block "echo \$(cat <<'EOF'
+)\"
+EOF
+rm -rf /
+)"
+# shellcheck disable=SC2016
+expect block 'echo ${x:-$(echo $(true); rm -rf /)}'
 expect block "printf '%s' '<<EOF'
 rm -rf /
 EOF"
@@ -130,6 +147,11 @@ expect pass 'command -v rm'
 expect pass 'echo $(true) rm -rf /'
 # shellcheck disable=SC2016
 expect pass 'echo "$(date)" git push -f origin main'
+# ${...} の中でも、引用符やエスケープで文字列になった置換は実行されない
+# shellcheck disable=SC2016
+expect pass 'echo ${x:-'"'"'$(rm -rf /)'"'"'}'
+# shellcheck disable=SC2016
+expect pass 'echo ${x:-\$(rm -rf /)}'
 # shellcheck disable=SC2016
 expect pass 'echo ${HOME}/build && rm -rf ./dist'
 

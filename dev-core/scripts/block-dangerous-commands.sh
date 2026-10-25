@@ -9,6 +9,8 @@
 # `;` `&` `|` `(` `)` と改行で区切った各コマンドの語の並びを判定する。引用符で囲まれた語は1語として
 # 扱い、実行されない文字列（引用符の中身、引用符付きの heredoc の本文、コメント）はコマンドとして
 # 見ない。$( ) とバッククォート、${x:-$( )}、引用符なしの heredoc の中の $( ) は、別のコマンドとして見る。
+# $( ) の終わりは、本体を同じ字句解析で走査して探す（引用符・コメント・heredoc の中の括弧は数えない）。
+# case の「パターン)」を含む $( ) は終わりを早く見誤る（既知の制約）。
 # 置換は外側の語の一部として残すので、置換の後ろの語も外側の同じコマンドの引数になる。
 # if・then・sudo・env・command・xargs・nice・timeout などの前置きは、オプションとその値を読み飛ばす。
 # bash -c / -lc など、eval、env -S の中の文字列は2段まで見る。
@@ -49,22 +51,19 @@ add_ask() { ASK_REASONS="${ASK_REASONS}- $1
 # コマンド文字列を字句解析し、語は "W<TAB>値"、コマンドの区切りは "S" の1行ずつに出す。
 lex_commands() {
   printf '%s' "$1" | awk '
-    function emit() { if (inword) { gsub(/\n/, " ", word); print "W\t" word; word = ""; inword = 0 } }
-    function sep() { emit(); print "S" }
-    # $( の "(" の位置 i から、対応する ")" の位置を返す（無ければ 0）。引用符・エスケープ・
-    # バッククォートの中の括弧は数えない
-    function close_paren(s, i, n,    d, c) {
-      d = 1
-      for (i = i + 1; i <= n; i++) {
-        c = substr(s, i, 1)
-        if (c == "\\") { i++; continue }
-        if (c == "\047") { while (i < n && substr(s, i + 1, 1) != "\047") i++; i++; continue }
-        if (c == "\"") { while (i < n && substr(s, i + 1, 1) != "\"") { if (substr(s, i + 1, 1) == "\\") i++; i++ } i++; continue }
-        if (c == "`") { while (i < n && substr(s, i + 1, 1) != "`") { if (substr(s, i + 1, 1) == "\\") i++; i++ } i++; continue }
-        if (c == "(") d++
-        else if (c == ")") { d--; if (d == 0) return i }
-      }
-      return 0
+    # 語と区切りを出す。quiet のとき（置換の終わりを探すための走査）は何も出さない
+    function emit() { if (inword) { if (!quiet) { gsub(/\n/, " ", word); print "W\t" word } word = ""; inword = 0 } }
+    function sep() { emit(); if (!quiet) print "S" }
+    # "$(" の "(" の位置 p から、対応する ")" の位置を返す（無ければ 0）。本体を同じ字句解析で
+    # 走査するので、引用符・エスケープ・コメント・heredoc・入れ子の置換の中の括弧は数えない
+    function close_paren(s, p, n,    sv_mode, sv_depth, sv_word, sv_inword, sv_nh, sv_quiet, k, hd, hq, hs, j) {
+      sv_mode = mode; sv_depth = depth; sv_word = word; sv_inword = inword; sv_nh = nh; sv_quiet = quiet
+      for (k = 1; k <= nh; k++) { hd[k] = hdelim[k]; hq[k] = hquoted[k]; hs[k] = hstrip[k] }
+      quiet = 1
+      j = lex(s, p + 1, n, 1)
+      mode = sv_mode; depth = sv_depth; word = sv_word; inword = sv_inword; nh = sv_nh; quiet = sv_quiet
+      for (k = 1; k <= nh; k++) { hdelim[k] = hd[k]; hquoted[k] = hq[k]; hstrip[k] = hs[k] }
+      return j
     }
     # バッククォートの位置 i から、閉じるバッククォートの位置を返す（無ければ 0）
     function close_tick(s, i, n) {
@@ -74,23 +73,52 @@ lex_commands() {
       }
       return 0
     }
-    # 置換の中身は、後で別のコマンド列として解析する（deferred）。外側の語には置換の原文を置き、
-    # 外側のコマンドを途切れさせない（置換の後ろの語も同じコマンドの引数になる）
+    # 置換（i が "$(" か "`"）。本体は後で別のコマンド列として解析する（deferred）。外側の語には
+    # 置換の原文を置き、外側のコマンドを途切れさせない（置換の後ろの語も同じコマンドの引数になる）
     function subst(s, i, n, j, open) {
       if (j == 0) j = n + 1
-      nd++; deferred[nd] = substr(s, i + open, j - i - open)
+      if (!quiet) { nd++; deferred[nd] = substr(s, i + open, j - i - open) }
       word = word substr(s, i, j - i + 1); inword = 1
       return j
     }
-    function collect(line,    rest) {
-      rest = line
-      while (match(rest, /\$\([^()]*\)/)) { nd++; deferred[nd] = substr(rest, RSTART + 2, RLENGTH - 3); rest = substr(rest, RSTART + RLENGTH) }
-      rest = line
-      while (match(rest, /`[^`]*`/)) { nd++; deferred[nd] = substr(rest, RSTART + 1, RLENGTH - 2); rest = substr(rest, RSTART + RLENGTH) }
-    }
-    function lex(s,    n, i, c, nx, k, d, q, strip, j, line, t) {
-      n = length(s); mode = "N"; depth = 0; word = ""; inword = 0; nh = 0
+    # 引用符なしの heredoc の本文: エスケープされていない $( ) とバッククォートの本体を deferred にする
+    function collect(t,    n, i, c, j) {
+      if (quiet) return
+      n = length(t)
       for (i = 1; i <= n; i++) {
+        c = substr(t, i, 1)
+        if (c == "\\") { i++; continue }
+        if (c == "$" && substr(t, i + 1, 1) == "(") {
+          j = close_paren(t, i + 1, n); if (j == 0) j = n + 1
+          nd++; deferred[nd] = substr(t, i + 2, j - i - 2); i = j; continue
+        }
+        if (c == "`") {
+          j = close_tick(t, i, n); if (j == 0) j = n + 1
+          nd++; deferred[nd] = substr(t, i + 1, j - i - 1); i = j; continue
+        }
+      }
+    }
+    # 引用符の外の ${ ... }。中の引用符・エスケープ・置換を扱い、対応する "}" の位置を返す
+    function brace(s, i, n,    d, c, nx, q) {
+      d = 0; q = ""
+      for (; i <= n; i++) {
+        c = substr(s, i, 1); nx = substr(s, i + 1, 1)
+        if (q == "\047") { word = word c; if (c == "\047") q = ""; continue }
+        if (c == "\\") { word = word c nx; i++; continue }
+        if (c == "$" && nx == "(") { i = subst(s, i, n, close_paren(s, i + 1, n), 2); continue }
+        if (c == "`") { i = subst(s, i, n, close_tick(s, i, n), 1); continue }
+        if (q == "\"") { word = word c; if (c == "\"") q = ""; continue }
+        if (c == "\047" || c == "\"") { q = c; word = word c; continue }
+        word = word c
+        if (c == "{") d++
+        else if (c == "}") { d--; if (d == 0) return i }
+      }
+      return n
+    }
+    # s の start 番目から字句解析する。stopclose なら、深さ 0 の ")" の位置を返す（置換の終わり）
+    function lex(s, start, n, stopclose,    i, c, nx, k, d, q, strip, j, line, t, body) {
+      mode = "N"; depth = 0; word = ""; inword = 0; nh = 0
+      for (i = start; i <= n; i++) {
         c = substr(s, i, 1); nx = substr(s, i + 1, 1)
         if (mode == "S") { if (c == "\047") mode = "N"; else word = word c; continue }
         if (mode == "D") {
@@ -105,13 +133,15 @@ lex_commands() {
         if (c == "\n") {
           sep()
           for (k = 1; k <= nh; k++) {
+            body = ""
             while (i < n) {
               j = index(substr(s, i + 1), "\n")
               if (j == 0) { line = substr(s, i + 1); i = n } else { line = substr(s, i + 1, j - 1); i = i + j }
               t = line; if (hstrip[k]) sub(/^\t+/, "", t)
               if (t == hdelim[k]) break
-              if (!hquoted[k]) collect(line)
+              body = body line "\n"
             }
+            if (!hquoted[k]) collect(body)
           }
           nh = 0
           continue
@@ -122,15 +152,14 @@ lex_commands() {
         if (c == "\"") { mode = "D"; inword = 1; continue }
         if (c == "`") { i = subst(s, i, n, close_tick(s, i, n), 1); continue }
         if (c == "$" && nx == "(") { i = subst(s, i, n, close_paren(s, i + 1, n), 2); continue }
-        if (c == "$" && nx == "{") {
-          d = 0; t = ""
-          for (; i <= n; i++) { c = substr(s, i, 1); t = t c; if (c == "{") d++; else if (c == "}") { d--; if (d == 0) break } }
-          # ${x:-$(cmd)} の中の置換もコマンドとして見る
-          word = word t; inword = 1; collect(t); continue
-        }
+        if (c == "$" && nx == "{") { i = brace(s, i, n); inword = 1; continue }
         if (c == ";" || c == "&" || c == "|") { sep(); continue }
         if (c == "(") { depth++; sep(); continue }
-        if (c == ")") { if (depth > 0) depth--; sep(); continue }
+        if (c == ")") {
+          if (depth > 0) { depth--; sep(); continue }
+          if (stopclose) { emit(); return i }
+          sep(); continue
+        }
         if (c == "<" && nx == "<" && substr(s, i + 2, 1) != "<") {
           emit(); i += 2; strip = 0
           if (substr(s, i, 1) == "-") { strip = 1; i++ }
@@ -150,12 +179,13 @@ lex_commands() {
         word = word c; inword = 1
       }
       sep()
+      return 0
     }
     { text = (NR == 1) ? $0 : text "\n" $0 }
     END {
-      nd = 0
-      lex(text)
-      for (m = 1; m <= nd; m++) lex(deferred[m])
+      nd = 0; quiet = 0
+      lex(text, 1, length(text), 0)
+      for (m = 1; m <= nd; m++) lex(deferred[m], 1, length(deferred[m]), 0)
     }
   '
 }
