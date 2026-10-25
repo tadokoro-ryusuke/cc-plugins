@@ -56,7 +56,7 @@ LLM を含むシステムの方式設計を、以下の Step 順に進める。�
 - **1つのモデルで足りる作業では、オーケストレーションは割高になりやすい**。オーケストレーターと子の構成が得をしやすいのは、定型作業が大量にあるときと、1つのコンテキストに収まらないときである。テストなどの失敗シグナルがあるなら、低い effort で全件を回し、失敗した分だけ effort を上げて再実行する構成も候補になる
 - **サブエージェントは親のプロンプトキャッシュを使えない**。文脈の先頭が親と異なるため、子を立てるたびにシステムプロンプトと渡した文脈を新たに読み込む費用がかかる。分割の利得がこの費用を上回るかで判断する
 - **無人のループでは、テキストだけの応答終了（end_turn）を完了とみなさない**。長いタスクの途中で、進捗報告だけを返して止まるモデルがある。完了はテスト・スキーマ・状態などの完了条件で判定し、自動で続けさせる回数には上限を置く（停止条件 → Step 7）
-- **固定値ではなく、eval で決める**。モデルと effort の組み合わせは代表的なタスクの評価セットで比較してから決め、計測日と一緒に記録する。モデルが更新されると較正も変わるため、更新時に測り直す（評価設計 → llm-evals 参照）
+- **固定値ではなく、eval で決める**。モデルと effort の組み合わせは代表的なタスクの評価セットで比較してから決め、計測日と一緒に記録する。モデルが更新されると較正も変わるため、更新時に測り直す（評価設計 → ai-engineering:llm-evals 参照）
 
 ## Step 3: ツール設計
 
@@ -69,6 +69,15 @@ LLM を含むシステムの方式設計を、以下の Step 順に進める。�
 - [ ] エラー応答は「次に何をすべきか」が分かる文面にする。なぜなら、エージェントはエラーメッセージを読んでリトライ戦略を決めるため
 - [ ] 権限は **deny-by-default（最小権限）**。まず読取専用/書込の別を付け、書込系は4軸（可逆性・金銭影響・対外性・データ機微度）で格付けして権限マトリクス（正本 → human-in-the-loop-design）に落とす
 - [ ] ツール接続の標準は MCP（Model Context Protocol）を第一候補にする
+- [ ] MCP を使うなら、設計書に**対象 MCP リビジョン**と、使う機能の状態（Active / Deprecated）を書く。設計時に、そのリビジョンの changelog と非推奨機能の一覧（`https://modelcontextprotocol.io/specification/<リビジョン>/deprecated`）を確認する。なぜなら、MCP は後方互換を破る変更を日付付きのリビジョン（YYYY-MM-DD）で出すため、版を書かないと、どの前提で作ったかが後から分からなくなるため
+
+MCP 2026-07-28 リビジョンの要点（2026-10-26 確認。この日時点の current。出典: https://modelcontextprotocol.io/specification/versioning 、 https://modelcontextprotocol.io/specification/2026-07-28/changelog ）:
+
+- **ステートレス化**: initialize のハンドシェイクと、プロトコルのセッション（`Mcp-Session-Id`）が廃止された。呼び出しをまたぐ状態が要るときは、サーバーが発行するハンドルを通常のツール引数で渡す
+- **非推奨**: Roots・Sampling・Logging・動的クライアント登録（DCR）。新規実装では採用しない。ただし非推奨一覧では、削除されうるのは早くても「2027-07-28 以降に出るリビジョン」からとされ、既存の連携をすぐ壊す必要はない。移行先は、Roots ならツール引数・リソース URI・サーバー設定、Sampling なら LLM の API を直接呼ぶ、Logging なら stderr（stdio のとき）か OpenTelemetry
+- **リモート MCP の認可**: クライアント登録は、仕様の推奨順（SHOULD）に従う。事前登録した情報があればそれを使い、なければ Client ID Metadata Documents（CIMD）、DCR は CIMD に対応しない認可サーバー向けの後方互換の代替（使うなら `application_type` を指定する）、どれも無ければ利用者に入力を求める。認可レスポンスに `iss` があれば、記録した issuer と照合してから認可コードを引き換える（RFC 9207）。サーバーは自分宛てに発行されたトークンだけを受け付け、ほかのトークンを受け取ったり中継したりしない
+- **トレース**: OpenTelemetry のトレースコンテキストは `_meta` の `traceparent` で伝える（監査ログ側 → human-in-the-loop-design Step 8）
+- **旧リビジョンとの互換**: SDK やクライアントの対応には時間差がある。相手が 2025-11-25 以前（initialize 型）のときの互換経路と、`server/discover` による版の選択を確かめる。既存の連携を新リビジョン前提で急いで書き直さない
 
 運用ループ: プロトタイプ → 評価でツール選択ミスを観測 → description を修正、を回す。ツール改善はエージェント自身にやらせてよい（Anthropic 公式推奨）。
 
@@ -111,7 +120,7 @@ RAG を作る場合は**段階論**で進める: **Naive → Advanced → Modula
 
 - **前処理 × チャンク戦略で精度の大半（7〜8割）が決まる**。埋め込みモデル選定に先に時間を使わない
 - チャンクは 400 トークン・オーバーラップ 15% から開始し、Context Recall が低ければ大きく、Precision が低ければ小さくする
-- **golden set（評価データセット 30 件〜）を先に作る**。なぜなら、評価がないと改善が全て感覚頼みになるため。評価設計の詳細 → dev-core:test-design 参照
+- **golden set（評価データセット 30 件〜）を先に作る**。なぜなら、評価がないと改善が全て感覚頼みになるため。評価設計の詳細 → ai-engineering:llm-evals 参照
 
 メモリ設計は保存先と更新則を分類して決める（CoALA の枠組み）: 作業記憶（コンテキスト内）/ エピソード記憶（過去のやりとり）/ 意味記憶（事実知識）/ 手続き記憶（スキル・手順）。短期/長期それぞれの保存先・スキーマ・書き込み/参照ルールをメモリ設計書に明記する。
 
@@ -129,17 +138,32 @@ RAG を作る場合は**段階論**で進める: **Naive → Advanced → Modula
 
 ガードレールは 4 層で設計する。「プロンプトで指示」だけで済ませてはならない。なぜなら、指示はプロンプトインジェクションで上書きされ得るため、決定的（コードで強制される）な層が必須:
 
-1. **入力フィルタ** — モデレーション、信頼できない入力（Web・メール・顧客文書）のマーキング、レート制限
+1. **入力フィルタ** — モデレーション、信頼できない入力（Web・メール・顧客文書・Issue/PR コメント・ログ・MCP ツールの description と応答）のマーキング、レート制限
 2. **出力検証** — スキーマ検証、対外送信前のチェック、機微情報の漏えい検査
 3. **停止条件** — 最大ターン数・トークン予算・タイムアウト・同一エラー 3 回で停止。**最初から入れる**。なぜなら、停止条件のないループは暴走時に止める手段がないため。完了の判定は、モデルが応答を終えたことではなく完了条件で行う（→ Step 2「モデルと effort の選定」）
 4. **権限分離** — 信頼できない入力を読んだコンテキストから書込系・対外送信系ツールを呼ばせない。実行分離は OS サンドボックス / コンテナ・VM / ネットワーク egress 制御の 3 層で考え、deny-by-default とする
 
-脅威の語彙として以下でセルフチェックする（2026年時点の版。最新版を要確認）:
+権限分離はセッション単位で確かめる。次の 3 つを 1 つのセッションにそろえない（出典: Meta「Agents Rule of Two: A Practical Approach to AI Agent Security」2025-10-31。1 セッションで満たしてよいのは 3 つのうち 2 つまで、という規則）:
 
-- [ ] **OWASP Top 10 for LLM Applications 2025** — 特にプロンプトインジェクション、過剰な代理権限（Excessive Agency）、機微情報漏えい
-- [ ] **OWASP Top 10 for Agentic Applications（2025年12月）** — プランニング・ツール使用・アイデンティティ・メモリ・エージェント間通信のリスク
+- **A**: 信頼できない入力を読む（入力フィルタの例に挙げたもの）
+- **B**: 機微データ・重要なシステムに触れる
+- **C**: 状態を変える・外部へ送る
 
-高リスクツール（不可逆・金銭影響・対外送信・機微データ）の呼び出しにだけ人間の承認を挟む layered defense にする（出典: OpenAI「A Practical Guide to Building Agents」）。承認ゲート・エスカレーション・監査ログの設計 → human-in-the-loop-design 参照。
+上の権限分離（A のコンテキストに C を持たせない）を守っていれば、3 つはそろわない。A と C がどうしても両方要るタスクは、自律実行させずに次のどちらかにする。なぜなら、注入された指示はセッション内のどのツールにも届き、B があればその被害が機微データやシステムに及ぶため。
+
+- セッションを分ける: A を読む子には B と C を渡さず、決めた形式の結果だけを親に返させる。親は信頼できない原文を読まずに C を実行する
+- 行動の前に人間が承認する（in-the-loop。設計 → human-in-the-loop-design Step 2）
+
+書込・送信のツールを持たない A と B のセッションでも、URL を開く・画像を表示するなど外部に届く読取の経路があれば、機微データを URL に載せて持ち出されうる。A と B を同居させるなら、そうした経路がないことを確かめる。
+
+脅威の語彙として以下でセルフチェックする（2026-10-26 に版を確認。版は変わるので、使う前に一次ソースで確かめる。URL は出典節）:
+
+- [ ] **OWASP GenAI LLM Top 10 2026**（2026-08 公開）— モデルをアプリの部品として使うときの語彙。2025 版からの主な変化: Excessive Agency（過剰な代理権限）が 3 位に上がった。System Prompt Leakage は Hidden Context Exposure に名前が変わり、範囲が広がった。1 位 Prompt Injection・2 位 Sensitive Information Disclosure は変わらない
+- [ ] **OWASP Top 10 for Agentic Applications for 2026**（2025-12-09 公開）— プランニング・ツール使用・アイデンティティ・メモリ・エージェント間通信のリスク
+- 使い分け（LLM Top 10 2026 の Preface による）: モデルを部品として使うなら LLM Top 10、ツールを呼び、セッションをまたぐ記憶を持ち、下流に作用する行為者として使うなら Agentic Top 10 と組み合わせる
+- [ ] 検証要件が要るときは **OWASP AISVS 1.01**（2026-10-09）。エージェントの実行は C9、MCP は C10（MCP 2026-07-28 リビジョンを参照）を見る。要件は版付きで引く（例: v1.01-C9.2.1）。AISVS は同じレベルの ASVS 検証を前提にする。契約に検証レベルを書く方法 → dev-core:security-by-design
+
+高リスクツール（不可逆・金銭影響・対外送信・機微データ）の呼び出しにだけ人間の承認を挟む layered defense にする（出典: OpenAI「A Practical Guide to Building Agents」）。例外は上の A と C が同居するセッションで、そこでは格付けの低い書込・送信も承認の対象にする。承認ゲート・エスカレーション・監査ログの設計 → human-in-the-loop-design 参照。
 
 ## 成果物テンプレ
 
@@ -152,6 +176,8 @@ RAG を作る場合は**段階論**で進める: **Naive → Advanced → Modula
 - 構成: シングル / マルチ(マネージャー型 or ハンドオフ型)
 - モデル選定: 各ノードのモデルと effort、選定理由(コスト/レイテンシ/精度)と比較に使った eval
 - データフロー: 入力 → [各ノード] → 出力(信頼できない入力の流入点を明記)
+- セッションごとの A/B/C: 信頼できない入力・機微データ/重要システム・状態変更/外部送信のどれを持つか
+- MCP: 対象リビジョン / 使う機能とその状態(Active・Deprecated) / 認可方式(事前登録・CIMD・DCR)
 ```
 
 **2. ツール仕様書（ツールごと）**
@@ -198,7 +224,8 @@ RAG を作る場合は**段階論**で進める: **Naive → Advanced → Modula
 - [ ] 全ツールに description・エラー応答設計・リスク格付けがある
 - [ ] 停止条件（ターン数・予算・タイムアウト・同一エラー回数）が入っている
 - [ ] 各ノードのモデルと effort を、代表的なタスクの eval で比較して決めている
-- [ ] 信頼できない入力の流入点と、そこからの権限分離が構成図に描かれている
+- [ ] 信頼できない入力の流入点と、そこからの権限分離が構成図に描かれている。A・B・C の 3 つがそろうセッションが自律実行になっていない
+- [ ] MCP を使う場合、対象リビジョンと使う機能の状態が設計書にあり、新規に Deprecated の機能を採用していない
 - [ ] コンテキスト予算表で常駐/JIT の根拠が「毎ターン必要か」で説明されている
 - [ ] RAG がある場合、golden set が先に存在する
 - [ ] 人間の決定事項（権限承認・投資判断）が未決のまま実装に進んでいない
@@ -210,6 +237,10 @@ RAG を作る場合は**段階論**で進める: **Naive → Advanced → Modula
 - Anthropic「Building Effective AI Agents」「Effective Context Engineering for AI Agents」「Writing Effective Tools for Agents」「How we built our multi-agent research system」
 - Anthropic API ドキュメント「Effort」「Optimizing for cost and intelligence」「Prompting Claude Opus 5.5」
 - OpenAI「A Practical Guide to Building Agents」
-- OWASP Top 10 for LLM Applications 2025 / OWASP Top 10 for Agentic Applications（genai.owasp.org）
-- MCP 公式仕様（modelcontextprotocol.io）/ AGENTS.md 公式仕様（agents.md）
+- OWASP GenAI LLM Top 10 2026（https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/ 。Preface と項目の原文は https://github.com/GenAI-Security-Project/GenAI-LLM-Top10/tree/main/2026/final 。genai.owasp.org/llm-top-10/ は 2025 版の表示が残っているので版の確認に使わない）
+- OWASP Top 10 for Agentic Applications for 2026（https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/ ）
+- OWASP AISVS 1.01（https://github.com/OWASP/AISVS/releases/tag/v1.01 ）
+- Meta「Agents Rule of Two: A Practical Approach to AI Agent Security」（https://ai.meta.com/blog/practical-ai-agent-security/ ）
+- MCP 公式仕様（https://modelcontextprotocol.io/specification/versioning で current のリビジョンを確かめ、そのリビジョンの changelog と deprecated を読む）/ AGENTS.md 公式仕様（agents.md）
+- 上の OWASP・Meta・MCP は 2026-10-26 に一次ソースを開いて確認した。OWASP の版と日付は dev-core:security-by-design Step 6 にも書いてあるので、版を更新するときは両方を揃える
 - 12-Factor Agents（humanlayer/12-factor-agents）
