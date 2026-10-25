@@ -41,7 +41,7 @@ install 後は **新しい Codex スレッド**を開始し、`/skills` 一覧�
 
 > **キャッシュに注意**: Codex は install 時にプラグインをキャッシュへスナップショットする。
 > marketplace 側を更新しても自動反映されないため、更新後は
-> `codex plugin add <plugin>@codex-plugins` で再インストールし、新スレッドを開始する。
+> `codex plugin add <plugin>@codex-plugins` で再インストールし、新スレッドを開始する。GitHub から登録したマーケットプレイスは、再インストールの前に `codex plugin marketplace upgrade codex-plugins` で更新する。
 
 なお、cc-plugins 側の dev-core も `.codex-plugin/plugin.json`（`skills: "./skills/"`）を
 持つため、この cc-plugins を直接 marketplace 登録して install することも機構上は可能だが、

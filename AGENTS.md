@@ -67,6 +67,7 @@ dev-core のスキルは2層に分かれます:
 ```bash
 node scripts/check-skills-drift.mjs        # 構成 drift 検証（Node 標準のみ・追加依存なし）
 node scripts/validate-skill-evals.mjs      # behavior eval schema・skill参照検証
+node scripts/validate-skill-evals.mjs --plugin indie-product-marketing   # indie の行動ケース
 node scripts/validate-claude-hooks.mjs     # hook event・handler type・script参照検証
 claude plugin validate . --strict          # マーケットプレイス全体の公式検証
 claude plugin validate <plugin> --strict   # 変更した各プラグインごとに実行する公式検証
@@ -88,7 +89,7 @@ name とディレクトリ名の不一致・description の 1024 字超過など
 - `~/work/codex-plugins`（[tadokoro-ryusuke/codex-plugins](https://github.com/tadokoro-ryusuke/codex-plugins)）は Codex ネイティブ版マーケットプレイス。dev-core の知識スキルと hotl-engineering は、日本語正本からの**英語翻案**としてミラーする（機械コピーではなく、Codex の機能差に合わせた翻案）。github-tools も両リポジトリに存在するが構成が異なり、翻案ミラーの対象外（リポジトリごとに管理）。ui-ux-pro-max は 2026-10 に cc-plugins から削除した（Claude Code では上流の公式プラグインを使う。codex-plugins 側は別管理）。
 - cc-plugins 側で対象スキルを改善したら、codex-plugins 側へも同じ翻案ルールで反映し、`node scripts/validate-codex-plugins.mjs`（codex-plugins 側）で検証する。
 - indie-product-marketing は向きが逆で、ドメイン知識（SKILL.md の内容、references、assets）の正本は codex-plugins。改善は codex-plugins で先に行い、cc へは一方向に日本語で翻案する。references/・assets/ は同一コピーにし、同期元の commit をプラグインの README に記録する。cc が所有するのは各スキルの `references/claude-code-runtime.md` だけ。
-- Codex は install 時にプラグインをキャッシュへスナップショットする。codex-plugins 更新後は `codex plugin add <plugin>@codex-plugins` で再インストールし、新スレッドを開始しないと反映されない。
+- Codex は install 時にプラグインをキャッシュへスナップショットする。codex-plugins 更新後は `codex plugin add <plugin>@codex-plugins` で再インストールし、新スレッドを開始しないと反映されない。GitHub から登録したマーケットプレイスは Git のスナップショットなので、再インストールの前に `codex plugin marketplace upgrade codex-plugins` で更新する。
 
 ## 公開リポジトリとしての注意
 

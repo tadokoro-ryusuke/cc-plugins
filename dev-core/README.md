@@ -81,8 +81,8 @@ TDD 開発フレームワーク。t-wada 式 TDD、FSD、Clean Architecture、DD
 | タイミング | 処理 | 実体 |
 |-----------|------|------|
 | SessionStart | allowlist済みrepository metadata + 未完了planのpath/status + 作業規律（リスクに応じた検証、証拠の再利用条件、同じ経路での Three Strikes）の注入 | scripts/session-start-context.sh |
-| PreToolUse:Bash | 代表的な誤操作の tripwire。止める: rm -r でのルート・ホームの削除、main/master への強制 push、DB クライアントでの DROP/TRUNCATE。確認に回す: 作業ツリーを捨てる git 操作（reset の hard、clean の force、restore . など）。引用符の中身と heredoc の本文は照合しない | scripts/block-dangerous-commands.sh |
-| PostToolUse:Write\|Edit | Prettier自動フォーマット（設定があるプロジェクトのみ） | scripts/format-changed-file.sh |
+| PreToolUse:Bash | 代表的な誤操作の tripwire。止める: rm -r でのルート・ホームの削除、main/master への強制 push、DB クライアントでの DROP/TRUNCATE。確認に回す: 作業ツリーを捨てる git 操作（reset の hard、clean の force、restore . など）。引用符の中身と heredoc の本文はコマンドとして照合しない（DB クライアントやシェルに heredoc で渡した本文は、SQL・スクリプトとして照合する） | scripts/block-dangerous-commands.sh |
+| PostToolUse:Write\|Edit | 編集したファイルの整形。Prettier と ruff は設定があるとき、cargo fmt は Cargo.toml があるとき、gofmt は入っていれば動く | scripts/format-changed-file.sh |
 | Stop | 停止前の検出: 追加行のデバッグ残骸（console.log/debugger 等）、テストファイルに追加された focus/skip マーカー、テストファイルの削除。未追跡の新規ファイルも対象 | scripts/stop-quality-gate.sh |
 
 危険コマンドのフックは best-effort の tripwire で、完全なセキュリティ境界ではない。rm の重要パス（/、~、作業ディレクトリとその親）は Claude Code 本体が全モードで自動承認しない。プラグインからは permissions.deny を配布できないので、厳密に止めたい操作は利用者の settings に書き、main への強制 push はサーバー側の branch protection でも止める。例:
