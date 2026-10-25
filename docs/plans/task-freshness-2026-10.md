@@ -50,8 +50,8 @@
 | 3b | cc | `feature/hotl-2.1.0-evals` | 3 | C14 の hotl 側（judge を軸ごとの合格率でゲート）、C47 の hotl 側（actions を Node 24 の版へ、判定ファイルの取得） | draft PR #15（Codex GO、CI pass） |
 | 4 | codex | `codex/hotl-2.1.0` | 2 | 3・3b の翻案 | draft PR codex #11 |
 | 5 | cc | `feature/dev-core-5.1.0` | 1 | 実装まわり（下記の commit 順）、github-tools の C29 | draft PR #16（フックは Codex の NO-GO 5回を経て、最終回の指摘まで反映） |
-| 6 | codex | `codex/dev-core-freshness` | codex main | 5・8 のうち dev-core の知識層の翻案（worktree ~/work/codex-plugins-devcore） | 実装済み。Codex の NO-GO（3件）を修正中 |
-| 7 | cc | `feature/skill-reachability` | 8 | C18 の測定、C35、C17（worktree ~/work/cc-plugins-reach） | 実装と計測済み（5.67 USD）。Codex の最終レビュー待ち |
+| 6 | codex | `codex/dev-core-freshness` | codex main | 5・8 のうち dev-core の知識層の翻案（worktree ~/work/codex-plugins-devcore） | draft PR codex #12（Codex の NO-GO を2回経て反映） |
+| 7 | cc | `feature/skill-reachability` | 8 | C18 の測定、C35、C17（worktree ~/work/cc-plugins-reach） | draft PR #18（計測 5.67 USD。Codex の NO-GO を3回経て GO） |
 | 8 | cc | `feature/knowledge-freshness` | 5 | C46・C47・C51・C52・C53・C21・C14（9 を含む） | draft PR #17（Codex GO） |
 | 9 | cc | （8 に統合） | - | C38・C40・C41・C45 | 8 に含めた |
 | 10 | codex | （6 に統合） | - | 8・9 のうち知識層の変更の翻案 | 6 に含めた（codex に無いスキルの分は対象外） |
@@ -106,6 +106,8 @@
 
 ## Current Next Action
 
-1. PR 7 の Codex 最終レビューを読み、後退と普段起きうる失敗だけを直して push し、#17 の上に draft PR を作る。
-2. PR 6（codex の dev-core 翻案）の指摘3件の修正を確かめ、再レビューを経て push し、draft PR を作る。
-3. マージはユーザーが行う。マージ後はプラグインを更新し（`/plugin marketplace update cc-plugins`、`codex plugin add <plugin>@codex-plugins`）、計測（docs/research/skill-reachability-2026-10.md）を 5.1.0 で取り直す。
+本計画の範囲で行う作業は残っていない（2026-10-26）。残りはユーザーの判断と、マージ後の作業。
+
+1. ユーザーが PR をレビューしてマージする。順序は cc #13 → #14 → #15、#13 → #16 → #17 → #18、codex #10 → #11、codex #12。前の PR がマージされたら、後続の base を main に切り替える。
+2. マージ後にプラグインを更新し（`/plugin marketplace update cc-plugins`、`codex plugin add <plugin>@codex-plugins`）、発火の計測（docs/research/skill-reachability-2026-10.md）を 5.1.0 で取り直す。
+3. バックログ: codex の dev-core の危険コマンドフック（正規表現のまま）を cc の字句解析版に揃える。発火を測るための短い正例を足して3回以上流し、説明の見直し（C30・C73）を判断する。hotl の相談ケースを生成スクリプトで扱えるようにする。監査レポート §7 の残りの P2・P3。
