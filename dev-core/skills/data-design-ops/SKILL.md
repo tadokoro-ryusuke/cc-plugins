@@ -44,6 +44,9 @@ description: "テーブル物理設計・インデックス・パーティショ
 4. **投機的に作らない。** 「オプティマイザに選択肢を」とインデックスを乱造すると書き込み劣化とロック競合を招く。使われないインデックスは pg_stat_user_indexes 等で定期的に棚卸しして削除する。
 5. **稼働中の大きなテーブルへの追加は CONCURRENTLY（PostgreSQL）必須。** ロングトランザクションとの共存に注意する。
    なぜ: 通常の CREATE INDEX はテーブルをロックし、本番のサービス停止になる。
+6. **主キーに UUID を使うなら、時刻順の UUIDv7（または ULID）にする。** PostgreSQL 18 以降は DB 側の `uuidv7()` で生成できる。17 以前にはこの関数が無いので、アプリ側で生成する。
+   なぜ: ランダムな UUIDv4 は挿入位置がインデックス全体に散らばり、断片化を招く。時刻順の値なら挿入がインデックスの末尾に集まる。公開 ID としての扱い（推測困難さに頼らない）は → dev-core:data-auth-boundary-design Step 3。
+   出典（2026-10-26 確認）: https://www.postgresql.org/docs/18/functions-uuid.html （uuidv7 あり）/ https://www.postgresql.org/docs/17/functions-uuid.html （uuidv7 なし）/ https://www.postgresql.org/about/news/postgresql-18-released-3142/ （2025-09-25 リリース）
 
 ### EXPLAIN を証拠とする手順
 

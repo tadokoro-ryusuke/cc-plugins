@@ -47,7 +47,7 @@ grep -rn "http://" --include="*.ts" --include="*.rs" --include="*.py" <対象>
 grep -rni "password\|secret\|api[_-]key\|token" --include="*.ts" --include="*.rs" --include="*.py" <対象>
 ```
 
-依存関係の脆弱性監査は言語ごとのツールを使う（複数言語なら全部実行する）。監査は報告だけを行うモードで実行する:
+依存関係の脆弱性監査は言語ごとのツールを使う（複数言語なら全部実行する）。監査は報告だけを行うモードで実行する。ここでは CI ゲートの既定（High 以上）より低い moderate まで拾う。レビューでは閾値未満の所見も判断材料にするため。ゲートの合否・閾値・例外の基準は dev-core:security-by-design Step 5 に従い、閾値未満の所見をゲートの不合格として報告しない:
 
 | 言語 | コマンド |
 |---|---|

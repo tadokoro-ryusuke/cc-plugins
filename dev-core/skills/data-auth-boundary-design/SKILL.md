@@ -66,10 +66,16 @@ erDiagram
 
 1. **主キーは無意コード(サロゲートキー: ULID / UUIDv7)にする。**
    なぜ: 有意コード(桁に意味を持たせる)は組織変更などで意味の前提が変わると破綻する。
+   時系列ソートできるのでインデックス効率も良い。DB 側での生成(PostgreSQL 18 の uuidv7() など)は → dev-core:data-design-ops Step 1。
 2. **人間向けの表示コードは別属性として持ち、変更可能にする。**
    なぜ: 主キーと表示を分離すれば、業務側のコード体系変更がデータ移行にならない。
-3. **外部に晒す ID は推測不能にする(ULID / UUIDv7 — 時系列ソート可能でインデックス効率も良い)。**
-   なぜ: 連番の外部露出は件数漏洩と列挙攻撃(IDOR)を招く。
+3. **外部に晒す ID は連番にしない(ULID / UUIDv7 / UUIDv4 などの非連番)。ただし ID の推測困難さには頼らない。**
+   なぜ: 連番の外部露出は件数漏洩と列挙を招く。ただし非連番は多層防御にすぎない。IDOR を防ぐのは Step 7 の 4(サーバ側・リソース単位の認可判定)であって、ID の形式ではない。
+   RFC 9562 §8 は「UUID を推測困難だと仮定しない(SHOULD NOT)」「持っているだけでアクセスできる識別子(security capability)に使ってはならない(MUST NOT)」と定めている。OWASP も、複雑な ID は多層防御であり、それでも認可チェックは欠かせないとしている。
+   - **隣の ID を当てられる**: ULID の monotonic 生成は、同じミリ秒の中では乱数部に 1 を足して次の値を作る。UUIDv7 も、同じミリ秒内の増分を 1 にしてよい方式を RFC が認めている(RFC 9562 §6.2 Method 2。RFC 自身が、その値は推測されやすいとしている)。
+   - **作成時刻が読める**: UUIDv7 / ULID は先頭 48bit に作成時刻(Unix ミリ秒)をそのまま持つ。PostgreSQL 18 には UUIDv7 から時刻を取り出す uuid_extract_timestamp() もある。作成時刻が機微な情報なら(会員登録日時など)、公開 ID を UUIDv4 にするか、主キーとは別の公開 ID を持つ。主キーは項目 1 のままでよい。
+   - **capability トークンは ID と別に作る**: 共有リンク・招待・パスワード再設定・メール確認など、知っているだけで入れる値は、UUID(v4 を含む)からも ID からも作らない。CSPRNG で作ったランダムバイトを base64url などで符号化する。長さは 128bit 以上を本スキルの既定とする(OWASP がセッション ID を自前で作るときに求める長さに倣った)。有効期限・失効手段・用途の限定を持たせ、サーバ側にはハッシュで保存する(DB が漏れても、そのまま使えるトークンを渡さないため)。
+   出典(2026-10-26 確認): RFC 9562 §6.2・§8 https://www.rfc-editor.org/rfc/rfc9562.html#name-security-considerations / ULID spec(Monotonicity)https://github.com/ulid/spec / OWASP IDOR Prevention Cheat Sheet https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html / OWASP Session Management Cheat Sheet https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html / PostgreSQL 18 UUID Functions https://www.postgresql.org/docs/18/functions-uuid.html
 4. **既存の標準コード(JIS都道府県コード、ISO 4217 通貨等)があるなら自作しない。**
    なぜ: 自作コード体系は連携のたびに変換表という負債を生む。
 

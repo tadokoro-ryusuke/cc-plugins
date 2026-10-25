@@ -35,7 +35,8 @@ CI/CD はリポジトリ作成と同時に整備する初期投資であり、�
 | マージ時 | integration + build | — |
 | リリース前 | E2E + セキュリティスキャン | — |
 
-- 脆弱性は critical/high のみビルド失敗にする等、開発者摩擦と安全のバランスを閾値で調整する。
+- 依存監査・脆弱性スキャンをどの段階に置くかは本スキルで決める。どの重大度で落とすか（出発点の既定は High 以上で fail）と例外の扱いの正本は dev-core:security-by-design Step 5。
+  なぜ: 閾値をファイルごとに書くと基準が食い違い、エージェントは都合のよい方を選ぶ。
 - カバレッジのラチェット運用（下げない）と flaky テストの隔離ルールは、正本 → 姉妹スキル test-design（Step 7 運用ルール / テスト計画レビュー・チェックリスト）。CI 側はその機械的実装（閾値ゲートの設定・quarantine ラベルと skip 手順）を担う。
 - テストの配分（ピラミッド）・技法・観点表の設計 → 姉妹スキル test-design 参照。
 - ローカルでの検証実行フロー → dev-core:verify 参照。
@@ -54,10 +55,23 @@ CI/CD はリポジトリ作成と同時に整備する初期投資であり、�
 
 - [ ] サードパーティ Action は **SHA ピン留め**する（タグ参照は改ざんに弱い）。
   なぜ: 2025年3月の tj-actions/changed-files 侵害（2.3万リポジトリに影響）はタグ参照経由で広がった。
+- [ ] SHA ピンは enterprise / organization / repository の allowed actions policy で**強制**する（pin していない action を使う workflow は失敗する）。pin と更新は Renovate などで機械化し、手作業にしない（詳細と確認日 → [references/supply-chain.md](references/supply-chain.md) §5）。
+  なぜ: 手作業の pin は漏れる。強制すれば、漏れはその場で失敗として見える。
 - [ ] `permissions:` を明示し **GITHUB_TOKEN を最小権限**にする（デフォルトの広い権限で流さない）。
+- [ ] `pull_request_target` と `workflow_run` は原則使わない。使うなら fork の head を checkout せず、secrets と書き込み権限を渡さない。GitHub の既定の無効化ルールは public リポジトリだけが対象なので、private / internal では execution protections の event rule を自分で設定する（詳細と確認日 → [references/supply-chain.md](references/supply-chain.md) §5）。
+  なぜ: これらのトリガーは fork からの PR でも secrets と書き込み権限を持って動く。fork のコードを実行した時点で乗っ取られる。
+- [ ] `${{ github.event.* }}` などの非信頼値は `run:` に直接書かず、env 経由で渡す。workflow は actionlint / zizmor で静的検査する。
 - [ ] シークレットをリポジトリ変数や `.env` コミットに置かない。
   なぜ: 組織の61%が公開リポジトリにシークレットを露出しているという調査がある（目安・要確認）。
 - [ ] Dependabot/Renovate による依存自動更新を有効化する。SLSA / SBOM は顧客のセキュリティ要件に応じて追加する。
+- [ ] 依存の取り込みを既定値で守る。
+  - 新着版は 3〜14 日待ってから取り込む。セキュリティ修正は即時に取り込む例外経路とセットにする。
+  - 依存の install script は拒否を既定にし、必要なものだけ許可リストに載せる。
+  - lockfile をコミットし、CI は lockfile を書き換えない install（`npm ci` / `pnpm install --frozen-lockfile` / `uv sync --locked`）にする。
+
+  なぜ: 乗っ取られた版や postinstall は、install した瞬間に CI の secrets に届く。どの対策が既定で効くかはツールと版で違うので、案件ごとに確かめる。ツール別の既定値と設定名は [references/supply-chain.md](references/supply-chain.md)（確認日つき）。
+- [ ] パッケージを公開する案件では、publish を Trusted Publishing（OIDC）にし、長期の publish トークンを残さない。
+  なぜ: 長期トークンが漏れると、そのまま悪性の版を公開される。
 
 ## Step 3: 標準テンプレを1つ作り、全案件に複製する
 
@@ -141,6 +155,8 @@ CI/CD はリポジトリ作成と同時に整備する初期投資であり、�
 - [ ] **workflow ファイルを CODEOWNERS で保護する**。
   なぜ: CI はエージェントの暴走を止める最後の砦。エージェントがゲート自体を書き換えられてはならない。
 - [ ] 書込先が本番系・操作が不可逆・エラーコストがレビューコストを超える操作は、人間承認を必須にする。
+- [ ] CI 上のエージェントに非信頼入力（Issue・PR 本文、fork のコード）を渡す job は、書き込み権限や secrets を持つ job と分ける。
+  なぜ: 非信頼入力でエージェントが操られても、その job に権限が無ければ被害は広がらない。
 - 人間の介在点設計の一般論 → ai-engineering:human-in-the-loop-design（別プラグイン） 参照。
 
 ## 分担線: AI がやること / 人間にしか決められないこと
@@ -167,6 +183,8 @@ CI/CD はリポジトリ作成と同時に整備する初期投資であり、�
 - [ ] 品質ゲートが3段階に分かれ、PR 時のチェックが数分以内に収まるか
 - [ ] シークレットは OIDC 優先か。長期キーが残るなら理由が明文化されているか
 - [ ] Action は SHA ピン留め、GITHUB_TOKEN は最小権限か
+- [ ] 依存のクールダウンと例外経路、install script の扱い、frozen install、pull_request_target の方針が明文化されているか
+- [ ] 長期の publish トークンが残っていないか（パッケージを公開する案件は Trusted Publishing か）
 - [ ] ローカルと CI のコマンドが一本化されているか
 - [ ] デプロイ戦略が SLA・規模に対して過剰装備/過少装備になっていないか
 - [ ] フラグ台帳と棚卸しの運用が定義されているか
@@ -178,7 +196,7 @@ CI/CD はリポジトリ作成と同時に整備する初期投資であり、�
 - テスト配分・技法・観点表・検収テスト → 姉妹スキル test-design
 - ローカル6段階検証（build→type→lint→test→security→diff） → dev-core:verify
 - TDD・セキュリティ原則・コーディング規約 → dev-core:best-practices
-- セキュリティスキャンの選定方針・脆弱性トリアージ（EPSS/KEV）・SBOM 方針 → dev-core:security-by-design（本スキルは組み込み位置とタイミング）
+- セキュリティスキャンの選定方針・脆弱性トリアージ（EPSS/KEV）・依存監査ゲートの閾値と例外・SBOM 方針 → dev-core:security-by-design（本スキルは組み込み位置とタイミング）
 - CI 失敗の根本原因分析 → dev-core:debug
 - Issue 運用・ブランチ規約 → 姉妹スキル issue-driven-dev
 - 規約を自動ガードレール化する仕組み → 姉妹スキル conventions-as-guardrails
@@ -189,6 +207,6 @@ CI/CD はリポジトリ作成と同時に整備する初期投資であり、�
 - Jez Humble & David Farley『継続的デリバリー』
 - Nicole Forsgren ほか『LeanとDevOpsの科学』（Accelerate）、DORA State of DevOps Report
 - GitHub Docs「Security hardening for GitHub Actions」「About security hardening with OpenID Connect」
-- OWASP CI/CD Security Top 10、SLSA（slsa.dev）
+- OWASP CI/CD Security Top 10、SLSA（slsa.dev。2026-10-26 時点の現行は v1.2、2025-11-24 公開で Source Track を追加。出典: https://slsa.dev/blog/2025/11/announce-slsa-v1.2 ）
 - Pete Hodgson「Feature Toggles (aka Feature Flags)」（martinfowler.com）
 - 『データベース・リファクタリング』（Ambler & Sadalage）— expand-contract の原典
