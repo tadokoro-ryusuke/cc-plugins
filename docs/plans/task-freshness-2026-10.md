@@ -47,16 +47,16 @@
 | 1 | cc | `feature/freshness-b0` | main | ui-ux-pro-max の削除（marketplace 6.0.0）、hotl 2.0.2（C03・C04・カバレッジゲート）、監査レポートと本計画 | draft PR #13 |
 | 2 | codex | `codex/hotl-2.0.2-freshness` | codex main | hotl 2.0.2 の翻案（#8 を置き換え）、ui-ux-pro-max の LICENSE と来歴（C02） | draft PR #10（#8 は close） |
 | 3 | cc | `feature/hotl-2.1.0` | 1 | モデル ID の vars 化と fail-fast、agent-implement / ai-review のツール付与（新規の発見）。SDK は 1.x に固定（2.x と 4.7 以降の judge への移行は見送り） | draft PR #14（Codex GO） |
-| 3b | cc | `feature/hotl-2.1.0-evals` | 3 | C14 の hotl 側（judge を軸ごとの合格率でゲート）、C47 の hotl 側（actions のメジャー版、ADJUST） | 実装中 |
-| 4 | codex | `codex/hotl-2.1.0` | 2 | 3・3b の翻案 | 3 の翻案をコミット済み（46f3ab2、未 push） |
-| 5 | cc | `feature/dev-core-5.1.0` | 1 | 実装まわり（下記の commit 順）、github-tools の C29 | 実装済み。フックの作り直し（78f9cb1）の Codex 再レビュー待ち |
-| 6 | codex | `codex/dev-core-freshness` | codex main | 5 のうち知識層の変更の翻案 | 未着手 |
-| 7 | cc | `feature/skill-reachability` | 5 | C18 の測定、C35、C17 | 未着手 |
-| 8 | cc | `feature/knowledge-freshness` | 5 | C46・C47・C51・C52・C53・C21・C14（9 を含む） | 実装済み（worktree ~/work/cc-plugins-knowledge）。Codex レビュー待ち |
+| 3b | cc | `feature/hotl-2.1.0-evals` | 3 | C14 の hotl 側（judge を軸ごとの合格率でゲート）、C47 の hotl 側（actions を Node 24 の版へ、判定ファイルの取得） | draft PR #15（Codex GO、CI pass） |
+| 4 | codex | `codex/hotl-2.1.0` | 2 | 3・3b の翻案 | draft PR codex #11 |
+| 5 | cc | `feature/dev-core-5.1.0` | 1 | 実装まわり（下記の commit 順）、github-tools の C29 | draft PR #16（フックは Codex の NO-GO 5回を経て、最終回の指摘まで反映） |
+| 6 | codex | `codex/dev-core-freshness` | codex main | 5・8 のうち dev-core の知識層の翻案（worktree ~/work/codex-plugins-devcore） | 実装済み。Codex の NO-GO（3件）を修正中 |
+| 7 | cc | `feature/skill-reachability` | 8 | C18 の測定、C35、C17（worktree ~/work/cc-plugins-reach） | 実装と計測済み（5.67 USD）。Codex の最終レビュー待ち |
+| 8 | cc | `feature/knowledge-freshness` | 5 | C46・C47・C51・C52・C53・C21・C14（9 を含む） | draft PR #17（Codex GO） |
 | 9 | cc | （8 に統合） | - | C38・C40・C41・C45 | 8 に含めた |
-| 10 | codex | 必要な分 | codex main | 8・9 のうち知識層の変更の翻案 | 未着手 |
+| 10 | codex | （6 に統合） | - | 8・9 のうち知識層の変更の翻案 | 6 に含めた（codex に無いスキルの分は対象外） |
 
-マージ順は 1 → 3、1 → 5 → 7・8・9。先の PR がマージされたら、後続 PR の base を main に切り替える。
+マージ順は 1 → 3 → 3b、2 → 4、1 → 5 → 8 → 7。先の PR がマージされたら、後続 PR の base を main に切り替える。
 
 ### PR 5 の commit 順（dev-core 5.1.0 は1回だけ上げる）
 
@@ -99,10 +99,13 @@
   PR 5 は実装済みで、フックを字句解析で作り直した（78f9cb1）。PR 8 は 7 担当で実装し、内部レビューの指摘（中4・低6）を反映した。
   C14 の hotl 側は PR 3 に載せず、PR 3b として judge のゲートを軸ごとの合格率に変えた（84dfa03、テスト 47 件 OK）。
   PR 4 は 3 の翻案をコミット済み（codex のテスト 92 件 OK、validate OK を手元で再確認）。
+- 2026-10-26（続き）: #15（3b）・#16（5）・#17（8）・codex #11（4）を draft で作成。フックは Codex の NO-GO を5回受け、
+  置換の終わりを字句解析の入れ子で探す形にし、heredoc の区切り語を bash 自身の動作と突き合わせる差分テスト（78 件）を入れた。
+  最終回は「後退と普段書きうる形だけを直す」規則で打ち切った。PR 7 は plugin eval と実際の構成で発火を測った
+  （dev-core の自動発火の正例 11 件中 2〜3 件しか発火しない。費用 5.67 USD）。
 
 ## Current Next Action
 
-1. Codex の3件のレビュー（PR 5 のフック、PR 8、PR 3b）を読み、指摘を実ファイルで確かめて直す。
-2. PR 3b に C47 の hotl 側（actions のメジャー版。版と破壊的変更は調査中）を足し、PR 4 に 3b を翻案する。
-3. PR 5・8・3b・4 を push して draft PR にする。
-4. PR 6/10（dev-core と知識層の翻案）、PR 7（C18 の測定）。
+1. PR 7 の Codex 最終レビューを読み、後退と普段起きうる失敗だけを直して push し、#17 の上に draft PR を作る。
+2. PR 6（codex の dev-core 翻案）の指摘3件の修正を確かめ、再レビューを経て push し、draft PR を作る。
+3. マージはユーザーが行う。マージ後はプラグインを更新し（`/plugin marketplace update cc-plugins`、`codex plugin add <plugin>@codex-plugins`）、計測（docs/research/skill-reachability-2026-10.md）を 5.1.0 で取り直す。
