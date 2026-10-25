@@ -67,7 +67,9 @@ CI/CD はリポジトリ作成と同時に整備する初期投資であり、�
 - [ ] CI 基盤はマネージド（GitHub Actions / GitLab CI）に全振りする。Jenkins 自前運用は選ばない。
 - [ ] **検証コマンドは1箇所に一本化**（package.json scripts / Makefile / justfile / cargo alias / uv+pyproject 等、スタックの標準に従う）し、ローカルと CI で同じコマンドを叩く。複数言語共存（Tauri 等）なら Makefile / justfile で全系統を束ねる。
   なぜ: ローカルで再現できない CI 失敗はデバッグ工数を倍化させる。
-- [ ] flaky 隔離の手順（ラベル・skip 方法・復帰条件）をテンプレに含める。
+- [ ] flaky 隔離の手順（ラベル・skip 方法・owner・期限・復帰条件）をテンプレに含める。隔離の判断基準の正本は test-design（Step 7）。ランナー固有の設定は版を書いて置く。例として Playwright では次の2つがある。
+  - `retryStrategy: 'isolated'`（1.62 以降）: リトライをスイートの最後に1件ずつ実行し、干渉を減らす選択肢。一律の既定にはしない。
+  - test locks（1.63 以降）: 同じ lock 名のテスト同士だけを直列化する。先に状態やデータの分離を試み、分離できない共有資源にだけ使う。スイート全体は直列化しない。
 - [ ] テンプレ改善は案件からのフィードバックで継続的に行い、次案件へ還元する。
 - CI 失敗の原因調査そのもの → dev-core:debug 参照。
 

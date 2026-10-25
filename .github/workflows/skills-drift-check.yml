@@ -86,6 +86,8 @@ jobs:
           fi
       - name: Smoke-test SessionStart context hook
         run: bash dev-core/scripts/test-session-start-context.sh
+      - name: Test Stop quality gate hook
+        run: bash dev-core/scripts/test-stop-quality-gate.sh
 
   validate:
     runs-on: ubuntu-latest

@@ -59,5 +59,6 @@ Mitchell Hashimotoの原則: **「エージェントがミスを犯すたびに�
 dev-core の Stop フック（`scripts/stop-quality-gate.sh`）がセッション終了時に以下を自動検出する:
 
 - 変更ファイルに残った `console.log` / `debugger` 等のデバッグ残骸
+- テストファイルに追加された focus / skip マーカー（`.only` / `.skip` / `@pytest.mark.skip` 等）と、テストファイルの削除
 
 このスクリプトの検出パターンに新しいチェック項目を追加し続けることで、Stopフック自体が学習する。

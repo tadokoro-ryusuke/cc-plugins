@@ -81,13 +81,13 @@ TDD 開発フレームワーク。t-wada 式 TDD、FSD、Clean Architecture、DD
 | SessionStart | allowlist済みrepository metadata + 未完了planのpath/status + 作業規律（リスクに応じた検証、証拠の再利用条件、同じ経路での Three Strikes）の注入 | scripts/session-start-context.sh |
 | PreToolUse:Bash | 危険コマンドブロック（rm -rf、force push等） | scripts/block-dangerous-commands.sh |
 | PostToolUse:Write\|Edit | Prettier自動フォーマット（設定があるプロジェクトのみ） | scripts/format-changed-file.sh |
-| Stop | デバッグ残骸（console.log/debugger）の停止前検出 | scripts/stop-quality-gate.sh |
+| Stop | 停止前の検出: 追加行のデバッグ残骸（console.log/debugger 等）、テストファイルに追加された focus/skip マーカー、テストファイルの削除。未追跡の新規ファイルも対象 | scripts/stop-quality-gate.sh |
 
 Claude Code の現行hook仕様では SessionStart/PreCompact は prompt handler 非対応。planの永続化は `/execute` が各iteration・停止・圧縮前に行い、SessionStart command hook はplan本文をdeveloper contextへ流さず再開対象だけを知らせる。`scripts/validate-claude-hooks.mjs` がevent/type互換性をCIで検証する。
 
-検出パターンの追加 = continuous-learning スキルの実践箇所。スクリプトとfixtureを編集してフック自体を成長させる。
+検出パターンの追加 = continuous-learning スキルの実践箇所。スクリプトと回帰テスト（`scripts/test-stop-quality-gate.sh`、CI で実行）を編集してフック自体を成長させる。Stop フックの検出は文字列照合による best-effort で、テストの弱体化をすべて捕まえるものではない（アサーションの純減やスナップショットの一括更新は verify の Diff ステップで判断する）。Stop には `onFailure` が効かないので、jq や git が無い、スクリプトが異常終了したときは停止を通す（fail-open）。
 
-`dev-core/evals/skill-behavior-cases.json` は grill の trigger/no-trigger、可逆な判断の継続、不可逆判断の停止、現在証拠による完了判定、TDD/refactor/debugのdelivery side effect禁止に加え、実行トポロジー（密結合な作業を親が持つ、独立トラックだけを委譲する、lint に agent を立てない、リスクゲートのレビューとその代替、テキストだけの end_turn を完了にしない、証拠の再利用、同じ経路での Three Strikes）を行動ケースとして固定する。`node scripts/validate-skill-evals.mjs` は schema と参照 skill を決定的に検証する静的gateであり、model挙動の採点は将来のcalibrated live evalで行う。
+`dev-core/evals/skill-behavior-cases.json` は grill の trigger/no-trigger、可逆な判断の継続、不可逆判断の停止、現在証拠による完了判定、TDD/refactor/debugのdelivery side effect禁止、テストを弱めて通さないこと（best-practices・verify）、単独 TDD の全体テストに加え、実行トポロジー（密結合な作業を親が持つ、独立トラックだけを委譲する、lint に agent を立てない、リスクゲートのレビューとその代替、テキストだけの end_turn を完了にしない、証拠の再利用、同じ経路での Three Strikes）を行動ケースとして固定する。`node scripts/validate-skill-evals.mjs` は schema と参照 skill を決定的に検証する静的gateであり、model挙動の採点は将来のcalibrated live evalで行う。
 
 ## Opus 5.5 での運用
 

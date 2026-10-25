@@ -43,7 +43,11 @@ t-wada 式の TDD サイクルを単独で実行する。サイクルの定義�
 
 ### Phase 4: Evidence ✅（証拠）
 
-focused test と関連する lint/typecheck を親がツールで実行し、実出力を記録する。`--commit` 指定がある場合だけ、変更ファイルを個別指定で `git add` し、Conventional Commits 形式でコミットする。
+focused test と関連する lint/typecheck を親がツールで実行し、実出力を記録する。
+
+Red → Green → Refactor を通したフルサイクルでは、完了報告と `--commit` の前に、`dev-core:verify` の Step 0 で検出したテストコマンドを、対象を絞らずに1回実行する（`dev-core:verify` の実行でもよい）。指定されたテストファイルだけのグリーンは、完了の証拠にしない。全体の実行で出た失敗は、自分が原因でないものも名前を挙げて報告する。実行できない場合は理由を書き、BLOCKED か未実行として扱い、完了も commit もしない。`--red` / `--green` だけを指定した実行はこの対象外（`--red` は意図的に赤なので、全体を回すと必ず落ちる）。
+
+`--commit` 指定があり、全体のテストが ✅ のときだけ、変更ファイルを個別指定で `git add` し、Conventional Commits 形式でコミットする。
 
 ## 報告ルール
 

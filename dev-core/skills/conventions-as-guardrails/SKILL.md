@@ -104,7 +104,8 @@ description: "コーディング規約・命名規約・ログ規約を「AIエ�
 事後レビューではなく「生成中に矯正する」。AI エージェントのフックに決定的チェックを仕込む:
 
 - [ ] **PostToolUse フック**: ファイル編集のたびにフォーマッタ + リンタを自動実行し、違反を即時フィードバックする
-- [ ] **Stop フック**: 作業終了時に lint / test / build を回し、失敗していたら完了を宣言させない
+- [ ] **Stop フック**: 作業終了時に lint / test / build を回し、失敗していたら完了を宣言させない。Stop フックには、同じ停止の2周目を通すループ防止（`stop_hook_active`）と連続継続の上限があり、毎ターンの実行コストもかかる。重いチェックを毎ターン回すかは、コストと照らして決める
+- [ ] **テストの focus / skip を設定で止める**: `.only` などの focus と無断の skip は、テストランナーとリンタの設定で決定的に落とす（Playwright の `forbidOnly`、Vitest の `allowOnly: false`、mocha の `--forbid-only`、eslint-plugin-jest の `no-focused-tests` / `no-disabled-tests` など）。テストを弱めて通す変更を、レビューの注意力に頼らず止めるため
 - [ ] **disable コメントは理由必須**: `eslint-disable` 等の抑制コメントには理由の記載を必須とし、追加は PR で明示して人間が承認する。無制限許可は規約を骨抜きにする
 - [ ] **危険操作の deny**: 本番 DB への書き込み等、取り返しのつかない操作はフックの deny 設定で AI の自動実行から外す
 
