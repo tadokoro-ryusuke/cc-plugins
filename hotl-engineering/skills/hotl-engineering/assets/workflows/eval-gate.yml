@@ -65,7 +65,9 @@ jobs:
       TARGET_ENDPOINT: ${{ vars.TARGET_STAGING_ENDPOINT }}
       EXPECTED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
       TARGET_API_KEY: ${{ secrets.TARGET_STAGING_API_KEY }}
-      # judge に使うモデル(Bedrock 東京)。生成側と分けるのが理想
+      # judge に使うモデル(Bedrock 東京)。生成側と分けるのが理想。
+      # ADAPT: Sonnet 4.5 は deprecated の旧世代(Anthropic 運営基盤での退役は 2026-11-30。
+      # Bedrock の退役日は AWS が決める)。後継への移行は ADJUST.md を参照
       JUDGE_MODEL: apac.anthropic.claude-sonnet-4-5-20250929-v1:0
     steps:
       - name: Prepare fresh evaluation artifacts
@@ -96,7 +98,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: pip install "anthropic[bedrock]" boto3
+      # SDK は major を固定する。2.x は API 2026-10-21 を送り、Bedrock では Claude 4.7 以降に
+      # しか対応しない(旧世代の judge は 400 になる)。1.x は sampling パラメータを受け付けないので、
+      # run_evals.py は送らない。版を変えるときは scripts/tests/test_hotl_sdk_contract.py の CI 側の
+      # 版も揃える
+      - run: pip install "anthropic[bedrock]>=1.17,<2" boto3
 
       # 実データ golden set は S3 から取得(repo にはサンプルのみ)
       - name: Fetch golden dataset
@@ -108,14 +114,16 @@ jobs:
 
       - name: Run evals
         id: run
+        # inputs.suite は workflow_dispatch の入力。shell に直接展開せず env: 経由で渡す
         env:
           EVAL_OUT: ${{ steps.artifacts.outputs.directory }}
+          SUITE: ${{ github.event_name == 'pull_request' && 'smoke' || (inputs.suite || 'full') }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          SUITE="${{ github.event_name == 'pull_request' && 'smoke' || (inputs.suite || 'full') }}"
           RUNNER="evals/run_evals.py"
           THRESHOLDS="evals/thresholds.json"
           # PR 時は base 側の runner と thresholds を使う(上の trusted checkout 参照)
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          if [ "$EVENT_NAME" = "pull_request" ]; then
             RUNNER=".trusted/evals/run_evals.py"
             THRESHOLDS=".trusted/evals/thresholds.json"
           fi

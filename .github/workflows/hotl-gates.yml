@@ -2,7 +2,7 @@ name: hotl gates
 
 # hotl-engineering が配布する GitHub テンプレート(workflows / evals / scripts)の
 # 回帰テストをオフラインで実行する。モデルや評価対象 API は一切呼ばない。
-# 検証本体は scripts/tests/(Python 標準 unittest + PyYAML)。
+# 検証本体は scripts/tests/(Python 標準 unittest + PyYAML + テンプレートと同じ版の anthropic SDK)。
 # agent-implement.yml の authorize スクリプトを実際に動かすため Node も用意する。
 
 on:
@@ -28,6 +28,8 @@ jobs:
     env:
       # 配布物(assets/)配下に __pycache__ を生成しない
       PYTHONDONTWRITEBYTECODE: "1"
+      # SDK の契約テスト(test_hotl_sdk_contract.py)を skip させない
+      HOTL_REQUIRE_SDK: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -38,5 +40,8 @@ jobs:
           python-version: "3.12"
       - name: Install workflow parser for offline fixture tests
         run: python3 -m pip install PyYAML==6.0.2
+      # eval-gate.yml テンプレートと同じ版指定にする(test_workflows.py が一致を検査する)
+      - name: Install the anthropic SDK pinned by the eval-gate template
+        run: python3 -m pip install "anthropic[bedrock]>=1.17,<2"
       - name: Test HOTL delivery gates with offline fixtures
         run: python3 -m unittest discover -s scripts/tests -v

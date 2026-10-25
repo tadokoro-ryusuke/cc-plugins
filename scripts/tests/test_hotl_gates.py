@@ -154,21 +154,18 @@ class EvalGateTests(unittest.TestCase):
 
 
 class JudgeSamplingTests(unittest.TestCase):
-    """cc 版独自: temperature は cfg にキーがあり、judge モデルが受け付ける系列のときだけ送る。
+    """judge には sampling パラメータ(temperature / top_p / top_k)を送らない。
 
-    対象は run_evals.py のコメントに記載の許可リスト(Claude 3 系 / Haiku 4.5 /
-    Sonnet・Opus 4.6 以前)。JUDGE_MODEL は import 時に確定するため patch.object で差し替える。
+    anthropic SDK 1.0.0(2026-08-20)以降の messages.create はこれらの引数を受け付けず、
+    送ると TypeError で全票が失敗する。thresholds.json に残っていても送らず、無視したことを知らせる。
+    JUDGE_MODEL は import 時に確定するため patch.object で差し替える。
     """
 
-    ACCEPTING = ("apac.anthropic.claude-sonnet-4-5-20250929-v1:0",
-                 "anthropic.claude-3-5-sonnet-20240620-v1:0",
-                 "anthropic.claude-haiku-4-5-20251001-v1:0",
-                 "anthropic.claude-opus-4-20250514-v1:0",
-                 "anthropic.claude-opus-4-6-v1")
-    REJECTING = ("anthropic.claude-opus-4-7",
-                 "anthropic.claude-sonnet-5",
-                 "anthropic.claude-sonnet-4-10",
-                 "arn:aws:bedrock:ap-northeast-1:000000000000:application-inference-profile/fixture")
+    MODELS = ("apac.anthropic.claude-sonnet-4-5-20250929-v1:0",
+              "anthropic.claude-haiku-4-5-20251001-v1:0",
+              "anthropic.claude-opus-4-7",
+              "arn:aws:bedrock:ap-northeast-1:000000000000:application-inference-profile/fixture")
+    SAMPLING = {"temperature": 0, "top_p": 0.9, "top_k": 5}
 
     @classmethod
     def setUpClass(cls):
@@ -185,25 +182,26 @@ class JudgeSamplingTests(unittest.TestCase):
         self.assertEqual(create.call_count, cfg.get("votes", 3))
         return create.call_args.kwargs
 
-    def test_allowlist_matches_documented_model_families(self):
-        for model in self.ACCEPTING:
+    def test_sampling_parameters_are_never_sent(self):
+        for model in self.MODELS:
             with self.subTest(model=model):
-                self.assertTrue(self.runner.judge_accepts_sampling(model))
-        for model in self.REJECTING:
-            with self.subTest(model=model):
-                self.assertFalse(self.runner.judge_accepts_sampling(model))
+                params = self.judge_params(model, dict(self.SAMPLING))
+                self.assertFalse(set(self.SAMPLING) & set(params))
+                self.assertIn("max_tokens", params)
 
-    def test_temperature_is_sent_only_to_accepting_models(self):
-        params = self.judge_params(self.ACCEPTING[0], {"temperature": 0})
-        self.assertEqual(params["temperature"], 0.0)
-        for model in self.REJECTING:
-            with self.subTest(model=model):
-                self.assertNotIn("temperature", self.judge_params(model, {"temperature": 0}))
+    def test_configured_sampling_parameters_are_reported_as_ignored(self):
+        self.assertEqual(self.runner.ignored_sampling_keys({"votes": 3, **self.SAMPLING}),
+                         ["temperature", "top_p", "top_k"])
+        self.assertEqual(self.runner.ignored_sampling_keys({"votes": 3}), [])
 
-    def test_temperature_is_omitted_when_not_configured(self):
-        params = self.judge_params(self.ACCEPTING[0], {})
-        self.assertNotIn("temperature", params)
-        self.assertIn("max_tokens", params)
+    def test_judge_failure_reports_the_sdk_error_message(self):
+        # 型名だけでは SDK の破壊的変更(引数の削除など)を追えないため、メッセージも出す
+        error = TypeError("create() got an unexpected keyword argument 'temperature'")
+        client = types.SimpleNamespace(messages=types.SimpleNamespace(create=Mock(side_effect=error)))
+        case = {"id": "fixture", "category": "answer", "query": "fixture"}
+        with patch("sys.stderr", new_callable=io.StringIO) as stderr, self.assertRaises(ValueError):
+            self.runner.eval_l2(client, case, {}, "rubric", {"votes": 1})
+        self.assertIn("unexpected keyword argument 'temperature'", stderr.getvalue())
 
 
 if __name__ == "__main__":
