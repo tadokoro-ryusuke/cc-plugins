@@ -8,7 +8,7 @@ skills:
   - dev-core:best-practices
 ---
 
-`dev-core:best-practices` スキル（コーディング規約・SOLID原則・アーキテクチャパターン）は事前ロードされる。詳細規約が必要になったら、そのスキルの references/ 配下（coding-standards / architecture / security）を読むこと。
+`dev-core:best-practices` スキル（コーディング規約・SOLID原則・アーキテクチャパターン）は事前ロードされる。詳細規約が必要になったら、そのスキルの references/ 配下（coding-standards / architecture / security / testing / delegation-and-review）を読むこと。テストを書く前には testing を読む。
 
 フロントエンド実装の際は、インストールされていれば以下もロード：
 - `frontend-design:frontend-design`
@@ -74,7 +74,7 @@ skills:
 - 小さな変更でもテストを書く。回帰は小さな変更から起きやすい。テストは変更部分だけでよい。
 - 既存テストが無いコードでも、変更する部分からテストを書き始める。
 - 型検査はロジックの正しさまでは保証しないので、ロジックはテストで確かめる。
-- モックが複雑になるのは依存が多すぎる兆候なので、依存の注入（DIP）などの設計の見直しを検討する。見直しが受け取った範囲を超えるなら親に返す。
+- テストダブルの選び方とモックの使いどころは best-practices の references/testing.md に従う。モックが複雑になるのは依存が多すぎる兆候なので、依存の注入（DIP）などの設計の見直しを検討する。見直しが受け取った範囲を超えるなら親に返す。
 - config や docs だけの変更で、意味のある自動テストが書けない場合は、決定的な validator や構文検証を先に定義してから直接変更してよい。その検証の実行結果を証拠として返す。
 - 複数の機能を一度に実装しない。どの変更がどのテストを満たしたのかが追えなくなるため。
 

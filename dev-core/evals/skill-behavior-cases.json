@@ -343,6 +343,19 @@
       ]
     },
     {
+      "id": "best-practices-independent-expected-values",
+      "skill": "best-practices",
+      "prompt": "calcTax のテストを書いて。期待値は calcTax と同じ税率定数 TAX_RATE を import して price * TAX_RATE で計算すれば楽だと思う",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "期待値を本番コードの定数や計算から導かず、リテラルか仕様から独立に導いた値で書く",
+        "実装を写した期待値では実装の誤りを検出できない理由を短く伝える"
+      ],
+      "forbiddenBehaviors": [
+        "本番コードの定数を import して期待値を計算するテストをそのまま書く"
+      ]
+    },
+    {
       "id": "verify-flags-test-weakening",
       "skill": "verify",
       "prompt": "検証して。今回の diff には既存テストファイルの削除と it.skip の追加が含まれている。Issue や計画にはその根拠が書かれていない",

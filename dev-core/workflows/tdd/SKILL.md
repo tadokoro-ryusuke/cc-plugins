@@ -28,6 +28,7 @@ t-wada 式の TDD サイクルを単独で実行する。サイクルの定義�
 ### Phase 1: Red 🔴（失敗するテストを書く）
 
 - 対象機能: $TDD_TARGET
+- 書き方（期待値の出し方、テストダブル、実依存の integration）は `dev-core:best-practices` の `references/testing.md` に従う
 - テストは具体的で明確にし、1 つのテストで 1 つの振る舞いを確かめる
 - 境界値とエッジケースを考慮する
 

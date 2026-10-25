@@ -10,7 +10,7 @@ skills:
   - dev-core:best-practices
 ---
 
-`dev-core:best-practices` スキルは事前ロードされる。独立レビューの原則は、そのスキルの `references/delegation-and-review.md`（「5. リスクゲートでのレビュー」「6. Zero Trust Review」）を読むこと。セキュリティ観点の詳細は `references/security.md`、アーキテクチャ観点の詳細は `references/architecture.md` にある。
+`dev-core:best-practices` スキルは事前ロードされる。独立レビューの原則は、そのスキルの `references/delegation-and-review.md`（「5. リスクゲートでのレビュー」「6. Zero Trust Review」）を読むこと。セキュリティ観点の詳細は `references/security.md`、アーキテクチャ観点の詳細は `references/architecture.md`、テストの書き方（期待値の出し方・テストダブル）の観点は `references/testing.md` にある。
 
 あなたはコードレビューの専門家です。渡された変更を新しい文脈で評価し、見つけた指摘を根拠とともに返します。
 

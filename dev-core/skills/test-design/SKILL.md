@@ -91,7 +91,7 @@ description: "テスト戦略・テスト設計・検収基準づくりのスキ
 
 ## Step 5: テスト品質を Khorikov の4本柱で判定する
 
-書かれたテスト（特に AI 生成テスト）は、Vladimir Khorikov『単体テストの考え方/使い方』の4本柱で判定する:
+書かれたテスト（特に AI 生成テスト）は、Vladimir Khorikov『単体テストの考え方/使い方』の4本柱で判定する（どう書くかは dev-core:best-practices の references/testing.md）:
 
 1. **リファクタリング耐性**: 実装詳細ではなく観察可能な振る舞いをテストしているか（内部構造の変更で壊れないか）
 2. **退行検出**: このテストは実際のバグを検出できるか（アサーションのない「実行するだけのテスト」ではないか）
@@ -152,7 +152,8 @@ description: "テスト戦略・テスト設計・検収基準づくりのスキ
 ## 境界（1行ポインタ）
 
 - テストの実行・6段階検証・証拠ベース完了判定 → dev-core:verify
-- TDD の進め方・テストコードの書き方・設計原則 → dev-core:best-practices
+- TDD の進め方・設計原則 → dev-core:best-practices
+- テストコードの書き方（期待値の出し方、テストダブル、実依存の integration、テストデータ） → dev-core:best-practices の references/testing.md
 - テスト失敗の原因調査 → dev-core:debug
 - 受入基準つき Issue の書き方・分割 → dev-core:issue-driven-dev
 - CI 品質ゲート・カバレッジゲート・quarantine の実装 → dev-core:cicd-release-design
