@@ -11,7 +11,8 @@
 # - 検出は文字列の照合による best-effort で、テストの弱体化をすべて捕まえるものではない。
 #   アサーションの純減やスナップショットの一括更新は、verify の Diff ステップで人が判断する。
 # - jq・git が無い、コミットが1つも無いリポジトリなどでは何もしない（停止を通す）。
-# - 検出パターンを追加する場合は DEBUG_PATTERN / SKIP_PATTERN を編集する（continuous-learning スキル参照）。
+# - 検出パターンを追加する場合は DEBUG_PATTERN / SKIP_PATTERN / RUST_IGNORE_PATTERN を編集する（continuous-learning スキル参照）。
+# - 未追跡ファイルは、ソースの拡張子のものだけを最大 MAX_UNTRACKED_FILES 件、MAX_FILE_BYTES 以下に限って見る。
 # - Go の fmt.Println は、main パッケージのファイルと cmd/ 配下では正当な出力として
 #   使われるため、そのファイルに限って検出対象から外す（他のパターンはそのまま検出する）。
 set -u
@@ -43,54 +44,67 @@ EXCLUDE_PATH_PATTERN='(\.test\.|\.spec\.|_test\.|(^|/)tests?/|(^|/)__tests__/|(^
 
 # テストファイルとみなすパス
 TEST_PATH_PATTERN='(\.test\.|\.spec\.|_test\.|(^|/)test_[^/]*\.py$|(^|/)tests?/|(^|/)__tests__/)'
-# テストの focus / skip マーカー
+# テストの focus / skip マーカー（括弧の前の空白も許す）
 # JS/TS: it/test/describe.only・.skip、fit/fdescribe/xit/xdescribe/xtest / Python: pytest の skip
-# Go: t.Skip / Rust: #[ignore] / Java・Kotlin: @Disabled
-SKIP_PATTERN='^\+.*(\b(it|test|describe|context)\.(only|skip)\(|(^|[^[:alnum:]_.])(fit|fdescribe|xit|xdescribe|xtest)\(|@pytest\.mark\.skip|pytest\.skip\(|\bt\.Skip(Now|f)?\(|#\[ignore\]|@Disabled\b)'
+# Go: t.Skip / Java・Kotlin: @Disabled
+SKIP_PATTERN='^\+.*(\b(it|test|describe|context)\.(only|skip)[[:space:]]*\(|(^|[^[:alnum:]_.])(fit|fdescribe|xit|xdescribe|xtest)[[:space:]]*\(|@pytest\.mark\.skip|pytest\.skip[[:space:]]*\(|\bt\.Skip(Now|f)?[[:space:]]*\(|@Disabled\b)'
+# Rust のテストは src/ の中にも書かれるので、#[ignore]（理由付きを含む）は .rs ファイルならどこでも見る
+RUST_IGNORE_PATTERN='^\+[[:space:]]*#\[ignore([[:space:]]*=|[[:space:]]*\])'
 
-# 変更ファイル（リポジトリルート基準）: 追跡済みの差分と、未追跡の新規ファイル
-changed_files() {
-  {
-    git -C "$TOP" diff HEAD --name-only --diff-filter=ACMR 2>/dev/null
-    git -C "$TOP" ls-files --others --exclude-standard 2>/dev/null
-  } | sort -u
-}
-
-# ファイルの追加行: 追跡済みは差分の追加行、未追跡は全行を追加行として扱う
-added_lines() {
-  if git -C "$TOP" ls-files --error-unmatch -- "$1" >/dev/null 2>&1; then
-    git -C "$TOP" diff HEAD --unified=0 -- "$1" 2>/dev/null | grep -v '^+++ '
-  else
-    sed 's/^/+/' "$TOP/$1" 2>/dev/null
-  fi
-}
+# 未追跡ファイルはソースだけを、上限付きで見る（巨大な未追跡ツリーで Stop のたびに待たせないため）
+SOURCE_EXT_PATTERN='\.(js|jsx|ts|tsx|mjs|cjs|mts|cts|vue|svelte|py|rb|php|go|rs|java|kt|kts|swift|scala|cs|c|cc|cpp|h|hpp|dart|ex|exs|lua)$'
+MAX_UNTRACKED_FILES=200
+MAX_FILE_BYTES=1048576
 
 DEBUG_FINDINGS=""
 TEST_FINDINGS=""
-while IFS= read -r f; do
-  [ -z "$f" ] && continue
+
+# 1ファイルの追加行を検査する。引数: パス 追加行
+scan() {
+  local f="$1" lines="$2" hits pattern
   if printf '%s\n' "$f" | grep -qE "$TEST_PATH_PATTERN"; then
-    hits=$(added_lines "$f" | grep -E "$SKIP_PATTERN" | head -5)
-    if [ -n "$hits" ]; then
-      TEST_FINDINGS="${TEST_FINDINGS}${f}:
+    hits=$(printf '%s\n' "$lines" | grep -E "$SKIP_PATTERN" | head -5)
+    [ -n "$hits" ] && TEST_FINDINGS="${TEST_FINDINGS}${f}:
 ${hits}
 "
-    fi
   fi
-  printf '%s\n' "$f" | grep -qE "$EXCLUDE_PATH_PATTERN" && continue
+  case "$f" in
+    *.rs)
+      hits=$(printf '%s\n' "$lines" | grep -E "$RUST_IGNORE_PATTERN" | head -5)
+      [ -n "$hits" ] && TEST_FINDINGS="${TEST_FINDINGS}${f}:
+${hits}
+" ;;
+  esac
+  printf '%s\n' "$f" | grep -qE "$EXCLUDE_PATH_PATTERN" && return 0
   pattern="$DEBUG_PATTERN"
   if printf '%s\n' "$f" | grep -qE "$GO_PRINT_ALLOWED_PATH_PATTERN" \
     || grep -qE "$GO_PACKAGE_MAIN_PATTERN" "$TOP/$f" 2>/dev/null; then
     pattern="$DEBUG_PATTERN_WITHOUT_GO_PRINT"
   fi
-  hits=$(added_lines "$f" | grep -E "$pattern" | head -5)
-  if [ -n "$hits" ]; then
-    DEBUG_FINDINGS="${DEBUG_FINDINGS}${f}:
+  hits=$(printf '%s\n' "$lines" | grep -E "$pattern" | head -5)
+  [ -n "$hits" ] && DEBUG_FINDINGS="${DEBUG_FINDINGS}${f}:
 ${hits}
 "
-  fi
+  return 0
+}
+
+# 追跡済みの変更: 差分の追加行
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  scan "$f" "$(git -C "$TOP" diff HEAD --unified=0 -- "$f" 2>/dev/null | grep -v '^+++ ')"
 done <<EOF
-$(changed_files)
+$(git -C "$TOP" diff HEAD --name-only --diff-filter=ACMR 2>/dev/null)
+EOF
+
+# 未追跡の新規ファイル: 全行を追加行として扱う（ソースだけ、シンボリックリンクと巨大なファイルは除く）
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  [ -L "$TOP/$f" ] && continue
+  [ -f "$TOP/$f" ] || continue
+  [ "$(wc -c <"$TOP/$f" 2>/dev/null || echo 0)" -le "$MAX_FILE_BYTES" ] || continue
+  scan "$f" "$(sed 's/^/+/' "$TOP/$f" 2>/dev/null)"
+done <<EOF
+$(git -C "$TOP" ls-files --others --exclude-standard 2>/dev/null | grep -E "$SOURCE_EXT_PATTERN" | head -n "$MAX_UNTRACKED_FILES")
 EOF
 
 DELETED_TESTS=$(git -C "$TOP" diff HEAD --name-only --diff-filter=D 2>/dev/null | grep -E "$TEST_PATH_PATTERN")

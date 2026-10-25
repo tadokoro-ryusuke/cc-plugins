@@ -63,6 +63,28 @@ expect block 'git push -f origin master'
 expect block "bash -c 'git push -f origin main'"
 expect block 'psql -c "DROP TABLE users"'
 expect block "mysql -e 'truncate table users'"
+# 前置きの引数・複合構文・シェル起動・置換（Codex レビューで旧版より弱いと分かった形）
+expect block 'command -- rm -rf /'
+expect block 'env -u FOO rm -rf /'
+expect block 'xargs -n 1 rm -rf /'
+expect block 'timeout 10 git push --force origin main'
+expect block '(rm -rf /)'
+expect block 'if rm -rf /; then true; fi'
+expect block "bash -lc 'rm -rf /'"
+expect block 'eval "git push -f origin main"'
+# shellcheck disable=SC2016 # $( ) を展開せずにフックへ渡す
+expect block 'echo $(rm -rf /) $(echo safe)'
+# shellcheck disable=SC2016
+expect block 'echo "$(git push -f origin main)"'
+# shellcheck disable=SC2016
+expect block 'echo `git push -f origin main`'
+expect block "printf '%s' '<<EOF'
+rm -rf /
+EOF"
+# shellcheck disable=SC2016
+expect block 'cat <<EOF
+$(rm -rf /)
+EOF'
 
 # --- must-pass（以前は誤って止めていた形を含む） ---
 expect pass 'echo "rm -rf /"'
@@ -81,6 +103,17 @@ rm -rf /
 git push -f origin main
 EOF"
 expect pass 'git restore --staged .'
+expect pass "rm -rf './safe /'"
+# shellcheck disable=SC2016
+expect pass "echo '\$(rm -rf /)'"
+# shellcheck disable=SC2016
+expect pass "cat <<'EOF'
+\$(rm -rf /)
+EOF"
+expect pass '# rm -rf /'
+expect pass 'command -v rm'
+# shellcheck disable=SC2016
+expect pass 'echo ${HOME}/build && rm -rf ./dist'
 
 # --- must-ask（戻せる余地のある破壊的操作） ---
 expect ask 'git reset --hard'

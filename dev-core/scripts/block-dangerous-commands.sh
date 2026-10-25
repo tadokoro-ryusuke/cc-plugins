@@ -5,14 +5,17 @@
 # permissions.deny、sandbox、サーバー側の branch protection で行う。rm の重要パス
 # （/、~、作業ディレクトリとその親）は、Claude Code 本体が全モードで自動承認しない。
 #
-# 照合は、引用符の中身と heredoc の本文を除いた「コマンドの位置」の語だけに行う。
-# `;` `&&` `||` `|` `&` と改行で区切った各コマンドについて、sudo / env / command / xargs などの
-# 前置きを外してから判定する。`bash -c '...'` と `$( ... )` の中身は1段だけ見る。
+# コマンド文字列を1文字ずつ字句解析し（引用符・エスケープ・コメント・heredoc・$( )・バッククォート）、
+# `;` `&` `|` `(` `)` と改行で区切った各コマンドの語の並びを判定する。引用符で囲まれた語は1語として
+# 扱い、実行されない文字列（引用符の中身、引用符付きの heredoc の本文、コメント）はコマンドとして
+# 見ない。$( ) とバッククォート、引用符なしの heredoc の中の $( ) は、コマンドとして見る。
+# if・then・sudo・env・command・xargs・nice・timeout などの前置きは、オプションとその値を読み飛ばす。
+# bash -c / -lc など、eval、env -S の中の文字列は2段まで見る。
 #
 #   block（exit 2）: rm -r で / ・ ~ ・ $HOME を消す、main / master への強制 push（-f / --force /
 #                    +refspec。宛先を書かないときは今のブランチ）、DB クライアントでの DROP / TRUNCATE
-#   ask（確認）    : git reset --hard、git clean -f、git restore .、git checkout -- .、
-#                    git branch -D、main / master への --force-with-lease
+#   ask（確認）    : 作業ツリーや未追跡ファイルを捨てる git 操作、git branch -D、
+#                    main / master への --force-with-lease
 #
 # jq が無い・入力を解釈できないときは、理由を stderr に出して exit 1 で通す（non-blocking error）。
 set -u
@@ -30,6 +33,8 @@ fi
 [ -z "$CMD" ] && exit 0
 
 PROTECTED_BRANCH_PATTERN='^(main|master)$'
+MAX_DEPTH=2
+TAB=$(printf '\t')
 BLOCK_REASONS=""
 ASK_REASONS=""
 
@@ -38,45 +43,89 @@ add_block() { BLOCK_REASONS="${BLOCK_REASONS}- $1
 add_ask() { ASK_REASONS="${ASK_REASONS}- $1
 "; }
 
-# コマンド列を「単純なコマンド」ごとの行に分ける。引用符の中では区切らず、heredoc の本文は捨てる。
-split_commands() {
-  printf '%s\n' "$1" | awk '
-    BEGIN { q = ""; seg = ""; heredoc = ""; pending = "" }
-    {
-      line = $0
-      if (heredoc != "") {
-        t = line; sub(/^\t+/, "", t)
-        if (t == heredoc) heredoc = ""
-        next
-      }
-      if (q == "" && match(line, /<<-?[ \t]*["'\'']?[A-Za-z_][A-Za-z0-9_]*["'\'']?/)) {
-        d = substr(line, RSTART, RLENGTH)
-        gsub(/<<-?[ \t]*/, "", d); gsub(/["'\'']/, "", d)
-        pending = d
-      }
-      n = length(line)
+# コマンド文字列を字句解析し、語は "W<TAB>値"、コマンドの区切りは "S" の1行ずつに出す。
+lex_commands() {
+  printf '%s' "$1" | awk '
+    function emit() { if (inword) { gsub(/\n/, " ", word); print "W\t" word; word = ""; inword = 0 } }
+    function sep() { emit(); print "S" }
+    function push(kind) { sp++; smode[sp] = mode; sdepth[sp] = depth; skind[sp] = kind; mode = "N"; depth = 0; sep() }
+    function pop() { sep(); mode = smode[sp]; depth = sdepth[sp]; sp--; if (mode == "D") inword = 1 }
+    function collect(line,    rest) {
+      rest = line
+      while (match(rest, /\$\([^()]*\)/)) { nd++; deferred[nd] = substr(rest, RSTART + 2, RLENGTH - 3); rest = substr(rest, RSTART + RLENGTH) }
+      rest = line
+      while (match(rest, /`[^`]*`/)) { nd++; deferred[nd] = substr(rest, RSTART + 1, RLENGTH - 2); rest = substr(rest, RSTART + RLENGTH) }
+    }
+    function lex(s,    n, i, c, nx, k, d, q, strip, j, line, t) {
+      n = length(s); mode = "N"; depth = 0; sp = 0; word = ""; inword = 0; nh = 0
       for (i = 1; i <= n; i++) {
-        c = substr(line, i, 1)
-        if (q != "") {
-          seg = seg c
-          if (c == "\\" && q == "\"" && i < n) { i++; seg = seg substr(line, i, 1); continue }
-          if (c == q) q = ""
+        c = substr(s, i, 1); nx = substr(s, i + 1, 1)
+        if (mode == "S") { if (c == "\047") mode = "N"; else word = word c; continue }
+        if (mode == "D") {
+          if (c == "\"") { mode = "N"; continue }
+          if (c == "\\" && index("$`\"\\\n", nx) > 0) { word = word nx; i++; continue }
+          if (c == "$" && nx == "(") { emit(); i++; push("p"); continue }
+          if (c == "`") { emit(); push("b"); continue }
+          word = word c; continue
+        }
+        # mode N
+        if (c == " " || c == "\t") { emit(); continue }
+        if (c == "\n") {
+          sep()
+          for (k = 1; k <= nh; k++) {
+            while (i < n) {
+              j = index(substr(s, i + 1), "\n")
+              if (j == 0) { line = substr(s, i + 1); i = n } else { line = substr(s, i + 1, j - 1); i = i + j }
+              t = line; if (hstrip[k]) sub(/^\t+/, "", t)
+              if (t == hdelim[k]) break
+              if (!hquoted[k]) collect(line)
+            }
+          }
+          nh = 0
           continue
         }
-        if (c == "\047" || c == "\"") { q = c; seg = seg c; continue }
-        if (c == "\\" && i < n) { seg = seg c substr(line, i + 1, 1); i++; continue }
-        if (c == ";" || c == "&" || c == "|") { print seg; seg = ""; continue }
-        seg = seg c
+        if (c == "#" && !inword) { while (i < n && substr(s, i + 1, 1) != "\n") i++; continue }
+        if (c == "\\") { if (nx == "\n") { i++; continue } word = word nx; inword = 1; i++; continue }
+        if (c == "\047") { mode = "S"; inword = 1; continue }
+        if (c == "\"") { mode = "D"; inword = 1; continue }
+        if (c == "`") { if (sp > 0 && skind[sp] == "b") pop(); else { emit(); push("b") } continue }
+        if (c == "$" && nx == "(") { emit(); i++; push("p"); continue }
+        if (c == "$" && nx == "{") {
+          d = 0
+          for (; i <= n; i++) { c = substr(s, i, 1); word = word c; if (c == "{") d++; else if (c == "}") { d--; if (d == 0) break } }
+          inword = 1; continue
+        }
+        if (c == ";" || c == "&" || c == "|") { sep(); continue }
+        if (c == "(") { depth++; sep(); continue }
+        if (c == ")") { if (depth > 0) { depth--; sep() } else if (sp > 0) pop(); else sep(); continue }
+        if (c == "<" && nx == "<" && substr(s, i + 2, 1) != "<") {
+          emit(); i += 2; strip = 0
+          if (substr(s, i, 1) == "-") { strip = 1; i++ }
+          while (substr(s, i, 1) == " " || substr(s, i, 1) == "\t") i++
+          d = ""; q = 0
+          for (; i <= n; i++) {
+            c = substr(s, i, 1)
+            if (c == "\047" || c == "\"" || c == "\\") { q = 1; continue }
+            if (c == " " || c == "\t" || c == "\n" || c == ";" || c == "&" || c == "|" || c == "<" || c == ">" || c == ")") break
+            d = d c
+          }
+          i--
+          if (d != "") { nh++; hdelim[nh] = d; hquoted[nh] = q; hstrip[nh] = strip }
+          continue
+        }
+        if (c == "<" || c == ">") { emit(); continue }
+        word = word c; inword = 1
       }
-      if (q == "") { print seg; seg = "" } else { seg = seg " " }
-      if (pending != "") { heredoc = pending; pending = "" }
+      sep()
     }
-    END { if (seg != "") print seg }
+    { text = (NR == 1) ? $0 : text "\n" $0 }
+    END {
+      nd = 0
+      lex(text)
+      for (m = 1; m <= nd; m++) lex(deferred[m])
+    }
   '
 }
-
-# 引用符を外した語の並び（中身は残す）
-unquote() { printf '%s' "$1" | tr -d "\"'"; }
 
 current_branch() { git branch --show-current 2>/dev/null; }
 
@@ -183,64 +232,128 @@ check_sql() {
   fi
 }
 
-check_command() {
-  local raw="$1" depth="$2"
-  local -a toks
-  read -r -a toks <<<"$(unquote "$raw")" || true
-  local i=0 n="${#toks[@]}"
-  # 前置きを外してコマンドの位置を得る
+# 1つのコマンドの語の並びを判定する。引数: 深さ 語...
+check_words() {
+  local depth="$1"
+  shift
+  local -a w=("$@")
+  local n="${#w[@]}" i=0
+  # 前置き（予約語・sudo・env・command・xargs など）を、オプションとその値ごと読み飛ばす
   while [ "$i" -lt "$n" ]; do
-    case "${toks[$i]}" in
+    case "${w[$i]}" in
+      if|then|elif|else|do|while|until|'!'|'{'|'}') i=$((i + 1)) ;;
       sudo)
         i=$((i + 1))
-        while [ "$i" -lt "$n" ] && [[ "${toks[$i]}" == -* ]]; do
-          case "${toks[$i]}" in -u|-g|-h|-p|-C) i=$((i + 2)) ;; *) i=$((i + 1)) ;; esac
+        while [ "$i" -lt "$n" ]; do
+          case "${w[$i]}" in
+            --) i=$((i + 1)); break ;;
+            -u|-g|-h|-p|-C|-D|-R|-T|-U|-r|-t) i=$((i + 2)) ;;
+            -*) i=$((i + 1)) ;;
+            *) break ;;
+          esac
         done ;;
       env)
         i=$((i + 1))
-        while [ "$i" -lt "$n" ] && { [[ "${toks[$i]}" == -* ]] || [[ "${toks[$i]}" == *=* ]]; }; do i=$((i + 1)); done ;;
+        while [ "$i" -lt "$n" ]; do
+          case "${w[$i]}" in
+            --) i=$((i + 1)); break ;;
+            -u|-C|--unset|--chdir) i=$((i + 2)) ;;
+            -S|--split-string)
+              [ "$((i + 1))" -lt "$n" ] && check_text "${w[$((i + 1))]}" "$((depth + 1))"
+              i=$((i + 2)) ;;
+            -*) i=$((i + 1)) ;;
+            *=*) i=$((i + 1)) ;;
+            *) break ;;
+          esac
+        done ;;
+      command)
+        i=$((i + 1))
+        while [ "$i" -lt "$n" ]; do
+          case "${w[$i]}" in
+            -v|-V) return 0 ;;
+            --) i=$((i + 1)); break ;;
+            -*) i=$((i + 1)) ;;
+            *) break ;;
+          esac
+        done ;;
       xargs)
         i=$((i + 1))
-        while [ "$i" -lt "$n" ] && [[ "${toks[$i]}" == -* ]]; do i=$((i + 1)); done ;;
-      command|nohup|time|exec|builtin|then|do|else|'('|'{'|'!') i=$((i + 1)) ;;
+        while [ "$i" -lt "$n" ]; do
+          case "${w[$i]}" in
+            --) i=$((i + 1)); break ;;
+            -n|-L|-I|-P|-s|-d|-E|-a) i=$((i + 2)) ;;
+            -*) i=$((i + 1)) ;;
+            *) break ;;
+          esac
+        done ;;
+      timeout)
+        i=$((i + 1))
+        while [ "$i" -lt "$n" ]; do
+          case "${w[$i]}" in
+            -s|-k|--signal|--kill-after) i=$((i + 2)) ;;
+            -*) i=$((i + 1)) ;;
+            *) i=$((i + 1)); break ;;
+          esac
+        done ;;
+      nice)
+        i=$((i + 1))
+        while [ "$i" -lt "$n" ]; do
+          case "${w[$i]}" in
+            -n) i=$((i + 2)) ;;
+            -*) i=$((i + 1)) ;;
+            *) break ;;
+          esac
+        done ;;
+      time|nohup|exec|builtin|stdbuf|setsid)
+        i=$((i + 1))
+        while [ "$i" -lt "$n" ] && [[ "${w[$i]}" == -* ]]; do i=$((i + 1)); done ;;
       [A-Za-z_]*=*) i=$((i + 1)) ;;
       *) break ;;
     esac
   done
   [ "$i" -lt "$n" ] || return 0
-  local cmd="${toks[$i]##*/}"
-  local -a args=("${toks[@]:$((i + 1))}")
+  local cmd="${w[$i]##*/}"
+  local -a args=("${w[@]:$((i + 1))}")
+  local arg next
   case "$cmd" in
     rm) check_rm "${args[@]+"${args[@]}"}" ;;
     git) check_git "${args[@]+"${args[@]}"}" ;;
-    psql|mysql|mariadb|sqlite3|sqlcmd) check_sql "$raw" ;;
-    bash|sh|zsh|dash)
-      if [ "$depth" -eq 0 ]; then
-        local inner
-        inner=$(printf '%s' "$raw" | sed -nE "s/.*[[:space:]]-c[[:space:]]+'([^']*)'.*/\1/p; s/.*[[:space:]]-c[[:space:]]+\"([^\"]*)\".*/\1/p" | head -n 1)
-        [ -n "$inner" ] && check_all "$inner" 1
-      fi ;;
+    psql|mysql|mariadb|sqlite3|sqlcmd) check_sql "${args[*]+"${args[*]}"}" ;;
+    eval) check_text "${args[*]+"${args[*]}"}" "$((depth + 1))" ;;
+    bash|sh|zsh|dash|ksh)
+      # -c、-lc、-ec など c を含むオプションの次の語が、実行する文字列
+      next=0
+      for arg in "${args[@]+"${args[@]}"}"; do
+        if [ "$next" -eq 1 ]; then
+          check_text "$arg" "$((depth + 1))"
+          break
+        fi
+        case "$arg" in --*) ;; -*c*) next=1 ;; esac
+      done ;;
   esac
-  # $( ... ) の中身を1段だけ見る
-  if [ "$depth" -eq 0 ]; then
-    local sub
-    sub=$(printf '%s' "$raw" | sed -nE 's/.*\$\(([^()]*)\).*/\1/p' | head -n 1)
-    [ -n "$sub" ] && check_all "$sub" 1
-  fi
   return 0
 }
 
-check_all() {
-  local text="$1" depth="$2" segment
-  while IFS= read -r segment; do
-    [ -n "${segment//[[:space:]]/}" ] || continue
-    check_command "$segment" "$depth"
+# 文字列を字句解析し、各コマンドを判定する。引数: 文字列 深さ
+check_text() {
+  local text="$1" depth="$2" line
+  [ "$depth" -le "$MAX_DEPTH" ] || return 0
+  local -a seg=()
+  while IFS= read -r line; do
+    if [ "$line" = "S" ]; then
+      [ "${#seg[@]}" -gt 0 ] && check_words "$depth" "${seg[@]}"
+      seg=()
+    else
+      seg+=("${line#W"$TAB"}")
+    fi
   done <<EOF
-$(split_commands "$text")
+$(lex_commands "$text")
 EOF
+  [ "${#seg[@]}" -gt 0 ] && check_words "$depth" "${seg[@]}"
+  return 0
 }
 
-check_all "$CMD" 0
+check_text "$CMD" 0
 
 if [ -n "$BLOCK_REASONS" ]; then
   {

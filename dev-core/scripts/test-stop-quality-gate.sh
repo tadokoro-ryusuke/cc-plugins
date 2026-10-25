@@ -74,6 +74,18 @@ printf '%s\n' 'const skipped = items.filter(isSkippable);' >>"$repo/tests/app.te
 expect 0 "ordinary code mentioning skip is not a skip marker"
 
 new_repo
+printf '%s\n' "test.only ('spaced', () => {});" >>"$repo/tests/app.test.ts"
+expect 2 "focused test with a space before the parenthesis blocks"
+
+new_repo
+printf '%s\n' '#[test]' '#[ignore = "requires network"]' 'fn slow() {}' >"$repo/src/lib.rs"
+expect 2 "Rust ignore with a reason in a source file blocks"
+
+new_repo
+printf '%s\n' 'console.log("x");' >"$repo/notes.txt"
+expect 0 "untracked non-source files are not scanned"
+
+new_repo
 git -C "$repo" rm -q tests/app.test.ts
 expect 2 "deleting a tracked test file blocks"
 
