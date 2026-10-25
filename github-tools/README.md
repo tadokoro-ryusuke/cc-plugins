@@ -51,6 +51,7 @@ GitHub連携ワークフローを支援するClaude Codeプラグインです。
 - **draft が既定**: `--ready` か明示の指示があるときだけ ready で作成する。`--body-only` では本文の下書きだけを作り、PR は作らない
 - **本文はファイル経由**: 本文を作業ツリーの外のファイルに書き、`--body-file` で渡す
 - **作業の保全**: 未コミットの変更を stash・破棄・自動コミットしない。作成直前に base と HEAD が分析時から変わっていないかを確かめる
+- **事前承認は目的の操作だけ**: 確認なしで動くのは、この skill の目的である `git fetch origin`・`git push -u origin HEAD`・PR の作成と、Issue / PR の参照だけ。lint や test のコマンド、ラベルの付与、force push、merge などは通常の permission で確認する（パッケージマネージャは lifecycle script で任意のコードを実行しうるため）
 
 ## 前提条件
 
