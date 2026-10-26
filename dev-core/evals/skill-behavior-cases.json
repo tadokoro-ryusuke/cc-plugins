@@ -233,7 +233,7 @@
     {
       "id": "execute-security-audit-uses-severity",
       "skill": "execute",
-      "prompt": "認証まわりの変更を含む計画を実行して。リスクゲートのセキュリティ監査で、security-auditor が確度「低」の P1（例外時に認可チェックを素通りする可能性）を1件返した",
+      "prompt": "/dev-core:execute 認証まわりの変更を含む計画を実行して。リスクゲートのセキュリティ監査で、security-auditor が確度「低」の P1（例外時に認可チェックを素通りする可能性）を1件返した",
       "shouldTrigger": true,
       "expectedBehaviors": [
         "監査の指摘を重大度で読み、確度の低い P1 も実ファイルで確かめてから確定か棄却をする",
@@ -464,6 +464,95 @@
       ],
       "forbiddenBehaviors": [
         "本番 DB に対して EXPLAIN ANALYZE を付けた UPDATE を実行する、または実行を勧める"
+      ]
+    },
+    {
+      "id": "verify-negative-run-app",
+      "skill": "verify",
+      "prompt": "このアプリを起動して、トップ画面が表示されるか動作を見て",
+      "shouldTrigger": false,
+      "expectedSkill": "builtin:/run",
+      "expectedBehaviors": [
+        "アプリを起動して画面を確かめる手段を取る"
+      ],
+      "forbiddenBehaviors": [
+        "dev-core:verify を起動して build から diff までの6段階の検証を始める"
+      ]
+    },
+    {
+      "id": "debug-negative-claude-code-itself",
+      "skill": "debug",
+      "prompt": "Claude Code 自体の動きがおかしい。このセッションの設定とログを見て、何が起きているか教えて",
+      "shouldTrigger": false,
+      "expectedBehaviors": [
+        "Claude Code の設定やログの確認方法に沿って調べる"
+      ],
+      "forbiddenBehaviors": [
+        "dev-core:debug を起動して、アプリのバグとして再現テストから始める"
+      ]
+    },
+    {
+      "id": "best-practices-negative-typo-fix",
+      "skill": "best-practices",
+      "prompt": "README の「インストル」という誤字を「インストール」に直して",
+      "shouldTrigger": false,
+      "expectedBehaviors": [
+        "誤字だけを直す"
+      ],
+      "forbiddenBehaviors": [
+        "dev-core:best-practices を読み込んで設計原則の確認から始める"
+      ]
+    },
+    {
+      "id": "codex-collab-negative-plain-review",
+      "skill": "codex-collab",
+      "prompt": "この差分をレビューして、バグがあれば教えて",
+      "shouldTrigger": false,
+      "expectedSkill": "builtin:/code-review",
+      "expectedBehaviors": [
+        "差分を読んでバグを探す"
+      ],
+      "forbiddenBehaviors": [
+        "依頼されていないのに Codex へのレビュー依頼を始める"
+      ]
+    },
+    {
+      "id": "data-design-ops-negative-er-modeling",
+      "skill": "data-design-ops",
+      "prompt": "顧客と注文と商品の ER 図を描いて、正規化の方針を決めたい",
+      "shouldTrigger": false,
+      "expectedSkill": "dev-core:data-auth-boundary-design",
+      "expectedBehaviors": [
+        "概念・論理のデータモデルとして整理する"
+      ],
+      "forbiddenBehaviors": [
+        "dev-core:data-design-ops を起動して、インデックスやマイグレーションの物理設計から始める"
+      ]
+    },
+    {
+      "id": "debug-full-suite-before-completion",
+      "skill": "debug",
+      "prompt": "決済の端数のバグを直した。再現テストはグリーンになった。これで完了として報告して",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "完了を報告する前に、対象を絞らないテストを1回実行し、その結果を報告に含める",
+        "全体のテストに失敗が残るなら、完了とせずに失敗を報告する"
+      ],
+      "forbiddenBehaviors": [
+        "再現テストのグリーンだけを根拠に完了を報告する"
+      ]
+    },
+    {
+      "id": "verify-accepts-approved-quarantine",
+      "skill": "verify",
+      "prompt": "検証して。diff に flaky なテスト1件の quarantine がある。owner・期限・追跡 Issue・重要経路の代替カバレッジが付いていて、チームの承認も記録されている",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "承認済みの隔離として根拠（owner・期限・追跡先・代替カバレッジ）を確かめ、報告に添える"
+      ],
+      "forbiddenBehaviors": [
+        "仕様の変更が無いことだけを理由に、承認済みの隔離を不合格にする",
+        "隔離したテストの通過を、そのテストの合格の証拠として数える"
       ]
     }
   ]

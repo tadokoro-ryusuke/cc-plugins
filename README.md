@@ -37,6 +37,38 @@ ui-ux-pro-max は 6.0.0 でこのマーケットプレイスから削除した�
 スキル ID `ui-ux-pro-max:ui-ux-pro-max` は公式版でも同じなので、各スキルからの参照（「導入されていれば」）はそのまま使える。
 公式版はスキルを複数同梱する。design-core と発火が重なりうるので、使わないスキルは無効化を検討する。
 
+## 常時コストと共存の設定
+
+インストールしたプラグインのスキルは、呼び出さなくても、名前と説明が毎ターンのコンテキストに入ります。自前のマーケットプレイスでは `/plugin` にコストの欄が出ないので、目安をここに置きます。
+
+| プラグイン | 常時コストの目安 |
+|-----------|----------------|
+| dev-core | 約 5.5k トークン（エージェントの説明 約 0.7k を含む） |
+| github-tools | ほぼ 0（スキルはすべて手動起動専用） |
+| hotl-engineering | 約 0.7k |
+| delivery-core | 約 1.7k |
+| ai-engineering | 約 0.7k |
+| compliance-core | 約 0.9k |
+| design-core | 約 1.1k |
+| indie-product-marketing | 約 1.3k |
+
+計測は 2026-10-26、Claude Code 2.1.310 です。`claude --plugin-dir <dir> plugin details <name>` の Always-on から、手動起動専用（`disable-model-invocation: true`）のスキルの分を引きました。手動起動専用のスキルは一覧に載らないためです。版ごとの内訳と再現手順は [docs/research/skill-reachability-2026-10.md](docs/research/skill-reachability-2026-10.md) にあります。版を上げたら測り直します。
+
+用途ごとの構成の例です。
+
+- 開発: dev-core と github-tools
+- 受託の上流も扱う: delivery-core と compliance-core を足す
+
+他のプラグインのスキルへの参照（`dev-core:*` など）はポインタです。参照先を入れていなくても、各スキルは単体で使えます。
+
+スキルが増えて説明が落ちたときは、次の順で確かめて調整します。スキルの一覧には予算（既定はコンテキストの 1%）があり、超えると呼び出しの少ないスキルから説明が落ちます。
+
+1. 確かめる: `/skill-doctor`（2.1.252 以上）で、スキルごとのコストと使われ方、使っていないスキルを見る。`/doctor` で一覧の推定と大きな寄与元を、`/context` の Skills 行で予算を適用した後の大きさを見る。
+2. 減らす: 使っていないプラグインを `/plugin` で無効にする。プラグインのスキルは `skillOverrides` の対象外。
+3. それでも要るスキルの説明が落ちるときだけ、予算を上げる: `skillListingBudgetFraction`（例: `0.02` で 2%）か、文字数で固定する `SLASH_COMMAND_TOOL_CHAR_BUDGET`。上げた分だけ毎ターンのコストが増える。
+
+出典（2026-10-26 確認）: [Skills の Skill descriptions are cut short と Find unused skills](https://code.claude.com/docs/en/skills)
+
 ## リポジトリ構成
 
 ```

@@ -1,2 +1,6 @@
 .claude
 __pycache__/
+
+# claude plugin eval: 生成したケース（正本は evals/skill-behavior-cases.json）と実行結果
+**/evals/plugin/
+**/evals/**/results/

@@ -80,6 +80,8 @@ jobs:
         run: node scripts/validate-skill-evals.mjs
       - name: Validate indie-product-marketing behavior eval cases
         run: node scripts/validate-skill-evals.mjs --plugin indie-product-marketing
+      - name: Test eval validator and plugin eval generator
+        run: node --test scripts/validate-skill-evals.test.mjs scripts/gen-plugin-evals.test.mjs scripts/measure-skill-firing.test.mjs
       - name: Validate Claude hook event compatibility
         run: |
           node scripts/validate-claude-hooks.mjs
