@@ -2,6 +2,8 @@
 
 TDD 開発フレームワーク。t-wada 式 TDD、FSD、Clean Architecture、DDD のベストプラクティスを、知識スキル・ワークフロー・専門エージェント・Hooks 自動化の4層で提供します。
 
+5.1.0 では、テストを弱めて通すことの禁止と検出、テストの書き方の正本（best-practices/references/testing.md）、危険コマンドのフックの作り直し、security-auditor と E2E の返却の統一を入れました（[変更点](#510-の変更点)）。
+
 5.0.0 から、親セッションが既定の実装者になりました。サブエージェントへの委譲とレビューは、利得とリスクに当てはまるときだけ行います（[Opus 5.5 での運用](#opus-55-での運用)、[4.x → 5.0.0 への移行](#4x--500-への移行)）。
 
 ## どんな時に使うか
@@ -79,15 +81,27 @@ TDD 開発フレームワーク。t-wada 式 TDD、FSD、Clean Architecture、DD
 | タイミング | 処理 | 実体 |
 |-----------|------|------|
 | SessionStart | allowlist済みrepository metadata + 未完了planのpath/status + 作業規律（リスクに応じた検証、証拠の再利用条件、同じ経路での Three Strikes）の注入 | scripts/session-start-context.sh |
-| PreToolUse:Bash | 危険コマンドブロック（rm -rf、force push等） | scripts/block-dangerous-commands.sh |
+| PreToolUse:Bash | 代表的な誤操作の tripwire。止める: rm -r でのルート・ホームの削除、main/master への強制 push、DB クライアントでの DROP/TRUNCATE。確認に回す: 作業ツリーを捨てる git 操作（reset の hard、clean の force、restore . など）。引用符の中身と heredoc の本文は照合しない | scripts/block-dangerous-commands.sh |
 | PostToolUse:Write\|Edit | Prettier自動フォーマット（設定があるプロジェクトのみ） | scripts/format-changed-file.sh |
-| Stop | デバッグ残骸（console.log/debugger）の停止前検出 | scripts/stop-quality-gate.sh |
+| Stop | 停止前の検出: 追加行のデバッグ残骸（console.log/debugger 等）、テストファイルに追加された focus/skip マーカー、テストファイルの削除。未追跡の新規ファイルも対象 | scripts/stop-quality-gate.sh |
+
+危険コマンドのフックは best-effort の tripwire で、完全なセキュリティ境界ではない。rm の重要パス（/、~、作業ディレクトリとその親）は Claude Code 本体が全モードで自動承認しない。プラグインからは permissions.deny を配布できないので、厳密に止めたい操作は利用者の settings に書き、main への強制 push はサーバー側の branch protection でも止める。例:
+
+```json
+{
+  "permissions": {
+    "deny": ["Bash(git push --force *)", "Bash(git push -f *)", "Bash(terraform destroy *)"]
+  }
+}
+```
+
+フックの回帰テストは `scripts/test-block-dangerous-commands.sh`（止める・通す・確認に回すの3つの表）で、CI で実行する。jq が無いときは止めずに通し（non-blocking error）、SessionStart で一度だけ知らせる。
 
 Claude Code の現行hook仕様では SessionStart/PreCompact は prompt handler 非対応。planの永続化は `/execute` が各iteration・停止・圧縮前に行い、SessionStart command hook はplan本文をdeveloper contextへ流さず再開対象だけを知らせる。`scripts/validate-claude-hooks.mjs` がevent/type互換性をCIで検証する。
 
-検出パターンの追加 = continuous-learning スキルの実践箇所。スクリプトとfixtureを編集してフック自体を成長させる。
+検出パターンの追加 = continuous-learning スキルの実践箇所。スクリプトと回帰テスト（`scripts/test-stop-quality-gate.sh`、CI で実行）を編集してフック自体を成長させる。Stop フックの検出は文字列照合による best-effort で、テストの弱体化をすべて捕まえるものではない（アサーションの純減やスナップショットの一括更新は verify の Diff ステップで判断する）。Stop には `onFailure` が効かないので、jq や git が無い、スクリプトが異常終了したときは停止を通す（fail-open）。
 
-`dev-core/evals/skill-behavior-cases.json` は grill の trigger/no-trigger、可逆な判断の継続、不可逆判断の停止、現在証拠による完了判定、TDD/refactor/debugのdelivery side effect禁止に加え、実行トポロジー（密結合な作業を親が持つ、独立トラックだけを委譲する、lint に agent を立てない、リスクゲートのレビューとその代替、テキストだけの end_turn を完了にしない、証拠の再利用、同じ経路での Three Strikes）を行動ケースとして固定する。`node scripts/validate-skill-evals.mjs` は schema と参照 skill を決定的に検証する静的gateであり、model挙動の採点は将来のcalibrated live evalで行う。
+`dev-core/evals/skill-behavior-cases.json` は grill の trigger/no-trigger、可逆な判断の継続、不可逆判断の停止、現在証拠による完了判定、TDD/refactor/debugのdelivery side effect禁止、テストを弱めて通さないこと（best-practices・verify）、単独 TDD の全体テストに加え、実行トポロジー（密結合な作業を親が持つ、独立トラックだけを委譲する、lint に agent を立てない、リスクゲートのレビューとその代替、テキストだけの end_turn を完了にしない、証拠の再利用、同じ経路での Three Strikes）を行動ケースとして固定する。`node scripts/validate-skill-evals.mjs` は schema と参照 skill を決定的に検証する静的gateであり、model挙動の採点は将来のcalibrated live evalで行う。
 
 ## Opus 5.5 での運用
 
@@ -118,6 +132,15 @@ Agent ツールには呼び出しごとの effort 指定がありません。eff
 - `CLAUDE_CODE_EFFORT_LEVEL`: 親も子もすべて同じ effort にする
 - `maxEffortLevel`（settings）: 上限をかける
 - 親が Fable 5.1 のときに実行系を安くしたい: `CLAUDE_CODE_SUBAGENT_MODEL=opus`（model を省略している実行系にだけ効く。レビュー系は `inherit` なので対象外）
+
+## 5.1.0 の変更点
+
+- **テストの完全性**: 仕様の変更を根拠にしないテストの改変（削除・skip/only・期待値の緩和・テスト入力の特別扱い）で通さない。verify の Diff ステップと Stop フックで検出し、単独の TDD でも完了前に全体テストを回す。flaky の隔離には owner・期限・代替カバレッジを付ける
+- **テストの書き方の正本**: `skills/best-practices/references/testing.md`（期待値の出し方、テストダブルの優先順位、自前の DB の実物での integration、テストデータ、E2E のロケータ）
+- **フック**: 危険コマンドのフックは、引用符と heredoc を除いたコマンドの位置だけを照合する tripwire にし、戻せる操作は確認に回す。Stop フックは未追跡ファイル、focus/skip マーカー、テストファイルの削除も検出する。どちらも回帰テストを CI で回す
+- **委譲先**: security-auditor を重大度（P0〜P3）・確度・file:line の契約に揃え、OWASP Top 10:2025 に更新した。e2e-runner に状態付きの返却を入れ、ロケータを Playwright の推奨順にした
+- **ワークフロー**: refactor は振る舞いを変えず（バグは報告）、テストの薄い対象は特性テストで固定する。debug は赤くなる再現から始める。3回失敗後の別モデルへの委譲は同意か事前許可があるときだけ
+- **data-design-ops**: 本番で `EXPLAIN ANALYZE` を使わない
 
 ## 4.x → 5.0.0 への移行
 

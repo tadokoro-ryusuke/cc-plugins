@@ -42,6 +42,11 @@ if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   fi
 fi
 
+# jq が無いと PreToolUse / Stop のフックは検査できない（止めずに通す）。一度だけ知らせる
+if ! command -v jq >/dev/null 2>&1; then
+  echo "[dev-core] jq was not found: the dangerous-command and Stop hooks cannot check anything until jq is installed."
+fi
+
 cat <<'EOF'
 [dev-core] Session discipline:
 - Use test-first for executable behavior changes and regressions; match other checks to risk and scope, and honor required project gates.

@@ -34,7 +34,7 @@ allowed-tools: Read, Write, Edit, Agent(dev-core:tdd-practitioner), Agent(dev-co
 
 1. plan と Current Next Action を読む。
 2. コードの振る舞い変更は、親が Red → Green → Refactor で実装する。docs/config のみで意味のある自動テストがない場合は、決定的 validator や構文検証を先に定義して直接変更してよい。
-3. focused verification（変更に関係する test・typecheck・lint）を、親がツールで直接実行する。コマンドを流すためだけに agent を立てない。
+3. focused verification（変更に関係する test・typecheck・lint）を、親がツールで直接実行する。コマンドを流すためだけに agent を立てない。既存テストの削除・skip・期待値の変更は、計画や受入条件に根拠があるときだけ行い、その対象と根拠を Progress Log に書く。根拠が無いのにテストを変えないと通らないなら、仕様とテストの矛盾として §4 で扱う。
 4. 結果を §4 の Concern Triage で処理する。
 5. 変更がレビューゲートに当たるなら、候補が安定した時点でゲートのレビューを行う（下記）。
 6. 指摘や失敗を修正し、影響する検証を再実行する。同じ修正経路での失敗は3回までとする。
@@ -109,7 +109,7 @@ allowed-tools: Read, Write, Edit, Agent(dev-core:tdd-practitioner), Agent(dev-co
 
 ## Stop Rules
 
-- 同じ修正経路が3回失敗した。
+- 同じ修正経路が3回失敗した。計画や依頼に事前の許可がない限り、別モデルのレスキュー（codex:codex-rescue など）を自動で起動せず、経路を止めて報告し、判断を委ねる。
 - 1 cycle 完了しても意味のある進捗がない。
 - 証拠が計画を否定する。
 - ユーザー変更を上書きする必要がある。

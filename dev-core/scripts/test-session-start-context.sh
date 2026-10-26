@@ -2,7 +2,7 @@
 
 set -eu
 
-script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+script_dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 repo="$(mktemp -d)"
 plain="$(mktemp -d)"
 trap 'rm -rf "$repo" "$plain"' EXIT

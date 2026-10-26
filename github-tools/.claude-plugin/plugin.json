@@ -1,7 +1,7 @@
 {
   "name": "github-tools",
   "displayName": "GitHub Tools",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "GitHub連携ワークフローを支援するプラグイン。PR作成とドキュメント更新を効率化します。",
   "author": {
     "name": "Ryusuke Tadokoro",
@@ -10,5 +10,10 @@
   "homepage": "https://github.com/tadokoro-ryusuke/cc-plugins",
   "repository": "https://github.com/tadokoro-ryusuke/cc-plugins",
   "license": "MIT",
-  "keywords": ["github", "pull-request", "workflow", "documentation"]
+  "keywords": [
+    "github",
+    "pull-request",
+    "workflow",
+    "documentation"
+  ]
 }

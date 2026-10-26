@@ -3,7 +3,7 @@ name: pr
 description: "現在のブランチから Pull Request を作成する。変更内容と検証結果から本文を作り、本文はファイル経由で渡し、既定では draft で作成する。Issue は存在と内容を確認できたときだけ紐付ける。本文の下書きだけを作ることもできる。/github-tools:pr で起動する。"
 argument-hint: "[Issue番号] [--ready] [--body-only]"
 disable-model-invocation: true
-allowed-tools: Bash(git:*), Bash(gh:*), Bash(pnpm:*), Bash(npm:*), Bash(yarn:*), Bash(mktemp:*), Read
+allowed-tools: Bash(git fetch origin), Bash(git push -u origin HEAD), Bash(gh issue view *), Bash(gh pr create *), Bash(gh pr view *), Bash(mktemp *), Read
 ---
 
 # Pull Request 作成

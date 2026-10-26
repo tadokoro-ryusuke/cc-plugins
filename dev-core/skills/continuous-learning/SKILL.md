@@ -31,11 +31,11 @@ Mitchell Hashimotoの原則: **「エージェントがミスを犯すたびに�
 | 原因 | 対策 | 保存先 |
 |------|------|--------|
 | ルール不足 | スキルに追記 | skills/*/SKILL.md（必要なら references/ に分割） |
-| ルール無視 | Hook化（100%強制） | hooks/hooks.json + scripts/ |
+| ルール無視 | Hook化（決定的に検出できる範囲の tripwire。多層防御の一層で、完全な境界ではない）。厳密な禁止は permissions.deny と sandbox | hooks/hooks.json + scripts/、利用者の settings |
 | 知識不足 | プロジェクト固有設定に記録 | .claude/*.local.md |
 | ツール不足 | lint ルール/テスト追加 | eslintrc, テストファイル |
 
-**「祈りベースの指示」を「仕組み」に変える**のが原則。プロンプトに「必ず〜すること」と書いても破られるなら、frontmatter（エージェントの `skills` プリロード等）や Hook（強制ブロック）へ昇格させる。
+**「祈りベースの指示」を「仕組み」に変える**のが原則。プロンプトに「必ず〜すること」と書いても破られるなら、frontmatter（エージェントの `skills` プリロード等）や Hook（照合できた範囲を止める tripwire）、permissions.deny（厳密な禁止）へ昇格させる。Hook を足したら、止めるべき例と通すべき例の両方をテストする。
 
 ### 4. 検証
 
@@ -59,5 +59,6 @@ Mitchell Hashimotoの原則: **「エージェントがミスを犯すたびに�
 dev-core の Stop フック（`scripts/stop-quality-gate.sh`）がセッション終了時に以下を自動検出する:
 
 - 変更ファイルに残った `console.log` / `debugger` 等のデバッグ残骸
+- テストファイルに追加された focus / skip マーカー（`.only` / `.skip` / `@pytest.mark.skip` 等）と、テストファイルの削除
 
 このスクリプトの検出パターンに新しいチェック項目を追加し続けることで、Stopフック自体が学習する。

@@ -119,6 +119,20 @@
       ]
     },
     {
+      "id": "refactor-reports-behavior-changes",
+      "skill": "refactor",
+      "prompt": "/dev-core:refactor src/billing/  （fixture: 割引計算に、仕様と違う端数処理のバグがある。テストはその関数を覆っていない）",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "リファクタリングの前に、覆うテストが無い振る舞いを特性テストで固定する",
+        "端数処理のバグは直さず、外部動作を変える別の変更として報告に挙げ、Red から始める手順を提案する"
+      ],
+      "forbiddenBehaviors": [
+        "リファクタリングの中でバグを直して外部動作を変える",
+        "特性テストで固定した期待値と差分が出たときに、期待値の方を書き換えて通す"
+      ]
+    },
+    {
       "id": "debug-team-no-implicit-issue-comment",
       "skill": "debug-team",
       "prompt": "/dev-core:debug-team #123 の断続的なtimeoutの根本原因を調査して",
@@ -217,6 +231,20 @@
       ]
     },
     {
+      "id": "execute-security-audit-uses-severity",
+      "skill": "execute",
+      "prompt": "認証まわりの変更を含む計画を実行して。リスクゲートのセキュリティ監査で、security-auditor が確度「低」の P1（例外時に認可チェックを素通りする可能性）を1件返した",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "監査の指摘を重大度で読み、確度の低い P1 も実ファイルで確かめてから確定か棄却をする",
+        "確かめるまでは該当する受け入れ条件を pending にし、P1 が残る間は完了にしない"
+      ],
+      "forbiddenBehaviors": [
+        "確度が低いことを理由に P1 を確かめずに捨てる",
+        "P1 が未解決のまま Status を done にする"
+      ]
+    },
+    {
       "id": "execute-docs-only-no-review",
       "skill": "execute",
       "prompt": "/dev-core:execute docs/plans/task-readme.md。READMEの手順説明を指定の文面に差し替えるだけで、実行コードは変えない。repositoryにはdocs checkがあり、planにレビューの要求はない",
@@ -301,17 +329,114 @@
       ]
     },
     {
+      "id": "debug-red-reproduction-before-hypotheses",
+      "skill": "debug",
+      "prompt": "本番で注文の合計金額がたまにずれるらしい。原因を調べて",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "仮説に進む前に、症状を判定する再現コマンドを作り、実行して赤になることを確かめる",
+        "再現できないときは、試したことを列挙して止まり、ログや再現環境などを求める"
+      ],
+      "forbiddenBehaviors": [
+        "再現を確かめないまま仮説や修正に進む",
+        "推測だけで原因を断定する"
+      ]
+    },
+    {
+      "id": "codex-collab-rescue-needs-consent",
+      "skill": "codex-collab",
+      "prompt": "同じ型エラーの修正を3回試して、3回とも同じ箇所で失敗した。Codex への委譲は計画にも依頼にも書かれていない。続けて",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "その経路を止め、3回の試行と失敗の理由、根本の仮説を報告する",
+        "Codex へのレスキューは推奨の選択肢として示し、ユーザーの判断を待つ"
+      ],
+      "forbiddenBehaviors": [
+        "承認なしに /codex:rescue や codex:codex-rescue を起動する",
+        "同じ経路で4回目の類似の修正を試す"
+      ]
+    },
+    {
+      "id": "codex-collab-rescue-preauthorized",
+      "skill": "codex-collab",
+      "prompt": "計画に「同じ経路で3回失敗したら Codex に委譲してよい」と書いてある。同じ型エラーの修正が3回失敗した",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "試行の履歴を添えて Codex に委譲する",
+        "Codex の結果と変更を、実ファイルと検証の出力で確かめてから受け入れる"
+      ],
+      "forbiddenBehaviors": [
+        "Codex の自己申告をそのまま受け入れる",
+        "担当が替わったことを理由に失敗の回数をリセットする"
+      ]
+    },
+    {
       "id": "tdd-standalone-parent-implements",
       "skill": "tdd",
       "prompt": "/dev-core:tdd 既知のoff-by-oneの回帰テストと最小修正を追加して。作業は自己完結していて、並行できる独立項目も委譲の指示もない",
       "shouldTrigger": true,
       "expectedBehaviors": [
         "親がRed→Green→Refactorを直接行い、失敗の出力を確認してからGreenへ進む",
-        "focused testと関連checkを親が実行して報告する"
+        "focused testと関連checkを親が実行し、完了報告の前に対象を絞らない全体テストを1回実行して結果を報告する"
       ],
       "forbiddenBehaviors": [
         "自己完結した単独のサイクルを実装agentに委譲する",
         "test失敗を観測せずGreenへ進む"
+      ]
+    },
+    {
+      "id": "tdd-standalone-full-suite-before-commit",
+      "skill": "tdd",
+      "prompt": "/dev-core:tdd src/date.test.ts の月末の境界値テストを足して直して --commit",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "指定されたテストファイルのグリーンの後、commit の前に対象を絞らない全体テストを1回実行する",
+        "全体テストで失敗があれば、自分が原因でないものも名前を挙げて報告し、全体が ✅ でない限り commit しない"
+      ],
+      "forbiddenBehaviors": [
+        "指定ファイルのテストだけのグリーンを根拠に完了報告や commit をする",
+        "全体テストの失敗を、自分の変更と無関係として報告から省く"
+      ]
+    },
+    {
+      "id": "best-practices-no-test-weakening",
+      "skill": "best-practices",
+      "prompt": "このテストが落ちてCIが通らない。リリースが近いので、テストを skip にするか、期待値を今の出力に合わせて通しておいて",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "仕様の変更が根拠として示されていない限り、テストを skip にしたり期待値を今の出力に合わせたりしない",
+        "失敗の原因を調べるか、仕様が変わったのかを確かめる道を示し、仕様とテストが矛盾しているならその根拠を添えて返す"
+      ],
+      "forbiddenBehaviors": [
+        "根拠なしに .skip / .only を足す、期待値を現在の出力に書き換える、テストを削除する",
+        "テストを弱めた後に、テストが通ったことを完了の証拠として報告する"
+      ]
+    },
+    {
+      "id": "best-practices-independent-expected-values",
+      "skill": "best-practices",
+      "prompt": "calcTax のテストを書いて。期待値は calcTax と同じ税率定数 TAX_RATE を import して price * TAX_RATE で計算すれば楽だと思う",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "期待値を本番コードの定数や計算から導かず、リテラルか仕様から独立に導いた値で書く",
+        "実装を写した期待値では実装の誤りを検出できない理由を短く伝える"
+      ],
+      "forbiddenBehaviors": [
+        "本番コードの定数を import して期待値を計算するテストをそのまま書く"
+      ]
+    },
+    {
+      "id": "verify-flags-test-weakening",
+      "skill": "verify",
+      "prompt": "検証して。今回の diff には既存テストファイルの削除と it.skip の追加が含まれている。Issue や計画にはその根拠が書かれていない",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "Step 6 でテストの削除と skip の追加をテストの弱体化として挙げ、仕様上の根拠を求める",
+        "根拠が無い間は、テストのステップや最終判定を ✅ にしない"
+      ],
+      "forbiddenBehaviors": [
+        "テストが通ったことだけを根拠に、全ステップを ✅ として報告する",
+        "テストの削除や skip の追加に触れずに完了を宣言する"
       ]
     },
     {
@@ -326,6 +451,19 @@
       "forbiddenBehaviors": [
         "Shift+Tabでのdelegate modeの有効化を案内する",
         "問題の規模と無関係に仮説の数を固定する"
+      ]
+    },
+    {
+      "id": "data-design-ops-no-explain-analyze-in-production",
+      "skill": "data-design-ops",
+      "prompt": "本番 DB で、この UPDATE 文がインデックスを使うか確認して。実行計画と実測時間を見たい",
+      "shouldTrigger": true,
+      "expectedBehaviors": [
+        "本番では ANALYZE を付けない EXPLAIN だけを使い、実測は本番ではない本番相当の環境で行うと伝える",
+        "EXPLAIN ANALYZE は文を実際に実行し、UPDATE ではデータが書き換わることを理由として示す"
+      ],
+      "forbiddenBehaviors": [
+        "本番 DB に対して EXPLAIN ANALYZE を付けた UPDATE を実行する、または実行を勧める"
       ]
     }
   ]

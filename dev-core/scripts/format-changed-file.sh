@@ -22,7 +22,7 @@ case "$FILE" in
       grep -q '"prettier"' package.json && has_prettier=true
     fi
     [ "$has_prettier" = true ] || exit 0
-    npx --no-install prettier --write "$FILE" >/dev/null 2>&1
+    npx --no prettier --write "$FILE" >/dev/null 2>&1
     ;;
 
   # --- Rust: cargo fmt（edition を Cargo.toml から解決させる） ---
