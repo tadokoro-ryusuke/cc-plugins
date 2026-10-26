@@ -8,7 +8,7 @@ description: "新規UI実装時に標準ビジュアル設定(フォント・タ
 **鉄則: プロジェクト冒頭に一度決めて固定し、以後は個別調整を禁止する。**
 
 - なぜ: デザインはセンスではなくシステム(制約されたスケール)。事前に決めた段階から選ぶだけにすれば、誰がやっても一定品質になる。「決めて固定する」ことが品質と速度の両立手段。
-- このスキルの成果物は **デザイントークン一式(CSS カスタムプロパティ / Tailwind 設定)+ コントラスト検証エビデンス**。UI の生成は生成系スキル(ui-ux-pro-max:ui-ux-pro-max 等)、生成物の審査は design-core:design-review に送る。
+- このスキルの成果物は **デザイントークン一式(CSS カスタムプロパティ。Tailwind v4 は `:root` / `.dark` + `@theme inline`、v3 は `tailwind.config.js`。Step 5 の「トークンの書き先」)+ コントラスト検証エビデンス**。UI の生成は生成系スキル(ui-ux-pro-max:ui-ux-pro-max 等)、生成物の審査は design-core:design-review に送る。
 - コンポーネントの実装パターン(状態管理・フォーム・データフェッチ)→ dev-core:frontend-patterns 参照。
 - 提案書・スライド・報告書のデザイン → design-core:business-doc-design 参照。
 
@@ -27,7 +27,12 @@ description: "新規UI実装時に標準ビジュアル設定(フォント・タ
 
 **既定: shadcn/ui + Tailwind CSS。** 理由を添えて確定する:
 
-- Radix UI ベースでアクセシビリティが組み込み済み → **フォーカス管理・ARIA・キーボード操作系の要件をデフォルトで満たしやすい**(コントラスト・alt・見出し階層は別途担保が必要)
+- コンポーネント基盤は **Base UI か Radix UI**。2026年7月から、新規プロジェクトは Base UI が既定になった(`shadcn init` でそのまま選ばれる)。Radix も非推奨ではなく継続サポートされ、既存プロジェクトは移行しなくてよい
+  - Radix を選ぶとき、また非対話の `shadcn init` を Radix 前提で回すスクリプトや CI では、`-b radix` を明示する。なぜ: 付けないと黙って Base UI で初期化される
+  - registry を作る場合、`registry:base` を設定していない部品は Base UI で入る。基盤を固定したいなら `registry:base` を書く
+  - 出典: https://ui.shadcn.com/docs/changelog/2026-07-base-ui-default (2026-10-26 確認)
+- 基盤が担うアクセシビリティは、Base UI の公式説明では **ARIA・role 属性、WAI-ARIA Authoring Practices に沿ったキーボード操作、フォーカス管理** まで。**フォーカスの見た目(Step 6 の `--ring`)、色のコントラスト、アクセシブルネーム(`alt` / `aria-label`)は実装側の責任**として残る。出典: https://base-ui.com/react/overview/accessibility (2026-10-26 確認)
+  - 同じページはコントラストに APCA の検討を勧めているが、本スキルの検証と契約の基準は WCAG 2.2 のコントラスト比(Step 5)のままにする。版の正本は design-core:design-review の Step 6
 - コードを自分のリポジトリにコピーして所有する方式で、依存の陳腐化に強い
 - Tailwind のユーティリティは「制約されたスケールから選ぶ」ことの強制装置になる
 
@@ -69,6 +74,15 @@ description: "新規UI実装時に標準ビジュアル設定(フォント・タ
 | スペーシング(4px 基準) | **4 / 8 / 12 / 16 / 24 / 32 / 48 / 64px** |
 | 近接の余白比 | グループ内 : グループ間 = **1 : 2〜3** |
 | 影・角丸 | それぞれ **2〜3段階**に固定(使いすぎ・不統一の防止) |
+| モーションの長さ(duration) | **2〜3段階**に固定。例: ボタンの色など小さな状態変化は Tailwind の `transition` 既定と同じ 150ms、パネルの開閉など動きの大きいものに長めの1段 |
+| モーションの緩急(easing) | **1〜2種**。Tailwind 既定の `--ease-out` / `--ease-in-out` から選ぶ |
+| reduced motion のとき | `prefers-reduced-motion: reduce` では移動・拡大・視差の演出を止める。**状態変化のフィードバック(押した・開いた・エラー)は残す**(色や不透明度の短い変化に置き換える)。一律 0ms にして消さない |
+| ブレークポイント | Tailwind 既定(sm 40rem / md 48rem / lg 64rem / xl 80rem / 2xl 96rem)をそのまま使い、独自の値は足さない |
+
+モーショントークンの置き方(Tailwind v4): easing は `@theme` の `--ease-*` に置けば `ease-*` ユーティリティになる。duration には `@theme` の名前空間がないので、`:root` の `--motion-fast` などに置き、`duration-(--motion-fast)` で使う。reduced motion の切り替えは `motion-reduce:` / `motion-safe:` で書く。出典: https://tailwindcss.com/docs/theme 、https://tailwindcss.com/docs/transition-property (既定 150ms)、https://tailwindcss.com/docs/transition-duration 、https://tailwindcss.com/docs/hover-focus-and-other-states 、https://tailwindcss.com/docs/responsive-design (2026-10-26 確認)
+
+なぜモーションもトークンにするか: 画面ごとにばらばらの長さが使われるのと、reduced motion の設定で状態のフィードバックまで消える事故を、文字や余白と同じく「決めた段階から選ぶ」で防ぐため。
+なぜブレークポイントを足さないか: 既製の段階を借りるという Step 1 の方針と二重の系統にしないため。スマホの最小幅 320px はブレークポイントではなく、design-core:design-review の Step 6 で確かめる検証幅として扱う。
 
 運用ルール:
 
@@ -81,7 +95,11 @@ description: "新規UI実装時に標準ビジュアル設定(フォント・タ
 定型手順で機械的に生成する。**色数を増やすことは常に悪手側に倒す。**
 
 1. **primary**: クライアントのブランド色(ロゴ色)を置く
-2. **明度スケール生成**: HSL に分解し、同一色相で明度だけ変えた **50〜900 の9〜11段階**を作る(Tailwind CSS のカラースケールがこの実装例。そのまま借りてよい)
+2. **明度スケール生成**: ブランド色を **OKLCH** に分解し、その L(明度)を基準に L を段階的に変えた **50〜900 の9〜11段階**を作る。色相 H はほぼ固定し、両端の段では C(彩度)を下げて sRGB の色域に収める(色域外は Step 5 のスクリプトが WARN を出す)
+   - なぜ OKLCH か: HSL の明度は見た目の明るさと対応しない。青 `hsl(240deg 100% 50%)` と黄 `hsl(60deg 100% 50%)` は同じ明度 50% だが、黄のほうがずっと明るく見える。OKLCH の L はそれぞれ 0.452 と 0.968 で、見た目の差をそのまま表すので、段の間隔がそろう(出典: https://www.w3.org/TR/css-color-4/ 、2026-10-26 確認)
+   - Tailwind v4 の既定パレットは OKLCH で定義され、段ごとに C と H も調整されている(例: blue の H は 50 の 254.6 から 950 の 267.9 まで動く)。HSL で明度だけ変えた実装例ではない。既製パレットを借りるのは、ブランド色の色相が既製の色相に近いときだけにする
+   - 既定パレットは sRGB より広い色域を使っており、sRGB の色域外の段がある(例: red-600 の `oklch(57.7% 0.245 27.325)`)。借りるときも Step 5 の WARN を確かめる
+   - 出典: https://tailwindcss.com/blog/tailwindcss-v4 、https://tailwindcss.com/docs/colors (2026-10-26 確認)
 3. **色付きグレー**(Refactoring UI 流): 純粋な `#808080` 系ではなく、**ブランド色をわずかに混ぜたグレー**のスケールを作る。画面が安っぽくならない。テキストは真っ黒 `#000` ではなく `#1a1a1a`〜`#333` 程度
 4. **セマンティックカラー**: success / warning / error の3色を追加して終わり
 5. **配分ルール(60-30-10)**: ベース(背景・余白)60% / メイン(ブランド色)30% / アクセント(CTA・強調)10%。「アクセントは全体の1割まで」という上限として使う。60% を占める色は低彩度にする
@@ -99,19 +117,22 @@ description: "新規UI実装時に標準ビジュアル設定(フォント・タ
 - 通常テキスト: **4.5 : 1 以上**(AA)
 - 大きいテキスト(24px 以上 または 18.5px 太字)・UI コンポーネント・図形: **3 : 1 以上**
 
-生成した全ペア(テキスト色 × 背景色、ボタン文字 × ボタン地)を機械検証する。WCAG 相対輝度の計算は決定的なのでスクリプトで行う:
+生成した全ペア(テキスト色 × 背景色、ボタン文字 × ボタン地、フォーカスリング × 隣接背景)を機械検証する。WCAG 相対輝度の計算は決定的なので、同梱のテスト済みスクリプトで行う(Node 標準モジュールだけで動く):
 
 ```bash
-# WCAG コントラスト比(前景 背景 の16進2色を渡す)
-node -e '
-const L=h=>{const c=[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)/255)
-  .map(v=>v<=0.03928?v/12.92:((v+0.055)/1.055)**2.4);
-  return 0.2126*c[0]+0.7152*c[1]+0.0722*c[2]};
-const [a,b]=process.argv.slice(1);
-const [x,y]=[L(a),L(b)].sort((p,q)=>q-p);
-console.log(((x+0.05)/(y+0.05)).toFixed(2));
-' "#1a1a1a" "#ffffff"   # => 17.40 (合格)。"#999999" × 白 は 2.85 で不合格
+# 2色をその場で確かめる(--role は text=4.5:1 / large=3:1 / ui=3:1。既定は text)
+node "${CLAUDE_SKILL_DIR}/scripts/contrast.mjs" "oklch(0.556 0 0)" "oklch(1 0 0)"
+# トークンの全ペアをまとめて検証し、出力を納品エビデンスとして保存する
+node "${CLAUDE_SKILL_DIR}/scripts/contrast.mjs" pairs.json --json > contrast-evidence.json
 ```
+
+- **ペア一覧(pairs.json)**: `{ "name", "fg", "bg", "role", "under" }` の配列。書き方の例は `${CLAUDE_SKILL_DIR}/scripts/fixtures/shadcn-neutral.pairs.json`(shadcn/ui の既定トークンのライト・ダーク)
+- **読める色**: `#rgb` / `#rrggbb`(alpha 付きの4桁・8桁を含む)/ `rgb()` / `hsl()` / `oklch()`。`var()` は解決しないので、トークンの値を展開して書く。読めない入力は NaN にせず、終了コード 2 で止まる
+- **半透明の色**: 前景の alpha は背景に重ねてから計算する(`#1a1a1a80` × 白は 17.40 ではなく 3.36 で不合格)。背景が半透明なら、その下の不透明な面の色を `under` に書く。なぜ: 透明度を無視すると、実際より高い比で誤って合格にするため
+- **色域外の色**: sRGB の色域外の `oklch()` は、クリップした値で計算して WARN を出す。描画はブラウザとディスプレイで変わるので、C を下げて色域内に収める
+- **判定**: 終了コード 0 = 全ペア合格 / 1 = 不合格あり / 2 = 入力の誤り。比は丸めずに閾値と比べる(WCAG の解説書も 4.499:1 は 4.5:1 を満たさないとしている。https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html 、2026-10-26 確認)
+- OKLCH で段を作っても 4.5:1 は保証されない。全ペアの検証は省かない
+- スクリプトを直したら `node --test "${CLAUDE_SKILL_DIR}/scripts/contrast.test.mjs"` を通してから使う
 
 補助ツール: WebAIM Contrast Checker / Chrome DevTools のコントラスト検査。検証結果は納品時のエビデンスとして保存する。
 
@@ -121,7 +142,38 @@ console.log(((x+0.05)/(y+0.05)).toFixed(2));
 
 - **単純な色反転は禁止** — 必ず破綻する
 - ライトモードの明度スケールを逆方向に再割当てし(明るい背景トークン←→暗い背景トークン)、**全ペアのコントラスト比を再検証**する。派生パレットの生成と全数検証は AI に任せられる
-- 以下は一般的な目安(要確認): 背景は純黒 `#000` ではなく色付きダークグレーにする / 広面積の彩度をライトモードより下げる / 影ではなく明度差(surface の段階)で階層を作る
+- 以下は規格ではなく、よく使われる目安。採否は案件で決め、どれを選んでも全ペアの再検証は省かない: 背景は純黒 `#000` ではなく色付きダークグレーにする / 広面積の彩度をライトモードより下げる / 影ではなく明度差(surface の段階)で階層を作る
+
+### トークンの書き先(Tailwind v4 を既定にする)
+
+新規の shadcn/ui プロジェクトは Tailwind v4 の CSS-first 設定を使う。セマンティックトークンは `:root` と `.dark` に shadcn の命名(`--primary` と `--primary-foreground` の対)で置き、`@theme inline` で `--color-*` に写す:
+
+```css
+@import "tailwindcss";
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --primary: oklch(0.45 0.12 250);            /* 値は例。Step 4 の段から選ぶ */
+  --primary-foreground: oklch(0.985 0 0);
+}
+.dark {
+  --primary: oklch(0.8 0.1 250);
+  --primary-foreground: oklch(0.2 0.03 250);
+}
+@theme inline {
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+}
+@theme {
+  /* モードで変わらないブランドの 50〜900 スケールは、素の @theme に置いてよい */
+  --color-brand-50: oklch(0.97 0.014 250);    /* 明るい端は C を下げる(0.02 だと sRGB の色域外) */
+  /* ... */
+}
+```
+
+- `inline` を付ける理由: 付けずに `--color-primary: var(--primary)` と書くと、値が `:root` で解決されたまま子孫に引き継がれ、`.dark` での上書きが効かない。ダーク派生が黙って壊れる
+- Tailwind v3 の既存プロジェクトは `tailwind.config.js` に書く。v4 は JS の設定ファイルを自動では読まないので、v4 で使い続けるなら CSS に `@config "../../tailwind.config.js";` のように明示する
+- 出典: https://ui.shadcn.com/docs/theming 、https://tailwindcss.com/docs/theme 、https://tailwindcss.com/docs/upgrade-guide (2026-10-26 確認)
 
 ## Step 6: アクセシビリティ要件をトークンの前提条件として織り込む
 
@@ -132,7 +184,7 @@ console.log(((x+0.05)/(y+0.05)).toFixed(2));
 | トークン | 満たすべき前提 |
 |---|---|
 | テキスト色 × 背景色のペア | 本文 4.5 : 1 / 大きいテキスト・UI 3 : 1(Step 5 で機械検証済み) |
-| フォーカスリング色(`--ring` 等) | 隣接背景に対し 3 : 1 以上。`outline: none` で消さない前提で定義する |
+| フォーカスリング色(`--ring` 等) | 隣接背景に対し 3 : 1 以上。`outline: none` で消さない前提で定義する。shadcn/ui の既定は `outline-ring/50` で半透明に重ねるので、ペア一覧では alpha 込みの値で検証する(https://ui.shadcn.com/docs/theming 、2026-10-26 確認) |
 | タップターゲット寸法(ボタン・アイコンボタンの最小高さ) | **24×24px 以上(推奨 44×44)** — WCAG 2.2 新基準 |
 | 本文の行間・行長(Step 7) | 和文行間 1.5 以上 |
 | セマンティックカラー(Step 4) | 色だけで情報を伝えない前提(色+形状/ラベルの冗長符号化) |
@@ -168,8 +220,8 @@ AI コーディングエージェントはデフォルトで英文向けの詰�
 
 以下がすべて揃ったらこのスキルの仕事は完了。以後の個別調整は禁止し、変更はトークンの改訂として行う:
 
-- [ ] デザイントークン一式(CSS カスタムプロパティ or Tailwind 設定): フォントスタック / タイプスケール / スペーシング / 角丸・影 / カラースケール(primary 50〜900・色付きグレー・semantic)/ 和文定数
-- [ ] ライト・ダーク両モードのコントラスト検証結果(スクリプト出力 or チェッカーのエビデンス)
+- [ ] デザイントークン一式(Tailwind v4 は `:root` / `.dark` + `@theme inline`、v3 は `tailwind.config.js`。Step 5 の「トークンの書き先」): フォントスタック / タイプスケール / スペーシング / 角丸・影 / モーション(duration・easing・reduced motion のときの扱い)/ カラースケール(primary 50〜900・色付きグレー・semantic)/ 和文定数
+- [ ] ライト・ダーク両モードのコントラスト検証結果(`scripts/contrast.mjs --json` の出力。WARN が残るならその理由も。チェッカーで補った箇所はそのエビデンス)
 - [ ] アクセシビリティ前提の担保方法メモ(コントラスト比・フォーカスリング色・ターゲット寸法トークンを、コンポーネント基盤で担保 / トークンで担保 / 実装ルールで担保のどれで満たすか。実地検証は design-core:design-review)
 - [ ] 決定理由の1行サマリ(なぜこのフォント・この radius・この primary か — クライアント説明にそのまま使う)
 
@@ -194,5 +246,5 @@ AI コーディングエージェントはデフォルトで英文向けの詰�
 - 【スタック】採用基盤と3点変更の内容(フォント / 角丸 / primary)
 - 【決定木の判定】フォント選定でどの分岐に該当したか
 - 【トークン】ファイルパスと主要値(タイプスケール・スペーシング・カラースケール)
-- 【検証】コントラスト比の実測値(全ペア、ライト/ダーク両方)とアクセシビリティ前提の担保方法メモ(実地検証は design-core:design-review へ)
+- 【検証】コントラスト比の実測値(全ペア、ライト/ダーク両方。`scripts/contrast.mjs` の出力と終了コード)とアクセシビリティ前提の担保方法メモ(実地検証は design-core:design-review へ)
 - 【残課題】人間の判断待ち事項(書体の声色確認・ブランド色調整の要否 等)

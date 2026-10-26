@@ -93,6 +93,8 @@ jobs:
         run: bash dev-core/scripts/test-stop-quality-gate.sh
       - name: Test dangerous-command hook
         run: bash dev-core/scripts/test-block-dangerous-commands.sh
+      - name: Test contrast checker script
+        run: node --test design-core/skills/ui-visual-defaults/scripts/contrast.test.mjs
 
   validate:
     runs-on: ubuntu-latest

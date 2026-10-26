@@ -13,6 +13,7 @@ description: "API・イベント・エラーレスポンスなど機械間境界
 - 実装コードのパターン（Repository・サービス層・Result・キャッシュ・トランザクション）→ dev-core:backend-patterns 参照。本スキルは対外契約と互換性戦略のみを扱う。
 - 画面・バッチなど基本設計成果物一式 → dev-core:external-design-deliverables 参照。
 - 契約テストの設計 → dev-core:test-design 参照。フロントのエラー表示実装 → dev-core:frontend-patterns 参照。
+- 認証・認可（IDOR 対策、共有リンクなどの capability トークン）→ dev-core:data-auth-boundary-design 参照。
 
 ## 分担線: AI がやること / 人間にしか決められないこと
 
@@ -61,11 +62,14 @@ description: "API・イベント・エラーレスポンスなど機械間境界
    - エラーコードの意味変更、デフォルト値や単位の変更
 4. 削除の手順: Deprecation の告知（ヘッダ + ドキュメント）→ Sunset 期日提示 → 移行期間 → 削除。
    期間は消費者との契約に従う（外部公開 API の目安: 6〜12ヶ月。要確認）。
-5. 日時は RFC 3339 / UTC 固定。ID は推測不能な形式（ULID / UUIDv7）。
+5. 日時は RFC 3339 / UTC 固定。外部公開 ID は非連番（ULID / UUIDv7 等）にするが、
+   推測困難さには頼らない（アクセス可否は必ずサーバ側の認可で判定する）。
 ```
 
 - [ ] Tolerant Reader を消費者側の義務として規約に書いたか（未知フィールド・未知 enum 値を無視する）
 - [ ] Deprecation → Sunset の手順と期間を契約書レベルの約束として定義したか
+- [ ] 外部公開 ID の推測困難さを、アクセス制御の代わりにしていないか。共有リンク・招待 URL などの capability トークンは ID と別に生成する（作り方の正本 → dev-core:data-auth-boundary-design Step 3）
+      なぜ: RFC 9562 §8 は、UUID を推測困難だと仮定しない（SHOULD NOT）、持っているだけでアクセスできる識別子に使わない（MUST NOT）と定めている。非連番は列挙を難しくする多層防御にすぎず、IDOR を防ぐのはサーバ側の認可である（https://www.rfc-editor.org/rfc/rfc9562.html#name-security-considerations 、2026-10-26 確認）
 
 ## Step 3: バージョニング方式を決める
 
@@ -169,6 +173,8 @@ API の消費者は人間の開発者だけでなく AI エージェント（MCP
 - [ ] enum 値・単位・フォーマット（通貨、タイムゾーン、ページングの継続方法）を機械可読に明示したか
 - [ ] エラーの type URI・エラーコード・Retry-After で、エージェントが自律リトライを正しく判断できるか（Step 7 と連動）
 - [ ] スペックだけを渡した別セッションの AI に呼び出しコードを書かせ、誤解なく成功するかを受け入れテストにしたか
+- [ ] MCP サーバーとしても公開する場合、ツール名・inputSchema / outputSchema と、対応する MCP 仕様のリビジョン（日付版。現行の版は https://modelcontextprotocol.io/specification/versioning で確かめる）も対外契約として Step 2 の互換性規約の対象にしたか。MCP 固有の設計（認可・非推奨機能の扱いなど）は → ai-engineering:ai-system-design
+      なぜ: ツール名とスキーマは、エージェントが呼び出しを組み立てる直接の手がかりで、OpenAPI のフィールドと同じく変えれば消費者が壊れる。MCP は日付付きのリビジョンで後方互換を破る改訂も出すため（2026-07-28 版は初期化ハンドシェイクとセッションを廃止した）、どのリビジョンに対応するかも約束の一部になる（https://modelcontextprotocol.io/specification/2026-07-28/changelog 、2026-10-26 確認）
 
 ## 完了チェックリスト（契約確定前）
 

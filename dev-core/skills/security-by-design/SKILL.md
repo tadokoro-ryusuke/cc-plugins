@@ -1,6 +1,6 @@
 ---
 name: security-by-design
-description: "セキュリティ設計を駆動するスキル。脅威モデリング（STRIDE・DFD・信頼境界）、セキュリティ要件定義、ASVS レベル選定と責任スコープ画定、ゼロトラスト（閉域の代替提案）、暗号化・シークレット管理のデフォルト、脆弱性トリアージ（EPSS+KEV）と保守 SLA、AI エージェント自体の脅威対策（OWASP LLM Top 10）を扱う。設計レビュー・提案書作成・「セキュリティ要件どうする?」の相談時に必ず使用する。"
+description: "セキュリティ設計を駆動するスキル。脅威モデリング（STRIDE・DFD・信頼境界）、セキュリティ要件定義、ASVS レベル選定と責任スコープ画定、ゼロトラスト（閉域の代替提案）、暗号化・シークレット管理のデフォルト、脆弱性トリアージ（EPSS+KEV）と依存監査の CI ゲート基準、保守 SLA、AI エージェント自体の脅威対策（OWASP LLM / Agentic Top 10、MCP、AISVS）を扱う。設計レビュー・提案書作成・「セキュリティ要件どうする?」の相談時に必ず使用する。"
 ---
 
 # Security by Design
@@ -49,7 +49,9 @@ Step 0 資産の棚卸し → Step 1 軽量STRIDE → Step 2 ASVSレベル選定
 
 ## Step 2: ASVS レベル選定と責任スコープ画定
 
-OWASP ASVS（Application Security Verification Standard）5.0（2025年5月リリース、17章・3レベル。目安・2026年時点、最新版を要確認）をセキュリティ要件の語彙として使う。独自チェックリストより標準準拠の宣言が説明責任を軽くするため。
+OWASP ASVS（Application Security Verification Standard）5.0.0（17章・3レベル）をセキュリティ要件の語彙として使う。独自チェックリストより標準準拠の宣言が説明責任を軽くするため。
+
+- 版: 5.0.0 は 2025-05-30 公開で、2026-10-26 時点でも安定版はこれ。GitHub の `latest` タグは開発中の Bleeding Edge なので、契約や要件の引用には使わない。出典: https://github.com/OWASP/ASVS/releases （確認日 2026-10-26）
 
 **データ機微度 → レベルの目安**:
 
@@ -62,6 +64,10 @@ OWASP ASVS（Application Security Verification Standard）5.0（2025年5月リ�
 1. **レベルをユーザー（顧客）と合意する**: 「全部 L3」は工数・UX を壊すだけで誰も幸せにしないため。
 2. **合意したレベルを契約・提案書に明記する**: 「本件は ASVS レベル N 準拠。ペネトレーションテストは別途」のようにスコープを画定する。無限責任の回避と品質宣言を兼ねる最重要の一手のため。契約条項への落とし込みは法務・弁護士に確認する。
 3. **API 中心の案件では OWASP API Security Top 10 を併用する**: ASVS だけでは API 固有の落とし穴（BOLA 等）の視点が薄いため。
+4. **AI 機能を含む案件では OWASP AISVS のレベルを ASVS とセットで明記する**: 「本件は ASVS レベル N、AI 機能部分は AISVS 1.01 レベル N 準拠」のように書く。ASVS だけでは AI 部分をどこまで検証するかが決まらないため。
+   - AISVS（AI 機能のセキュリティ検証標準）は ASVS に合わせた3レベルで、AISVS レベル N の検証は同じ ASVS レベル N の検証を前提にしている。片方だけ書くと前提が欠ける。
+   - 要件は版付きで引用する（例: `v1.01-C10.2.7`）。版の間で番号・文言・レベルが変わるため。
+   - 版: 1.0 は 2026-06-26、1.01 は 2026-10-09 に公開（12章。C9 がエージェントの実行、C10 が MCP）。GitHub の release ページは 2026-10-16 に後から作られたもので、公開日ではない。出典: https://github.com/OWASP/AISVS/releases 、https://github.com/OWASP/AISVS/blob/v1.01/1.01/en/0x03-Using-AISVS.md （確認日 2026-10-26）
 
 要件の実装レベルのチェックリスト（OWASP Top 10:2025 対応）は `dev-core:best-practices` の references/security.md 参照。非機能要件としての合意の取り方は delivery-core:requirements-definition 参照。
 
@@ -95,21 +101,46 @@ OWASP ASVS（Application Security Verification Standard）5.0（2025年5月リ�
 
 ## Step 5: 脆弱性トリアージと保守 SLA への接続
 
-1. **検知を自動化する**: 依存関係は Dependabot / Renovate、コンテナ・IaC は Trivy、コードは SAST（CodeQL / Semgrep）。人手の巡回は続かないため。CI への組み込み位置は dev-core:cicd-release-design 参照。
+1. **検知を自動化する**: 依存関係は Dependabot / Renovate、コンテナ・IaC は Trivy、コードは SAST（CodeQL / Semgrep）。人手の巡回は続かないため。CI への組み込み位置と、依存取り込みのハードニング（新着版のクールダウン・install script の拒否・frozen install）は dev-core:cicd-release-design 参照。
 2. **CVSS 単体でトリアージしない**: CVSS は「悪用されたときの深刻度」であり「悪用される確率」ではないため。判定順:
    - **CISA KEV に載っている**（悪用実績あり）→ 最優先で即対応
    - **EPSS が高い**（悪用確率が高い）→ 期限付きで対応
    - **上記以外の Critical/High** → 定期メンテナンスサイクルで対応
-   - **Low / 到達不能パス** → 記録して静観（全部対応は疲弊、全部無視は事故のため）
+   - **Low / 到達不能パス** → 記録して静観（全部対応は疲弊、全部無視は事故のため）。CI ゲートに掛かる所見を静観にするときは、下の「依存監査の CI ゲート基準」の除外ファイルに載せる
 3. **トリアージ基準と対応期限を保守契約の SLA に定義する**: 例「KEV 掲載: N 営業日以内、High: 次回定期リリース」。緊急対応の工数・料金の扱いは自組織の見積・価格判断プロセスで定める。契約に書いていない緊急対応は無償対応かトラブルの二択になるため。
 4. **SBOM（CycloneDX / SPDX）生成をビルドに組み込む**: エンタープライズ顧客のサプライチェーン要求に即応できるため。OSS ライセンス面は compliance-core:oss-license-audit 参照。
 
+### 依存監査の CI ゲート基準（正本）
+
+脆弱性で CI を止める基準は、ここにだけ書く。cicd-release-design・verify・CI テンプレはここを参照する。基準がファイルごとに違うと、エージェントは都合のよい方を選ぶため。
+
+- **ゲートは「設定した監査コマンドが、設定した閾値で通ること」**: 出発点の既定は High 以上で fail（例: `pnpm audit --audit-level high`）。閾値を変えるときは理由を ADR に残す。
+- **KEV/EPSS はゲートの条件にせず、対応順・期限・例外の根拠に使う**: 対応順は上の 2 の判定順、期限は 3 の SLA で決める。
+- **「到達不能」「KEV 非掲載」を CI の自動判定の条件にしない**: `npm audit` / `pnpm audit` / `pip-audit` / `cargo audit` などの標準の監査コマンドは、既知の脆弱性の有無や重大度で判定する。KEV 掲載も到達可能性も判定しない。判定できない条件を通過条件にすると、エージェントが「到達不能」と主張するだけでゲートを抜けられるため。
+- **例外は除外ファイルでだけ認める**: 項目ごとに理由・期限・承認者を必須にする（VEX 文書でもよい）。除外ファイルは CODEOWNERS で保護し、エージェントが自分で項目を足せないようにする。期限が切れた項目はゲートで落とす。
+- **KEV 掲載の所見を閾値未満でも落としたいときは、任意で足す**: KEV・EPSS を結果に含められるスキャナ（例: Grype）の出力か、CISA KEV カタログとの突き合わせを、スクリプトで判定する。
+- **EPSS の数値で線を引くなら、モデル更新のたびに見直す**: EPSS のモデルは更新され、同じ数値でも意味が変わるため（2026-10-25 付けのスコアデータは model_version v2026.06.15。スコアは FIRST の EPSS SIG が保守し Empirical Security が生成・公開している。出典: https://www.first.org/epss/ 、https://epss.empiricalsecurity.com/epss_scores-current.csv.gz 、確認日 2026-10-26）。
+- **結果を言い換えない**: 「閾値以上の所見なし」を「脆弱性なし」と報告しない。除外した項目は理由と期限を添えて報告する。
+
 ## Step 6: AI エージェント自体の脅威対策
 
-AI 機能を組み込む案件でも、自分の開発体制（Claude Code / Codex）でも、**AI エージェントは新しい攻撃面**として脅威モデルに含める。参照枠は OWASP LLM アプリケーション Top 10 と CSA MAESTRO（目安・2026年時点、要確認）。
+AI 機能を組み込む案件でも、自分の開発体制（Claude Code / Codex）でも、**AI エージェントは新しい攻撃面**として脅威モデルに含める。
 
-- [ ] **プロンプトインジェクションを Step 1 の DFD に載せる**: 外部入力（Web ページ・ユーザー文書・ツール出力）→ LLM の矢印は信頼境界をまたぐため。
+参照枠は OWASP の2つの Top 10 を組み合わせる。モデルを部品として使う部分は LLM Top 10、ツール・記憶・下流への作用をもつ行為者として使う部分は Agentic Top 10 で見る（LLM Top 10 2026 の Preface の区分）。2025 版からの変化と使い分けの詳細、AI システム全体の設計は ai-engineering:ai-system-design 参照。
+
+- **OWASP GenAI LLM Top 10 2026**（OWASP Top 10 for LLM Applications 2026、2026-08 公開）。genai.owasp.org/llm-top-10/ のメニューは 2025 版のままなので、版の確認には次の出典を使う。出典: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/ 、https://github.com/GenAI-Security-Project/GenAI-LLM-Top10/tree/main/2026/final
+- **OWASP Top 10 for Agentic Applications for 2026**（2025-12-09 公開、項目は ASI01〜ASI10）。出典: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+- 脅威の洗い出しの補助に **CSA MAESTRO**（エージェント型 AI 向けの脅威モデリングの枠組み、2025-02-06 公開）。出典: https://cloudsecurityalliance.org/blog/2025/02/06/agentic-ai-threat-modeling-framework-maestro
+- 確認日はいずれも 2026-10-26。版と日付は ai-engineering:ai-system-design Step 7 にも書いてあるので、版を更新するときは両方を揃える。
+
+- [ ] **プロンプトインジェクションを Step 1 の DFD に載せる**: 外部入力（Web ページ・ユーザー文書・ツール出力・リポジトリの内容・Issue/PR のコメント・ログ・MCP のツール記述）→ LLM の矢印は信頼境界をまたぐため。
 - [ ] **ツール権限を最小化する**: エージェントに渡すツール・API キー・DB 権限はタスクに必要な最小セットに絞る。インジェクション成立時の被害半径が権限で決まるため。
+- [ ] **非信頼入力を読むセッションに、状態を変える・外部へ送る権限を持たせない**: 両方が要るタスクは自律実行させず、次のどちらかにする。セッションを分ける（非信頼入力を読む側には機微データと状態変更の権限を渡さず、決めた形式の結果だけを返させる。行動する側は原文を読まない）か、行動の前に人間が承認する。「非信頼入力を読む」「機微データ・重要なシステムに触れる」「状態を変える・外部へ送る」の3つを揃えないのは最低条件で、既定はこれより強い上の線にする。注入された指示はセッション内のどのツールにも届き、機微データに触れる権限があれば被害がそこへ及ぶため。正本は ai-engineering:ai-system-design Step 7 のガードレール（権限分離）。出典: Meta「Agents Rule of Two」2025-10-31、https://ai.meta.com/blog/practical-ai-agent-security/ （確認日 2026-10-26）
+- [ ] **MCP サーバーは第三者コードとして扱う**: Agentic Top 10 の ASI04（Agentic Supply Chain Vulnerabilities）は、ツールのメタデータへのインジェクション（Tool-descriptor injection）と、乗っ取られた MCP・レジストリのサーバー（Compromised MCP / Registry Server）を例に挙げている（Agentic Top 10 本文 p.18 の Common Examples 2 と 5。出典: https://genai.owasp.org/download/52117/ 、確認日 2026-10-26）。対策は AISVS 1.01 の C10（MCP Security）を基準にする。
+  - 導入時に審査し、許可リストに載せたものだけを使う（`v1.01-C10.1.1` 取得元の検証 L1、`C10.1.2` 許可リスト L2）。版も固定し、更新は差分を見てから入れる（本スキルの既定）。ローカルで起動する MCP サーバーは、最小権限のサンドボックスで動かす（`C10.1.3` L2）。
+  - ツール記述・スキーマ・ツール応答は非信頼入力として扱う。モデルに渡す前にスキーマで検証し、間接インジェクションを検査する（`C10.4.1` / `C10.4.2` L1）。ツール定義が変わったら再承認する（`C10.4.8` L3）。
+  - リモート MCP では、リクエストごとにアクセストークンを検証する（`C10.2.1` L1）。その MCP サーバー宛てに発行されたトークンだけを受け付け、それ以外のトークンを受け取ったり中継したりしない（MCP 仕様 2026-07-28 の Authorization で MUST / MUST NOT）。他のサービス宛てのトークンを下流の API にそのまま渡さない（token passthrough の禁止。`v1.01-C10.2.7` L1）。
+  - 出典: https://github.com/OWASP/AISVS/blob/v1.01/1.01/en/0x10-C10-MCP-Security.md 、https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization 、MCP 公式ドキュメント Security Best Practices（2026-07-28 版）https://modelcontextprotocol.io/docs/2026-07-28/tutorials/security/security_best_practices （確認日 2026-10-26）
 - [ ] **不可逆・破壊的操作に人間の承認ゲートを置く**: 本番適用（`terraform apply` 等）、DNS 変更、削除、送金・送信系。承認フローの設計は ai-engineering:human-in-the-loop-design 参照。
 - [ ] **AI 出力（コード・SQL・コマンド）を信頼境界の内側として扱わない**: 生成コードの認可ロジックは人間が最終確認する。AI は「動く」コードを書くが「漏れない」保証はしないため。
 - [ ] **AI システム全体の設計は ai-engineering:ai-system-design 参照**、生成 AI の知財・入力データの扱いは compliance-core:genai-ip-clearance 参照。
@@ -121,7 +152,9 @@ AI 機能を組み込む案件でも、自分の開発体制（Claude Code / Cod
 - [ ] **認可を後回しにしていないか** — 認証・認可・マルチテナント分離は最初の設計レビューで STRIDE にかける。認可モデルの作り直しは最悪級の手戻りのため。実装パターンは `dev-core:backend-patterns` 参照。
 - [ ] **WAF を過信していないか** — WAF は既知パターンの一部にしか効かず、認可バグ（IDOR）は素通しする。認可テストはコードレベルで書く。
 - [ ] **シークレットがコミットされ得る構成になっていないか** — gitleaks 二重化（Step 4）を確認。公開リポジトリ化・AI ツール連携で漏えいが顕在化するため。
-- [ ] **ASVS レベル（責任スコープ）を契約・提案書に明記したか** — 曖昧なまま事故が起きると賠償交渉で不利になるため。
+- [ ] **ASVS レベル（責任スコープ）を契約・提案書に明記したか** — 曖昧なまま事故が起きると賠償交渉で不利になるため。AI 機能を含むなら AISVS レベルもセットで書いたか（Step 2）。
+- [ ] **MCP サーバーを審査・許可リスト・版の固定なしで入れていないか** — ツール記述経由のインジェクションと、乗っ取られたサーバーの入口になるため（Step 6）。
+- [ ] **依存監査の除外を、理由・期限・承認者なしで入れていないか** — 除外ファイルが CI ゲートの抜け道になるため（Step 5）。
 - [ ] **脆弱性アラートを「全部対応」か「全部無視」にしていないか** — EPSS/KEV トリアージ（Step 5）に落とす。
 - [ ] **「閉域」を鵜呑みにしていないか** — 規程の原文を確認し、ゼロトラスト代替（Step 3）を先に検討したか。
 - [ ] **脅威表・方針がリポジトリ外にないか** — AI が読めない場所の設計文書は、AI の場当たり実装で境界が壊れる原因になるため。
@@ -148,10 +181,10 @@ AI 機能を組み込む案件でも、自分の開発体制（Claude Code / Cod
 | コードのセキュリティ監査 | security-auditor エージェント（本スキルの方針を監査基準として使う） |
 | OWASP Top 10:2025 の実装チェックリスト・入力検証 | `dev-core:best-practices`（references/security.md） |
 | 認可・API・トランザクションの実装パターン | `dev-core:backend-patterns` |
-| CI/CD へのスキャン組み込み・リリースゲート | `dev-core:cicd-release-design` |
+| CI/CD へのスキャン組み込み・リリースゲート・依存取り込みと GitHub Actions のサプライチェーン対策 | `dev-core:cicd-release-design`（依存監査ゲートの閾値と例外は本スキル Step 5 が正本） |
 | 非機能要件の引き出しと顧客合意 | delivery-core:requirements-definition / delivery-core:client-alignment |
 | 個人情報・プライバシー法令対応 | compliance-core:privacy-data-compliance |
 | OSS ライセンス・生成 AI の知財 | compliance-core:oss-license-audit / compliance-core:genai-ip-clearance |
-| AI システム設計・承認ゲート設計 | ai-engineering:ai-system-design / ai-engineering:human-in-the-loop-design |
+| AI システム設計・権限分離・承認ゲート設計 | ai-engineering:ai-system-design / ai-engineering:human-in-the-loop-design |
 
 法令・規格・バージョンの記載はすべて目安（2026年時点）。契約・法的判断は弁護士等の専門家に、規格の最新版は公式ソースにあたって確認すること。

@@ -6,7 +6,7 @@
 
 - **A01 Broken Access Control**: 認可チェックが全エンドポイントに実装、水平権限昇格防止、CORS 設定。SSRF 対策（URL 検証、内部ネットワークへのアクセス制限）もここに含む
 - **A02 Security Misconfiguration**: デフォルト資格情報の変更、不要機能の無効化、安全な既定値
-- **A03 Software Supply Chain Failures**: 依存監査（`npm audit` / `cargo audit` / `pip-audit` / `govulncheck` 等、言語に応じて）クリーン。信頼できる取得元、ロックファイル、SBOM。トリアージ（EPSS/KEV）と SBOM の詳細は dev-core:security-by-design、CI での位置付けは dev-core:cicd-release-design
+- **A03 Software Supply Chain Failures**: 依存監査（`npm audit` / `cargo audit` / `pip-audit` / `govulncheck` 等、言語に応じて）が、設定した閾値で通る。閾値・例外・トリアージ（EPSS/KEV）・SBOM の正本は dev-core:security-by-design Step 5。信頼できる取得元、ロックファイル、SBOM。CI での位置付けは dev-core:cicd-release-design
 - **A04 Cryptographic Failures**: 機密データの暗号化、HTTPS 強制、安全な暗号アルゴリズム
 - **A05 Injection**: SQL / XSS / コマンドインジェクション対策（ORM・パラメータ化、自動エスケープ）
 - **A06 Insecure Design**: 脅威モデリング、防御の多層化

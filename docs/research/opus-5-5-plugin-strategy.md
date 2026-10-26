@@ -2,7 +2,7 @@
 
 - 調査日: 2026-09-23
 - 対象: cc-plugins `9ed9423`（dev-core 4.4.0）、codex-plugins `321e032`（dev-core 5.5.0）、Claude Code 2.1.280
-- 状態: **提案**（実装・バージョン変更は未実施）
+- 状態: **実装済み**（Phase A-0〜B を実装し、cc-plugins 側は 2026-09-23 に #9〜#12 で main に merge した。codex-plugins の indie 0.3.1（#7）は未 merge。A-1・A-2 の完了条件のうち、行動ケースの実行と記録は未達。Phase C・D は未実施）。本文は 2.1.280 を対象にした調査時点の記録で、その後の変化は「追記（2026-10-26）」にまとめた
 - レビュー: 3視点の設計パネル、反証レビュー、advisor、Codex の独立レビュー（P1 が3件、P2 が7件）を統合済み
 - 根拠の区別:
   - **[公式]** 公開一次情報
@@ -10,6 +10,31 @@
   - **[実装]** 2.1.280 のバイナリ文字列で確認したもの（docs に記載がない可能性あり）
   - **[二次]** コミュニティ情報
   - **[推測]**
+
+---
+
+## 追記（2026-10-26）: 2.1.280 より後の effort の変化
+
+本文は Claude Code 2.1.280 での調査記録なので、書き換えずに残す。その後の版で effort の前提が2つ変わったので、ここにまとめる。本文の該当箇所には「→ 追記」と付けた。
+
+1. **ultracode が effort から切り離された（2.1.284、2026-09-28）**
+   - `/effort` のトグルや `ultracode` 設定で入れても、effort は変わらない。どの effort でも ultracode のままでいられる。
+   - xhigh になるのは、`claude --effort ultracode` で起動したときと、Agent SDK で effortLevel に ultracode を渡したときだけ。
+   - 本文の「ultracode なら全員が xhigh」「ultracode ではレビュアーが high に抑えられる」は、この2つの起動経路に限った話になる。§8 の「ultracode で `/effort medium` にしたとき」の問いは、ultracode のまま medium で動く、で答えが出た。
+2. **Agent ツールに呼び出しごとの `effort` 引数が入った（2.1.292、2026-10-06）**
+   - ユーザーが effort を指定して頼むと、Claude は fork でない subagent の呼び出しに effort を渡せる。渡した値は agent frontmatter の `effort` より優先され、resume しても残る。`CLAUDE_CODE_EFFORT_LEVEL` はその両方に優先する。
+   - F6 の順位では、`CLAUDE_CODE_EFFORT_LEVEL` と agent frontmatter の間に、その subagent に対する呼び出しごとの effort が入る。スラッシュ起動した skill の effort との前後は docs に書かれておらず、未確認。また、2.1.284 以降の ultracode はセッションの effort の一つではない。
+   - #72596 は not planned で閉じたままだが、機能は 2.1.292 で入った。issue の状態は根拠にせず、CHANGELOG と docs を根拠にする。プラグイン agent の model / effort を settings で変える機能（#79866）は、not planned のまま。
+3. **pin は既定値として維持する**
+   - pin は「上書きできない固定値」ではなく、何も指定しないときの既定値になった。上書きされるかどうかは、ユーザーの依頼と Claude の判断による。
+   - dev-core のワークフローからは、呼び出しごとの effort を渡さない。子の実効値は `dev-core/skills/best-practices/references/delegation-and-review.md` の §10 に従い、requested と verified を分けて記録する。
+   - §9 の測定で effort の差を作るときは、frontmatter の effort を変えたプラグインの変種で作る。呼び出しごとの effort は渡すかどうかを Claude が決めるので、測定の変数にしない。`claude plugin eval`（2.1.310 の `--help` で確認）にも、`--model` はあるが effort を変えるフラグは無い。測定の設計は未着手。
+
+出典（2026-10-26 確認）
+- Claude Code CHANGELOG の 2.1.284 と 2.1.292: https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md 。リリース日は GitHub Releases の v2.1.284（2026-09-28）と v2.1.292（2026-10-06）
+- sub-agents の Choose an effort level: https://code.claude.com/docs/en/sub-agents#choose-an-effort-level
+- model-config の Adjust effort level: https://code.claude.com/docs/en/model-config#adjust-effort-level
+- anthropics/claude-code の issue: https://github.com/anthropics/claude-code/issues/72596 、https://github.com/anthropics/claude-code/issues/79866 （どちらも closed / not planned）
 
 ---
 
@@ -32,9 +57,9 @@
      - サブエージェントは親とキャッシュを共有しません [公式]。
      - codex-plugins も 5.4.0 以降、同じ結論です。
 3. **Claude 版の「実行プロファイル」は、agent frontmatter の `effort` で表します。** 次のことを確認済みです [実測・実装・公式]。
-   - プラグイン同梱の agent でも `effort:` が効き、セッションの effort（`/effort` や ultracode）を上書きします。
-   - effort を指定しない agent はセッションの effort に従います。ultracode なら全員が xhigh で動きます。
-   - Agent ツールには、呼び出しごとに effort を渡す引数がありません。
+   - プラグイン同梱の agent でも `effort:` が効き、セッションの effort（`/effort` や ultracode）を上書きします。（→ 追記1: 2.1.284 以降の ultracode は effort ではない）
+   - effort を指定しない agent はセッションの effort に従います。ultracode なら全員が xhigh で動きます。（→ 追記1: 2.1.284 以降は `--effort ultracode` で起動したときだけ）
+   - Agent ツールには、呼び出しごとに effort を渡す引数がありません。（→ 追記2: 2.1.292 で入った）
 
    そこで役割ごとに固定します。
    - 委譲された実装と E2E は medium
@@ -64,9 +89,9 @@
 | F3 | コスト最適化ガイドの結果: マルチモデル構成は、同じモデルを低い effort で回すより高くついた。オーケストレータが得をしたのは「ルーチン作業の裾野」と「1コンテキストに収まらない作業」の2つだけ。low で全件を回し、失敗した分だけ再実行すると、合格率を保ったまま費用は約半分（テストなどの失敗シグナルがあることが前提）。測定対象に Opus 5.5 は含まれない | [公式] optimizing-for-cost-and-intelligence |
 | F4 | Opus 5 ガイド（Opus 5.5 でも出発点とされる）は、「subagent で検証せよ」といった指示が過剰検証を招くので削除するよう勧めている。一方、ハーネス設計の記事は、作業者と評価者を分けることを強いレバーとしている | [公式] prompting-claude-opus-5、engineering blog |
 | F5 | Opus 5.5 は長いタスクの途中で、テキストだけの進捗報告で end_turn することがある。無人のループは完了条件で判定し、自動継続は2〜3回で止める | [公式] prompting-claude-opus-5-5 |
-| F6 | effort の優先順位: `CLAUDE_CODE_EFFORT_LEVEL` ＞ ターンの effort レイヤ（agent frontmatter、スラッシュ起動した skill）＞ セッションの effort（`--effort`、`/effort`、ultracode）＞ `modelSettings.<model>.effortLevel` ＞ モデルの既定値。`maxEffortLevel` が上限になる | [実測][実装][公式] sub-agents、model-config |
+| F6 | effort の優先順位: `CLAUDE_CODE_EFFORT_LEVEL` ＞ ターンの effort レイヤ（agent frontmatter、スラッシュ起動した skill）＞ セッションの effort（`--effort`、`/effort`、ultracode）＞ `modelSettings.<model>.effortLevel` ＞ モデルの既定値。`maxEffortLevel` が上限になる（→ 追記1・2: ultracode は effort から外れ、呼び出しごとの effort が frontmatter の上に入った） | [実測][実装][公式] sub-agents、model-config |
 | F7 | agent frontmatter の `effort` は、プラグイン agent でも有効。指定がない場合は、セッションの effort が明示されていればそれに従い、なければそのモデルの設定値か既定値を使う。user settings のトップレベルにある `effortLevel` は Opus 5.5 には効かない | [実測] transcript の実効 effort、[公式] changelog 2.1.280 |
-| F8 | Agent ツールには、呼び出しごとに effort を渡す引数がない（#72596 not planned）。プラグイン agent の model / effort を settings で上書きする機能もない（#79866 not planned）。呼び出しごとに model / effort を変えられるのは Workflow の `agent()` だけ | [公式] GitHub issues、workflows docs |
+| F8 | Agent ツールには、呼び出しごとに effort を渡す引数がない（#72596 not planned）。プラグイン agent の model / effort を settings で上書きする機能もない（#79866 not planned）。呼び出しごとに model / effort を変えられるのは Workflow の `agent()` だけ（→ 追記2: 2.1.292 で Agent ツールに effort 引数が入った。#79866 は not planned のまま） | [公式] GitHub issues、workflows docs |
 | F9 | skill frontmatter の `effort` は、ユーザーがスラッシュで起動したときだけ、そのターン全体（親と、effort を指定していない子）に効く。モデルが Skill ツールで起動した場合は反映されなかった | [実測] `-p` の単発ターンで測定。複数ターンにわたって持続するかは未測定 |
 | F10 | Anthropic API では、alias の opus は Opus 5.5、sonnet は Sonnet 5 を指す。3P プロバイダでは異なる（sonnet は 4.5 系、Foundry の opus は 4.6）。model の解決順は、呼び出し時の model 引数 ＞ frontmatter ＞ `CLAUDE_CODE_SUBAGENT_MODEL` ＞ 親 | [公式] model-config、sub-agents |
 | F11 | プラグイン agent では hooks・mcpServers・permissionMode が無視される | [公式] sub-agents |
@@ -117,9 +142,9 @@
 |---|---|---|
 | routine | 短く機械的で低リスク、受け入れチェックが厳密 | 当面は既定（medium）で扱う。low は、原因と修正内容が確定していて振る舞いを独立に検証できる作業に限る。測定後に agent を足すかを判断する（Phase C） |
 | bounded / 既定 | 振る舞いとインターフェースが確定し、許可するファイルと依存が分かっている | `tdd-practitioner`（medium） |
-| complex | モジュールをまたぐ推論や競合する仮説がある。判断は親が持つ | 原則は親が行う（セッションの effort で）。独立した complex な項目を委譲する手段は要検証とし、確認できるまでは親が持つ。候補は Workflow の `agent({agentType, effort})` だが、agent の frontmatter とどちらが優先されるか未確認 |
+| complex | モジュールをまたぐ推論や競合する仮説がある。判断は親が持つ | 原則は親が行う（セッションの effort で）。独立した complex な項目を委譲する手段は要検証とし、確認できるまでは親が持つ。候補は Workflow の `agent({agentType, effort})` だが、agent の frontmatter とどちらが優先されるか未確認（→ 追記2: 2.1.292 以降は Agent ツールの呼び出しごとの effort も候補） |
 
-Agent ツールでは effort を指定できないので、段階は agent ファイルを分けて表します（F8）。
+Agent ツールでは effort を指定できないので、段階は agent ファイルを分けて表します（F8）。（→ 追記2: 2.1.292 以降は呼び出しごとに指定できる。agent ファイルの effort は既定値として残す）
 
 ### 3.3 移植表
 
@@ -141,7 +166,7 @@ Agent ツールでは effort を指定できないので、段階は agent フ�
 | 思想（codex の出典） | cc での形 |
 |---|---|
 | `execution-profile.json` と resolver、capability JSON | agent frontmatter の `effort` と、固定 effort の allowlist（validator で検査） |
-| implementation presets | effort を固定した agent ファイル（3.2）と、Workflow の `agent({effort})` |
+| implementation presets | effort を固定した agent ファイル（3.2）と、Workflow の `agent({effort})`（→ 追記2: 2.1.292 以降は Agent ツールの呼び出しごとの effort もある） |
 | 親モデルの不一致の処理 | 開始時に実効 effort を記録する（`${CLAUDE_EFFORT}`、要確認）。xhigh 以上なら一度だけ `/effort medium` を案内する |
 
 **移さないもの**
@@ -205,17 +230,17 @@ Agent ツールでは effort を指定できないので、段階は agent フ�
 
 - 既定の Opus 5.5 medium のセッションでは、medium の固定は何も変えません。レビュアーだけが high に上がります。
 - 固定が効くのは、次の2つの場合です。
-  - 親を high / xhigh / ultracode に上げたとき。このとき「親は高く、実装は medium」になり、ユーザーが想定する構成そのものになります。
+  - 親を high / xhigh / ultracode に上げたとき。このとき「親は高く、実装は medium」になり、ユーザーが想定する構成そのものになります。（→ 追記1: 2.1.284 以降、ultracode で xhigh になるのは `--effort ultracode` で起動したときだけ）
   - 親が Fable 5.1 や Sonnet 5 のとき。どちらも既定が high なので、実装は medium に下がります。
-- 逆に、親が xhigh 以上（ultracode を含む）のときは、レビュアーが xhigh から high に**下がります**。これは意図した上限です。公式は xhigh と max を「測定できた作業に限る」としているためです。レビューも xhigh で行いたい場合は、`CLAUDE_CODE_EFFORT_LEVEL` を使います（全体に効きます）。
+- 逆に、親が xhigh 以上（ultracode を含む）のときは、レビュアーが xhigh から high に**下がります**。これは意図した上限です。公式は xhigh と max を「測定できた作業に限る」としているためです。レビューも xhigh で行いたい場合は、`CLAUDE_CODE_EFFORT_LEVEL` を使います（全体に効きます）。（→ 追記1・2: ultracode が xhigh を伴うのは `--effort ultracode` 起動のときだけ。2.1.292 以降は、そのレビューだけを xhigh で頼むこともできる）
 - 実行系は model を省略するので、親が Fable 5.1 なら、実装も Fable 5.1 の medium で動きます。単価は Opus 5.5 の2.5倍です。安くしたいときは `CLAUDE_CODE_SUBAGENT_MODEL=opus` を使います。
 - 判断系は `inherit` を明示しているので、この環境変数の影響を受けません。
 
 **設計の理由**
 
 - **固定するのは「下げても足りる」と公式が示している役割と、品質を落とせない役割だけです。**
-  - 固定した値は、ユーザー側で上書きできません（F8）。
-  - 逃げ道は `CLAUDE_CODE_EFFORT_LEVEL`（全体に効く）と `maxEffortLevel`（上限）だけです。README に書きます。
+  - 固定した値は、ユーザー側で上書きできません（F8）。（→ 追記2: 2.1.292 以降は呼び出しごとの effort で上書きできる。プラグインの設定では今も変えられない）
+  - 逃げ道は `CLAUDE_CODE_EFFORT_LEVEL`（全体に効く）と `maxEffortLevel`（上限）だけです。README に書きます。（→ 追記2: 呼び出しごとの effort が加わった）
   - 固定には allowlist と理由を必須にします。
 - **レビュアーを high にする理由**
   - 今回はバッチごとのレビューをやめて、ゲートに絞ります。レビューの頻度を減らすのと同時に、残るレビューの effort まで下げないためです。
@@ -451,7 +476,7 @@ skills:
 **実装時に確かめること**
 - allowed-tools の `Agent(…)` / `Task(…)` の表記が、事前許可として効くか
 - skill 本文の `${CLAUDE_EFFORT}` が置換されるか
-- ultracode で `/effort medium` にしたとき、dynamic workflows がどうなるか
+- ultracode で `/effort medium` にしたとき、dynamic workflows がどうなるか（→ 追記1: 2.1.284 以降は ultracode のまま medium で動く）
 - バックグラウンドで起動した agent に frontmatter の effort が効くか
 - Workflow の `agent({agentType, effort})` と agent の frontmatter のどちらが優先されるか
 - `isolation: worktree` の base ref（feature branch の状態が見えるか）
@@ -510,7 +535,7 @@ skills:
 |---|---|
 | 親が実装すると、長い計画では文脈が膨らむ | plan を永続化して、再開できるようにする。文脈を隔離する利得が具体的にあるときだけ委譲する |
 | バッチごとのレビューをやめると、見逃しが増える | リスクゲートのレビューを high に固定する。最終ゲートで実行証拠を確認する。偽完了率と仕込んだバグで監視し、悪化したらゲートを広げる |
-| 固定した effort は、ユーザーが上書きできない。上げる方向にも下げる方向にも効き、ultracode ではレビュアーが high に抑えられる | 固定は5体に限る。allowlist と理由を必須にする。逃げ道（`CLAUDE_CODE_EFFORT_LEVEL`、`maxEffortLevel`）を README に書く |
+| 固定した effort は、ユーザーが上書きできない。上げる方向にも下げる方向にも効き、ultracode ではレビュアーが high に抑えられる（→ 追記1・2: 2.1.292 以降は呼び出しごとの effort で上書きできる。ultracode で xhigh になるのは `--effort ultracode` 起動のときだけ） | 固定は5体に限る。allowlist と理由を必須にする。逃げ道（`CLAUDE_CODE_EFFORT_LEVEL`、`maxEffortLevel`、2.1.292 以降は呼び出しごとの effort）を README に書く。子の実効値は `delegation-and-review.md` の §10 に従い、requested と verified を分けて記録する |
 | medium が既定だと「賢くない」と感じられるおそれ（F15 の前例） | 親の effort は固定しない。README で「計画は high 以上」と案内する。レビューは high |
 | プラグインのバージョンが混在する（dev-core 5.0.0 ＋ github-tools 2.0.0） | github-tools 2.1.0 を先に出す。対応するバージョンと更新順を移行ノートに書く |
 | Opus 5.5 は出たばかりで、推奨が更新される可能性がある | changelog と公式ガイドの更新を再評価のきっかけにする。固定した値には計測日を持たせる |

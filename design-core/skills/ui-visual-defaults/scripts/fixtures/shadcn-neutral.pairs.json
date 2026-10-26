@@ -1,0 +1,16 @@
+{
+  "source": "shadcn/ui の neutral 既定トークン（https://ui.shadcn.com/docs/theming 、2026-10-26 確認）。ペア一覧の書き方の例。",
+  "pairs": [
+    { "name": "light: foreground / background", "fg": "oklch(0.145 0 0)", "bg": "oklch(1 0 0)", "role": "text" },
+    { "name": "light: muted-foreground / background", "fg": "oklch(0.556 0 0)", "bg": "oklch(1 0 0)", "role": "text" },
+    { "name": "light: muted-foreground / muted", "fg": "oklch(0.556 0 0)", "bg": "oklch(0.97 0 0)", "role": "text" },
+    { "name": "light: primary-foreground / primary", "fg": "oklch(0.985 0 0)", "bg": "oklch(0.205 0 0)", "role": "text" },
+    { "name": "light: destructive / background", "fg": "oklch(0.577 0.245 27.325)", "bg": "oklch(1 0 0)", "role": "text" },
+    { "name": "light: ring(outline-ring/50) / background", "fg": "oklch(0.708 0 0 / 50%)", "bg": "oklch(1 0 0)", "role": "ui" },
+    { "name": "dark: foreground / background", "fg": "oklch(0.985 0 0)", "bg": "oklch(0.145 0 0)", "role": "text" },
+    { "name": "dark: muted-foreground / muted", "fg": "oklch(0.708 0 0)", "bg": "oklch(0.269 0 0)", "role": "text" },
+    { "name": "dark: primary-foreground / primary", "fg": "oklch(0.205 0 0)", "bg": "oklch(0.922 0 0)", "role": "text" },
+    { "name": "dark: destructive / background", "fg": "oklch(0.704 0.191 22.216)", "bg": "oklch(0.145 0 0)", "role": "text" },
+    { "name": "dark: input の枠 / background", "fg": "oklch(1 0 0 / 15%)", "bg": "oklch(0.145 0 0)", "role": "ui" }
+  ]
+}

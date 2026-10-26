@@ -42,7 +42,7 @@ TDD 開発フレームワーク。t-wada 式 TDD、FSD、Clean Architecture、DD
 | スキル | 内容 |
 |--------|------|
 | best-practices | TDD/SOLID/コーディング規約のコア原則。詳細は references/{coding-standards,architecture,security,delegation-and-review}.md に progressive disclosure。delegation-and-review は実装の所有・委譲・リスクゲートのレビューの原則 |
-| frontend-patterns | フロントエンド設計パターン（フレームワーク非依存） |
+| frontend-patterns | Webフロントエンドのコンポーネント設計・状態管理・フォーム・データフェッチ・アクセシビリティ・性能・テストのパターン（フレームワーク非依存。取得手段はレンダリングモデルに合わせて選ぶ） |
 | backend-patterns | API設計、Repository、サービス層パターン |
 | verify | 6段階検証フロー（build→type→lint→test→security→diff）。証拠ベース完了判定（Iron Law）の正本。検証コマンドはプロジェクトから自動検出 |
 | debug | 4フェーズ根本原因分析。Three Strikes Rule（3回失敗で STOP）の正本 |
@@ -105,7 +105,7 @@ Claude Code の現行hook仕様では SessionStart/PreCompact は prompt handler
 
 ## Opus 5.5 での運用
 
-必要な Claude Code は 2.1.280 以上です（agent frontmatter の `effort` と Opus 5.5 の既定 effort に依存）。
+必要な Claude Code は 2.1.280 以上です（agent frontmatter の `effort` と Opus 5.5 の既定 effort に依存）。下に書く呼び出しごとの effort 指定は 2.1.292 以上、effort から切り離された ultracode は 2.1.284 以上の挙動です。
 
 **推奨するセッションの使い分け**
 
@@ -117,21 +117,31 @@ dev-core はセッション（親）の effort を変えません。skill の fr
 
 **agent の effort を固定している理由**
 
-Agent ツールには呼び出しごとの effort 指定がありません。effort を書かない agent はセッションの effort で動くため、ultracode ではすべての子が xhigh になります。そこで役割ごとに frontmatter で固定しています（`scripts/agent-effort-pins.json` が正本）。
+effort を書かない agent は、セッションの effort で動きます。親を xhigh に上げると、委譲した実装やログの隔離まで xhigh になります。そこで役割ごとの既定値を frontmatter に置いています（`scripts/agent-effort-pins.json` が正本）。この README で「固定」と呼ぶのは、この既定値のことです。
+
+frontmatter の effort は既定値で、次の2つがこれを上書きします。
+
+- 呼び出しごとの指定（2.1.292 以上）: ユーザーが「high でレビューして」のように頼むと、Claude は fork でない subagent の呼び出しに effort を渡せます。渡した値は frontmatter より優先されます。渡すかどうかは Claude が決め、dev-core のワークフローからは渡していないので、頼まなければ既定値で動きます。
+- `CLAUDE_CODE_EFFORT_LEVEL`: 呼び出しごとの指定と frontmatter の両方に優先します。
+
+ultracode は 2.1.284 から effort と切り離されました。`/effort` のトグルや `ultracode` 設定で入れても、effort は変わりません。xhigh になるのは、`claude --effort ultracode` で起動したときと、Agent SDK で effortLevel に ultracode を渡したときだけです。
 
 | 状況 | 固定の効果 |
 |---|---|
 | 既定の Opus 5.5 medium セッション | 実行系は変わらない（元から medium）。レビュー系だけが high に上がる |
-| 親を high / xhigh / ultracode に上げた | 実行系は medium のまま。レビュー系は high に揃う（xhigh のセッションでは high に抑えられる） |
+| 親を high / xhigh に上げた（`--effort ultracode` での起動も xhigh になる） | 実行系は medium のまま。レビュー系は high に揃う（xhigh のセッションでは high に抑えられる） |
 | 親が Fable 5.1 / Sonnet 5（既定 high） | 実行系は medium に下がる。実行系は model を省略しているので、親と同じモデルで動く |
 
 **固定を変えたいとき**
 
-固定値はプラグインの設定では上書きできません。
+固定値はプラグインの設定では上書きできません（プラグイン agent の model と effort を settings で変える要望は、not planned で閉じられています）。代わりに次を使います。
 
+- 呼び出しごとの指定（2.1.292 以上）: 「security-auditor を xhigh で」のように頼む。その呼び出しだけに効く
 - `CLAUDE_CODE_EFFORT_LEVEL`: 親も子もすべて同じ effort にする
 - `maxEffortLevel`（settings）: 上限をかける
 - 親が Fable 5.1 のときに実行系を安くしたい: `CLAUDE_CODE_SUBAGENT_MODEL=opus`（model を省略している実行系にだけ効く。レビュー系は `inherit` なので対象外）
+
+出典（2026-10-26 確認）: [sub-agents の Choose an effort level](https://code.claude.com/docs/en/sub-agents#choose-an-effort-level)、[model-config の Adjust effort level](https://code.claude.com/docs/en/model-config#adjust-effort-level)、[Claude Code CHANGELOG の 2.1.284 と 2.1.292](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md)、[anthropics/claude-code#79866](https://github.com/anthropics/claude-code/issues/79866)
 
 ## 5.1.0 の変更点
 
@@ -140,7 +150,11 @@ Agent ツールには呼び出しごとの effort 指定がありません。eff
 - **フック**: 危険コマンドのフックは、引用符と heredoc を除いたコマンドの位置だけを照合する tripwire にし、戻せる操作は確認に回す。Stop フックは未追跡ファイル、focus/skip マーカー、テストファイルの削除も検出する。どちらも回帰テストを CI で回す
 - **委譲先**: security-auditor を重大度（P0〜P3）・確度・file:line の契約に揃え、OWASP Top 10:2025 に更新した。e2e-runner に状態付きの返却を入れ、ロケータを Playwright の推奨順にした
 - **ワークフロー**: refactor は振る舞いを変えず（バグは報告）、テストの薄い対象は特性テストで固定する。debug は赤くなる再現から始める。3回失敗後の別モデルへの委譲は同意か事前許可があるときだけ
-- **data-design-ops**: 本番で `EXPLAIN ANALYZE` を使わない
+- **data-design-ops**: 本番で `EXPLAIN ANALYZE` を使わない。主キーに UUID を使うなら時刻順の UUIDv7（または ULID）にする
+- **security-by-design**: 依存監査の CI ゲート基準の正本を置いた（既定は High 以上で fail、例外は除外ファイルだけ）。AI エージェントの脅威対策を OWASP LLM Top 10 2026・Agentic Top 10・MCP 2026-07-28・AISVS 1.01 に合わせた
+- **cicd-release-design**: サプライチェーン対策（新着版のクールダウン、install script、frozen install、Trusted Publishing、Actions の SHA ピンの強制）を references/supply-chain.md に足した
+- **frontend-patterns**: レンダリングモデルごとの取得手段、アクセシビリティの実装、Core Web Vitals、テストの書き方を足した
+- **data-auth-boundary-design / interface-contract-design**: 外部公開 ID は非連番にするが、推測困難さには頼らない（IDOR はサーバ側の認可で防ぐ）。共有リンクなどの capability トークンは ID と別に作り、作り方の正本を data-auth に置いた。MCP のツールとスキーマも対外契約に含めた
 
 ## 4.x → 5.0.0 への移行
 
@@ -196,7 +210,7 @@ build-command: pnpm build
 typecheck-command: pnpm typecheck
 lint-command: pnpm lint
 test-command: pnpm test
-audit-command: npm audit --audit-level=moderate
+audit-command: pnpm audit --audit-level high
 ---
 
 ## 技術スタック
@@ -231,5 +245,7 @@ audit-command: uv run pip-audit
 ## 技術スタック
 - Framework: FastAPI + Pydantic
 ```
+
+`audit-command` の閾値と例外の基準は [security-by-design の「依存監査の CI ゲート基準」](skills/security-by-design/SKILL.md) に従う（例1の High は出発点の既定）。
 
 複数言語が共存するプロジェクト（例: Tauri = Cargo.toml + package.json）では、**全系統のコマンドを `&&` で連結するか、Makefile / justfile に一本化して指定する**。片方の言語だけ検証して完了扱いにしない。
