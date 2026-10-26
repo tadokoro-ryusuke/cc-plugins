@@ -16,7 +16,9 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
 ## workflows/ci.yml
 - [ ] pnpm → 実際のパッケージマネージャ(npm/yarn/uv/poetry)。Python系ならL1-L5を ruff / mypy / pip-audit / pytest に読み替え
 - [ ] `pnpm lint` / `pnpm test` / `pnpm build` → 実在するスクリプト名
-- [ ] カバレッジ閾値(70%)→ 既存カバレッジ実績に合わせて現実的な値から開始
+- [ ] カバレッジ閾値 → vitest.config の `coverage.thresholds`(全体)に、既存カバレッジ実績に合わせた
+      現実的な値から設定し、段階的に上げる。変更ファイルだけに要求したい場合は、差分を実際に判定する
+      ツールを選び、入力形式との互換を fixture で確かめてから導入する
 - [ ] 新規に導入するノイズの多いチェックは較正期間中に観測する。既存の強制済み security ジョブを弱めない
 
 ## workflows/ai-review.yml
@@ -47,6 +49,13 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
 - [ ] PR 実行時は runner と閾値を trusted base 側に置く。閾値ポリシーの変更は別途レビューし、
       候補が自分のゲートを下げられないようにする
 - [ ] thresholds.json の値はそのまま使わず、初回 full 実行の実測から設定する
+- [ ] anthropic SDK は major を固定したまま使う(テンプレートは `>=1.17,<2`)。1.x 以降は sampling
+      パラメータ(temperature 等)を受け付けないので、judge の分散は票数で抑える。2.x(API 2026-10-21)に
+      上げるときは、judge を Bedrock で 2026-10-21 に対応したモデル(Claude 4.7 以降)へ移し、
+      IAM・エンドポイントの変更をあわせて行う。上げる前にネットワークなしの契約テスト
+      (cc-plugins の scripts/tests/test_hotl_sdk_contract.py が例)を新しい版で通す
+- [ ] JUDGE_MODEL の既定(Sonnet 4.5)は deprecated の旧世代。組織で有効化済みの後継モデルに置換し、
+      置換した日付とモデル一覧を確認した日付を記録する
 - [ ] レビュー済み baseline は、`--baseline` を付けない較正実行で明示的に初期化し、workflow を
       有効化する前に保存する。通常運用でのダウンロード欠落・失敗で比較を無効化しない
 - [ ] レポート/artifact の出力先はランナーの新しい一時ディレクトリ(`$RUNNER_TEMP` 配下)にする。
@@ -81,7 +90,16 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
 
 ## workflows/incident-triage.yml
 - [ ] 調査用ロールが Read-Only であることを IaC/手順で担保(Reader + ログ閲覧のみ)
-- [ ] --allowedTools のコマンド列を対象基盤の read 系コマンドに書き換え
+- [ ] --allowedTools のコマンド列を対象基盤の read 系コマンドに書き換える。接頭辞は具体的なサブコマンドまで
+      書く（`az monitor:*` のような広い接頭辞は変更系サブコマンドも通す）。`gh api` のような汎用コマンドや
+      書き込み系コマンドを足さない。`--tools` の絞り込みと、`--disallowedTools` のファイル編集系ツールの
+      禁止は外さない
+- [ ] Issue に載るのはエージェントの最終回答だけだが、最終回答もログを引用しうる。Issue の閲覧範囲
+      （private リポジトリか）を確認し、必要なら投稿前のマスキングを足す
+- [ ] claude-code-action の `github_token: ${{ github.token }}` を外さない。外すと、書き込み権限を持つ
+      Claude GitHub App トークンがエージェントに渡る。triage job の permissions は read と id-token だけにする
+- [ ] Issue 作成と通知は report job に分けたままにする(エージェントを書き込み権限のある job で動かさない)
+- [ ] アラートの payload は env: 経由でファイルに書き出して読ませる。prompt や run: に `${{ }}` で展開しない
 - [ ] アラート → repository_dispatch の中継(Function/Logic App)は別途実装が必要
 
 ## templates/

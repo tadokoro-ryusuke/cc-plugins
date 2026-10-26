@@ -108,8 +108,9 @@ jobs:
         run: pnpm audit --audit-level high
 
   # ---------------------------------------------------------------------------
-  # L4: Test + Coverage — 新規コードにのみカバレッジを要求(レガシー負債で
-  #   ブロックしない)。vitest 想定
+  # L4: Test + Coverage — vitest 想定。カバレッジ閾値は vitest.config の
+  #   coverage.thresholds で全体に掛け、閾値割れで pnpm test を失敗させる。
+  #   レガシー負債でブロックしないよう、閾値は現状の実績から始めて段階的に上げる
   # ---------------------------------------------------------------------------
   test:
     name: "L4 / test"
@@ -125,15 +126,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Unit / integration tests
         run: pnpm test -- --coverage
-      # 変更ファイルに対するカバレッジ閾値。vitest.config の
-      # coverage.thresholds ではなく差分ベースで判定したい場合:
-      - name: Coverage on changed files (>= 70%)
-        if: github.event_name == 'pull_request'
-        uses: ArtiomTr/jest-coverage-report-action@v2 # vitest の json-summary 互換
-        with:
-          coverage-file: ./coverage/coverage-final.json
-          threshold: 70
-          annotations: failed-tests
+      # 変更ファイルだけにカバレッジを要求したい場合は、差分を実際に判定するツールを足し、
+      # 入力形式(vitest の出力)との互換を fixture で確かめてから有効にする。
+      # 全体の閾値を差分の閾値と称して判定しない(ADJUST.md 参照)
 
   # ---------------------------------------------------------------------------
   # L5: Build — 最終防衛線

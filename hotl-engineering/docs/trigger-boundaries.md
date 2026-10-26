@@ -1,6 +1,6 @@
 # hotl-engineering のトリガー境界 — 既存スキルとの棲み分け
 
-cc-plugins 内のスキル（dev-core の知識スキルとワークフロー、github-tools、ui-ux-pro-max）の
+cc-plugins 内のスキル（dev-core の知識スキルとワークフロー、github-tools）と、併用される外部の ui-ux-pro-max の
 description と突合した衝突チェックの結果（Claude Code 組み込みの `/code-review` との分担も含む）。判定原則は1つ:
 
 > **hotl-engineering は「開発フロー・運用・体制を設計/導入する」スキル（メタ次元）。
@@ -29,7 +29,7 @@ dev-core:code-review は Claude Code 組み込みの `/code-review` とも語彙
 | 学習・振り返り | 「同じミスを繰り返さない仕組みを」→ dev-core:continuous-learning（セッション単位の学習抽出）。「失敗を golden set に還流する**運用ルールを設計**」→ hotl-engineering（原則11）。近接領域だが、前者は「今のセッションから抽出」、後者は「チームの仕組み設計」 |
 | 計画・タスク | 「新機能の**計画を立てて**」→ dev-core:task（1タスクの実装計画）。「**開発体制を立ち上げたい**」→ hotl-engineering（体制・フローの設計） |
 | PR・ドキュメント | 「PR を作って」→ github-tools:pr。「README を更新して」→ github-tools:docs。衝突なし |
-| UI/UX | ui-ux-pro-max と共通語彙なし。衝突なし |
+| UI/UX | ui-ux-pro-max（2026-10 に cc-plugins から削除。上流の公式プラグインを併用する場合も同じ）と共通語彙なし。衝突なし |
 
 ## 過剰トリガー防止（eval ケース #6 の担保）
 

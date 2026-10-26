@@ -3,6 +3,49 @@
 このスキルへの変更は必ずここに記録する（HANDOFF の運用ルール）。
 references の内容変更・description の意味的変更は PR で提案し、承認を得てから反映する。
 
+## 2.0.2 — 2026-10-25
+
+配布テンプレートの不具合修正（スキル本文の判断基準は変更なし）。
+
+- **eval-gate.yml / run_evals.py**: anthropic SDK 1.0.0（2026-08-20）以降、`messages.create` は
+  sampling パラメータ（temperature / top_p / top_k）を受け付けない。2.0.0 で入れた「temperature を
+  受け付けるモデルにだけ送る」処理は、既定の judge（Sonnet 4.5）と thresholds.json の `temperature: 0`
+  の組み合わせで全票が TypeError になり、fail-closed のゲートが常に閉じていた。テンプレートは SDK を
+  固定せず、ランナーが毎回最新の SDK を入れるため、テンプレートのまま使っている適用先では
+  2026-08-20 以降のすべての実行が該当する
+  - judge には sampling パラメータを送らない。thresholds.json に残っていても無視し、実行ログに出す。
+    thresholds.json から `temperature` を削除
+  - SDK を `anthropic[bedrock]>=1.17,<2` に固定。2.x は API 2026-10-21 を送り、旧世代の judge は
+    Bedrock で非対応になる
+  - judge の失敗ログに例外メッセージの先頭を出す（型名だけでは SDK の破壊的変更を追えなかった）
+  - 既定の judge（Sonnet 4.5）は deprecated（Anthropic 運営基盤での退役は 2026-11-30）。後継への移行と
+    SDK 2.x 化は次の minor で扱う。ADJUST.md に移行の確認項目を追加
+  - eval-gate.yml: `inputs.suite` を `run:` に直接展開していたのを env: 経由に変更
+- **incident-triage.yml**: 「Read-Only」の宣言と実装の食い違いを修正
+  - `Bash(gh api:*)` を外した。claude-code-action に `github_token` を渡していなかったため、
+    書き込み権限を持つ Claude GitHub App トークンがエージェントに渡っていた。`github_token: ${{ github.token }}`
+    を明示し、triage job の権限を read と id-token に絞った
+  - 使えるツールを `--tools` で Read / Grep / Glob / Bash に絞り、Bash の事前承認を読み取り専用の
+    コマンド接頭辞に限定した（`az monitor:*` と `az webapp log:*` は変更系サブコマンドも含むため、
+    `az monitor activity-log list` などの具体的なコマンドと `az containerapp logs show` に置き換え）。
+    ファイル編集系ツールは `--disallowedTools` でも明示的に禁止
+  - アラートの payload を prompt に直接展開していたのを、env: 経由でファイルに書き出し、非信頼データと
+    明示して読ませる形に変更
+  - Issue 作成と Teams 通知を、エージェントが動かない report job（`issues: write` のみ）に分離。
+    Teams の webhook URL も env: 経由にした
+  - Issue 本文に execution file（ツール出力を含む実行ログ全体）をそのまま投稿していたのを、最終回答だけを
+    取り出して投稿する形に変更（2.0.1 以前からの問題）
+  - 要約が無い・空白だけ・投稿に失敗した場合も、Run への案内だけで Issue を作る（`find` の失敗で
+    フォールバックの前に終了していた）
+- **ci.yml**: 「Coverage on changed files (>= 70%)」ステップを削除。実際には全体カバレッジの閾値で判定し、
+  入力形式も vitest の出力と合っていなかった。カバレッジ閾値は、適用先の vitest.config の
+  `coverage.thresholds` で全体に掛ける運用に改め（テンプレートは vitest.config を同梱しない）、
+  ADJUST.md の確認項目も合わせた
+- references/eval-design.md: sampling パラメータと SDK の版固定についての記述を更新
+- docs/trigger-boundaries.md: ui-ux-pro-max が cc-plugins から削除されたことを反映
+- 回帰テスト（cc-plugins の scripts/tests/）: 上記の各点を検査するテストと、固定した版の SDK で judge の
+  呼び出し経路をネットワークなしで通す契約テスト（test_hotl_sdk_contract.py）を追加
+
 ## 2.0.1 — 2026-09-23
 
 dev-core 5.0.0 の構成変更に合わせたドキュメントの修正。スキル本文・テンプレート・evals は変更なし。

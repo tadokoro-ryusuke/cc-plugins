@@ -3,7 +3,7 @@
 run_evals.py — 検索QAエージェント eval ハーネス
 
 L1: 決定的チェック(recall@5, MRR, must_not, refusal)
-L2: LLM-as-judge(Bedrock 東京 / temperature 0 ※受け付けるモデルのみ / 3票中央値)
+L2: LLM-as-judge(Bedrock 東京 / sampling パラメータは送らない / 3票中央値)
 ゲート判定: thresholds.json + baseline 比較 → exit code
 
 使い方:
@@ -40,17 +40,14 @@ JUDGE_MODEL = os.environ.get(
 RUBRIC_PATH = Path(__file__).parent / "judge_rubric.md"
 AXES = ("correctness", "faithfulness", "completeness")
 
-# temperature を受け付ける judge モデル系列の許可リスト(Claude 3 系 / Haiku 4.5 /
-# Sonnet・Opus 4.6 以前)。Opus 4.7 以降・Sonnet 5 以降などは temperature を送ると
-# 400 になるため、一致しない(未知・新しい)モデルには送らない。
-# max_tokens は Messages API の必須項目なので常に送る
-_SAMPLING_MODEL_RE = re.compile(
-    r"claude-(?:3-|haiku-4-5|(?:sonnet|opus)-4-(?:[0-6](?![0-9])|[0-9]{8}))"
-)
+# anthropic SDK 1.0.0(2026-08-20)以降の messages.create は sampling パラメータを
+# 受け付けず、送ると TypeError で全票が失敗する。judge の分散は複数票の中央値で抑える。
+# thresholds.json に残っていても送らず、無視したことを実行ログに出す
+SAMPLING_KEYS = ("temperature", "top_p", "top_k")
 
 
-def judge_accepts_sampling(model: str) -> bool:
-    return _SAMPLING_MODEL_RE.search(model) is not None
+def ignored_sampling_keys(cfg: dict) -> list[str]:
+    return [key for key in SAMPLING_KEYS if key in cfg]
 
 
 # ---------------------------------------------------------------------------
@@ -162,14 +159,12 @@ def eval_l2(
         "max_tokens": int(cfg.get("max_tokens", 1024)),
         "messages": [{"role": "user", "content": prompt}],
     }
-    # temperature は cfg にあり、かつ judge モデルが受け付ける場合だけ送る
-    if "temperature" in cfg and judge_accepts_sampling(JUDGE_MODEL):
-        params["temperature"] = float(cfg["temperature"])
     for _ in range(vote_count):
         try:
             msg = client.messages.create(**params)
         except Exception as e:  # noqa: BLE001 — judge 1票の失敗で suite 全体を止めない
-            print(f"  judge vote failed ({type(e).__name__})", file=sys.stderr)
+            # 型名だけでは SDK の破壊的変更(引数の削除など)を追えないので、メッセージの先頭も出す
+            print(f"  judge vote failed ({type(e).__name__}: {str(e)[:200]})", file=sys.stderr)
             continue
         text = "".join(b.text for b in msg.content if b.type == "text")
         m = re.search(r"\{.*\}", text, re.DOTALL)
@@ -295,6 +290,9 @@ def main() -> int:
     all_thresholds = json.loads(Path(args.thresholds).read_text())
     thresholds = all_thresholds[args.suite]
     judge_cfg = all_thresholds.get("judge", {})
+    if ignored := ignored_sampling_keys(judge_cfg):
+        print(f"judge: ignoring sampling parameters {', '.join(ignored)} "
+              "(not accepted by anthropic SDK >= 1.0)", file=sys.stderr)
     rubric = RUBRIC_PATH.read_text(encoding="utf-8")
 
     # --baseline を明示したのにファイルが無い・壊れている場合は比較を黙って無効化しない

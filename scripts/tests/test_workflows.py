@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -17,6 +18,42 @@ WORKFLOWS = ROOT / "hotl-engineering/skills/hotl-engineering/assets/workflows"
 
 def workflow(name):
     return yaml.safe_load((WORKFLOWS / name).read_text())
+
+
+# 外部から値を注入できる式。run: や prompt: に直接展開せず env: 経由で渡す
+UNTRUSTED_EXPRESSION = re.compile(r"\$\{\{[^}]*(inputs\.|github\.event\.|client_payload)")
+# incident-triage のエージェントに与えてよいツール。Bash は読み取り専用のコマンド接頭辞だけを事前承認する
+TRIAGE_TOOLS = {"Read", "Grep", "Glob", "Bash"}
+TRIAGE_READ_ONLY_COMMANDS = ("az monitor activity-log list", "az monitor log-analytics query",
+                             "az monitor metrics list", "az containerapp revision list",
+                             "az containerapp show", "az containerapp logs show",
+                             "gh pr list", "gh run list")
+
+
+def tool_list(claude_args, flag):
+    match = re.search(flag + r'\s+"([^"]*)"', claude_args)
+    return [tool.strip() for tool in match.group(1).split(",")] if match else []
+
+
+def is_read_only_triage_tool(tool):
+    """裸の Bash・広いワイルドカード・変更系サブコマンドを含む接頭辞を通さない。"""
+    if tool in TRIAGE_TOOLS - {"Bash"}:
+        return True
+    return tool in {f"Bash({command}:*)" for command in TRIAGE_READ_ONLY_COMMANDS}
+
+
+def run_step(step, env, cwd, path_prefix=None):
+    """GitHub Actions の既定シェルと同じ条件(bash -e -o pipefail)で run: を実行する。"""
+    full_env = {**os.environ, **env}
+    if path_prefix:
+        full_env["PATH"] = f"{path_prefix}{os.pathsep}{full_env['PATH']}"
+    return subprocess.run(["bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", step["run"]],
+                          env=full_env, cwd=cwd, capture_output=True, text=True, timeout=10)
+
+
+def pinned_sdk(path):
+    match = re.search(r'pip install "(anthropic\[bedrock\][^"]*)"', path.read_text())
+    return match.group(1) if match else None
 
 
 class WorkflowTests(unittest.TestCase):
@@ -100,6 +137,135 @@ process.stdout.write(JSON.stringify({allowed: outputs.authorized === 'true' && !
             with self.subTest(outcome=outcome, directory=directory):
                 self.assertEqual(eval(expression, {"__builtins__": {}},
                                       {"outcome": outcome, "directory": directory}), allowed)
+
+    def test_incident_triage_agent_cannot_write_to_github_or_files(self):
+        data = workflow("incident-triage.yml")
+        self.assertNotIn("write", (data.get("permissions") or {}).values())
+        triage = data["jobs"]["triage"]
+        self.assertEqual({key for key, value in triage["permissions"].items() if value == "write"},
+                         {"id-token"})
+        agent = next(step for step in triage["steps"] if "claude-code-action" in step.get("uses", ""))
+        # 明示しないと、書き込み権限を持つ Claude GitHub App トークンへ交換される
+        self.assertEqual(agent["with"].get("github_token"), "${{ github.token }}")
+        claude_args = agent["with"]["claude_args"]
+        # --allowedTools は事前承認にすぎないので、使えるツールの集合そのものを --tools で絞る
+        tools = set(tool_list(claude_args, "--tools"))
+        self.assertTrue(tools)
+        self.assertLessEqual(tools, TRIAGE_TOOLS)
+        allowed = tool_list(claude_args, "--allowedTools")
+        self.assertTrue(allowed)
+        for tool in allowed:
+            with self.subTest(tool=tool):
+                self.assertTrue(is_read_only_triage_tool(tool))
+        disallowed = set(tool_list(claude_args, "--disallowedTools"))
+        self.assertLessEqual({"Edit", "MultiEdit", "Write", "NotebookEdit"}, disallowed)
+
+    def test_read_only_tool_check_rejects_broad_or_mutating_grants(self):
+        for tool in ("Bash", "Bash(*)", "Bash(az monitor:*)", "Bash(az webapp log:*)", "Bash(gh api:*)",
+                     "Bash(gh issue create:*)", "Bash(git push:*)", "Edit", "Write", "WebFetch"):
+            with self.subTest(tool=tool):
+                self.assertFalse(is_read_only_triage_tool(tool))
+
+    def test_issue_body_contains_only_the_final_answer(self):
+        # execution file は SDK のメッセージ配列全体で、ツール出力(ログやファイルの中身)を含む
+        steps = workflow("incident-triage.yml")["jobs"]["triage"]["steps"]
+        extract = next(step for step in steps if step.get("id") == "summary")
+        messages = [
+            {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Bash"}]}},
+            {"type": "user", "message": {"content": [{"type": "tool_result", "content": "SECRET_FIXTURE=abc"}]}},
+            {"type": "result", "subtype": "success", "result": "事象サマリ: fixture"},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            execution = root / "execution.json"
+            execution.write_text(json.dumps(messages))
+            outputs = root / "outputs"
+            outputs.write_text("")
+            result = run_step(extract, {"EXECUTION_FILE": str(execution), "RUNNER_TEMP": str(root),
+                                        "GITHUB_OUTPUT": str(outputs)}, root)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            summary = Path(dict(line.split("=", 1) for line in outputs.read_text().splitlines())["path"])
+            body = summary.read_text()
+            self.assertIn("事象サマリ: fixture", body)
+            self.assertNotIn("SECRET_FIXTURE", body)
+        upload = next(step for step in steps if "upload-artifact" in step.get("uses", ""))
+        self.assertIn("steps.summary.outputs.path", upload["with"]["path"])
+
+    def test_report_creates_an_issue_even_without_a_usable_result(self):
+        steps = workflow("incident-triage.yml")["jobs"]["report"]["steps"]
+        create = next(step for step in steps if step.get("id") == "issue")
+        mock_gh = """#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$GH_CALLS"
+case "$*" in *--body-file*) [ "${FAIL_BODY_FILE:-0}" = 1 ] && exit 1;; esac
+echo "https://github.com/fixture/repo/issues/1"
+"""
+        # jq -r は空の回答にも改行を出すので、空白だけの要約もフォールバックに回ることを確かめる
+        for case, summary_text, fail_body_file in (("missing", None, "0"), ("present", "事象サマリ: fixture", "0"),
+                                                   ("posting-fails", "事象サマリ: fixture", "1"),
+                                                   ("empty", "", "0"), ("newline-only", "\n", "0"),
+                                                   ("whitespace-only", "  \n\t\n", "0")):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                bin_dir = root / "bin"
+                bin_dir.mkdir()
+                (bin_dir / "gh").write_text(mock_gh)
+                (bin_dir / "gh").chmod(0o755)
+                result_dir = root / "triage"
+                if summary_text is not None:
+                    result_dir.mkdir()
+                    (result_dir / "summary.md").write_text(summary_text)
+                calls = root / "calls"
+                calls.write_text("")
+                outputs = root / "outputs"
+                outputs.write_text("")
+                env = {"GH_CALLS": str(calls), "FAIL_BODY_FILE": fail_body_file, "ALERT_NAME": "fixture",
+                       "RESULT_DIR": str(result_dir), "RUN_URL": "https://example.invalid/run",
+                       "GITHUB_OUTPUT": str(outputs)}
+                result = run_step(create, env, root, path_prefix=str(bin_dir))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("url=https://github.com/fixture/repo/issues/1", outputs.read_text())
+                last_call = calls.read_text().splitlines()[-1]
+                if case == "present":
+                    self.assertIn("--body-file", last_call)
+                else:
+                    self.assertIn("https://example.invalid/run", last_call)
+
+    def test_incident_reporting_runs_outside_the_agent_job(self):
+        jobs = workflow("incident-triage.yml")["jobs"]
+        report = jobs["report"]
+        self.assertEqual(report["needs"], "triage")
+        self.assertEqual(report["permissions"], {"issues": "write"})
+        self.assertFalse(any("claude-code-action" in step.get("uses", "") for step in report["steps"]))
+        self.assertFalse(any("gh issue" in step.get("run", "") for step in jobs["triage"]["steps"]))
+
+    def test_untrusted_input_is_not_expanded_into_prompts_or_shell(self):
+        for name in ("incident-triage.yml", "eval-gate.yml"):
+            for job_name, job in workflow(name)["jobs"].items():
+                for step in job["steps"]:
+                    sources = [step.get("run", "")]
+                    if "claude-code-action" in step.get("uses", ""):
+                        sources.append(step["with"].get("prompt", ""))
+                    for source in sources:
+                        with self.subTest(workflow=name, job=job_name, step=step.get("name") or step.get("uses")):
+                            self.assertIsNone(UNTRUSTED_EXPRESSION.search(source))
+
+    def test_eval_gate_pins_the_sdk_version_tested_in_ci(self):
+        # API 2026-10-21 を送る anthropic SDK 2.x は sampling 引数を受け付けない。
+        # テンプレートと CI の契約テスト(test_hotl_sdk_contract.py)で同じ版を使う
+        spec = pinned_sdk(WORKFLOWS / "eval-gate.yml")
+        self.assertIsNotNone(spec)
+        self.assertIn("<2", spec)
+        gates = ROOT / ".github/workflows/hotl-gates.yml"
+        self.assertEqual(pinned_sdk(gates), spec)
+        self.assertEqual(yaml.safe_load(gates.read_text())["jobs"]["test"]["env"].get("HOTL_REQUIRE_SDK"), "1")
+
+    def test_ci_does_not_claim_changed_file_coverage(self):
+        # jest-coverage-report-action の threshold は全体カバレッジで、入力形式も vitest と合わない
+        for job_name, job in workflow("ci.yml")["jobs"].items():
+            for step in job.get("steps", []):
+                with self.subTest(job=job_name, step=step.get("name") or step.get("uses")):
+                    self.assertNotIn("jest-coverage-report-action", step.get("uses", ""))
+                    self.assertNotIn("changed files", (step.get("name") or "").lower())
 
 
 if __name__ == "__main__":

@@ -16,7 +16,6 @@ on:
     paths: &drift_paths
       - "dev-core/**"
       - "github-tools/**"
-      - "ui-ux-pro-max/**"
       - "hotl-engineering/**"
       - "delivery-core/**"
       - "ai-engineering/**"
