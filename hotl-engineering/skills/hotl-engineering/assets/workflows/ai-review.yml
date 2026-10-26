@@ -45,8 +45,8 @@ jobs:
     outputs:
       tier2: ${{ steps.filter.outputs.critical }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -74,12 +74,12 @@ jobs:
       issues: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE }}
           aws-region: ap-northeast-1
@@ -143,7 +143,7 @@ jobs:
       # ゲート判定用の structured 出力(集約 job が読む)
       - name: Upload verdict
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ai-review-verdict-light
           path: ${{ runner.temp }}/review-light/verdict.json
@@ -164,12 +164,12 @@ jobs:
       issues: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE }}
           aws-region: ap-northeast-1
@@ -234,7 +234,7 @@ jobs:
       # ゲート判定用の structured 出力(集約 job が読む)
       - name: Upload verdict
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ai-review-verdict-deep
           path: ${{ runner.temp }}/review-deep/verdict.json
@@ -254,17 +254,28 @@ jobs:
     steps:
       # 強制化の前に assets/scripts/check_review_verdicts.py を base ブランチの
       # このパスへ配置する。PR 側が持ち込んだゲートスクリプトは決して実行しない。
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: .trusted
           persist-credentials: false
-      - name: Download verdicts
-        continue-on-error: true # 証跡の欠落はどちらの Phase でも validator が報告する
-        uses: actions/download-artifact@v4
+      # 名前で1つずつ取得する。download-artifact v5 以降は、pattern が1件だけに当たると path の直下に
+      # 展開するため、通常の PR(light だけ)で validator が読む場所から外れる
+      - name: Download light verdict
+        id: light-verdict
+        continue-on-error: true # 取得の失敗はどちらの Phase でも validator が報告する(outcome を渡す)
+        uses: actions/download-artifact@v8
         with:
-          pattern: ai-review-verdict-*
-          path: verdicts
+          name: ai-review-verdict-light
+          path: verdicts/ai-review-verdict-light
+      - name: Download deep verdict
+        id: deep-verdict
+        if: needs.classify.outputs.tier2 == 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: ai-review-verdict-deep
+          path: verdicts/ai-review-verdict-deep
 
       - name: Enforce gate
         env:
@@ -275,4 +286,6 @@ jobs:
           TIER2: ${{ needs.classify.outputs.tier2 }}
           IS_DRAFT: ${{ github.event.pull_request.draft }}
           EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+          LIGHT_DOWNLOAD: ${{ steps.light-verdict.outcome }}
+          DEEP_DOWNLOAD: ${{ steps.deep-verdict.outcome }}
         run: python3 .trusted/.github/scripts/check_review_verdicts.py

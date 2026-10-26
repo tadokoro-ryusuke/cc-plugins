@@ -29,7 +29,6 @@ concurrency:
 
 permissions:
   contents: read
-  id-token: write
 
 env:
   ACR_NAME: myappacr
@@ -43,15 +42,18 @@ jobs:
   # ---------------------------------------------------------------------------
   staging:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Azure の OIDC。必要な job にだけ渡す
     timeout-minutes: 30
     environment: staging
     outputs:
       image_tag: ${{ steps.meta.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Azure login (OIDC)
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -63,20 +65,20 @@ jobs:
       - name: Build & push image
         run: |
           az acr build \
-            --registry $ACR_NAME \
-            --image $IMAGE:${{ steps.meta.outputs.tag }} .
+            --registry "$ACR_NAME" \
+            --image "$IMAGE:${{ steps.meta.outputs.tag }}" .
 
       - name: Deploy to staging
         run: |
           az containerapp update \
-            --name ${APP_NAME}-staging \
-            --resource-group $RESOURCE_GROUP \
-            --image $ACR_NAME.azurecr.io/$IMAGE:${{ steps.meta.outputs.tag }}
+            --name "${APP_NAME}-staging" \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "$ACR_NAME.azurecr.io/$IMAGE:${{ steps.meta.outputs.tag }}"
 
       # --- staging smoke(CP3で人間が見るエビデンス) ---
       - name: Smoke test
         run: |
-          for i in $(seq 1 10); do
+          for _ in $(seq 1 10); do
             code=$(curl -s -o /dev/null -w "%{http_code}" \
               "${{ vars.STAGING_URL }}/api/health")
             [ "$code" = "200" ] && break
@@ -91,13 +93,16 @@ jobs:
   # ---------------------------------------------------------------------------
   production:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     needs: staging
     timeout-minutes: 30
     environment:
       name: production # ← required reviewer がここに紐づく
       url: ${{ vars.PRODUCTION_URL }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -112,7 +117,7 @@ jobs:
           done
 
       - name: Azure login (OIDC)
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID_PROD }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -130,16 +135,16 @@ jobs:
         id: deploy
         run: |
           az containerapp update \
-            --name $APP_NAME \
-            --resource-group $RESOURCE_GROUP \
-            --image $ACR_NAME.azurecr.io/$IMAGE:${{ needs.staging.outputs.image_tag }}
+            --name "$APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "$ACR_NAME.azurecr.io/$IMAGE:${{ needs.staging.outputs.image_tag }}"
 
       # --- 承認後は自動でヘルス監視。閾値超過なら人間を待たずロールバック ---
       - name: Health watch (5 min)
         id: health
         run: |
           fails=0
-          for i in $(seq 1 20); do
+          for _ in $(seq 1 20); do
             code=$(curl -s -o /dev/null -w "%{http_code}" \
               "${{ vars.PRODUCTION_URL }}/api/health") || code=000
             [ "$code" = "200" ] || fails=$((fails+1))

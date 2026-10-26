@@ -122,6 +122,16 @@ def run_step(step, env, cwd, path_prefix=None):
                           env=full_env, cwd=cwd, capture_output=True, text=True, timeout=10)
 
 
+# Node 24 で動く最初のメジャー版（各 action の action.yml の runs.using で確認。2026-10-26）。
+# claude-code-action は composite で、v1 が現行
+NODE24_MIN_MAJOR = {"actions/checkout": 5, "actions/setup-node": 5, "pnpm/action-setup": 5,
+                    "actions/upload-artifact": 6, "actions/download-artifact": 7, "actions/setup-python": 6,
+                    "actions/github-script": 8, "actions/create-github-app-token": 3,
+                    "aws-actions/configure-aws-credentials": 6, "azure/login": 3, "dorny/paths-filter": 4,
+                    "gitleaks/gitleaks-action": 3, "marocchino/sticky-pull-request-comment": 3,
+                    "anthropics/claude-code-action": 1}
+
+
 def pinned_sdk(path):
     match = re.search(r'pip install "(anthropic\[bedrock\][^"]*)"', path.read_text())
     return match.group(1) if match else None
@@ -525,6 +535,44 @@ exit 0
                 with self.subTest(job=job_name, step=step.get("name") or step.get("uses")):
                     self.assertNotIn("jest-coverage-report-action", step.get("uses", ""))
                     self.assertNotIn("changed files", (step.get("name") or "").lower())
+
+    def test_gate_downloads_each_verdict_by_name_into_its_tier_directory(self):
+        # download-artifact v5 以降は、pattern が1件だけに当たると path の直下に展開する。通常の PR では
+        # light だけなので verdicts/verdict.json になり、validator が読む verdicts/ai-review-verdict-light/ から外れる
+        steps = workflow("ai-review.yml")["jobs"]["ai-review-gate"]["steps"]
+        downloads = [step for step in steps if "download-artifact" in step.get("uses", "")]
+        self.assertTrue(downloads)
+        self.assertFalse([step for step in downloads if "pattern" in step.get("with", {})])
+        by_name = {step["with"]["name"]: step for step in downloads}
+        self.assertEqual(set(by_name), {"ai-review-verdict-light", "ai-review-verdict-deep"})
+        for tier, step in by_name.items():
+            with self.subTest(tier=tier):
+                self.assertEqual(step["with"]["path"], f"verdicts/{tier}")
+                self.assertTrue(step.get("continue-on-error"))
+        self.assertIn("needs.classify.outputs.tier2 == 'true'", by_name["ai-review-verdict-deep"]["if"])
+        # 取得の結果(digest の不一致を含む)を validator に渡す
+        gate_env = next(step for step in steps if step.get("name") == "Enforce gate")["env"]
+        for tier, key in (("ai-review-verdict-light", "LIGHT_DOWNLOAD"), ("ai-review-verdict-deep", "DEEP_DOWNLOAD")):
+            with self.subTest(tier=tier):
+                self.assertEqual(gate_env[key], "${{ steps.%s.outcome }}" % by_name[tier]["id"])
+
+    def test_actions_are_on_majors_that_run_on_node24(self):
+        # GitHub のホストランナーから Node 20 は 2026-09-23 に外れた。node20 宣言の版を新しく書かない
+        for path in [*WORKFLOWS.glob("*.yml"), *(ROOT / ".github/workflows").glob("*.yml")]:
+            for job_name, job in yaml.safe_load(path.read_text())["jobs"].items():
+                for step in job.get("steps", []):
+                    uses = step.get("uses")
+                    if not uses:
+                        continue
+                    action, _, ref = uses.partition("@")
+                    with self.subTest(path=path.name, job=job_name, uses=uses):
+                        self.assertIn(action, NODE24_MIN_MAJOR)
+                        match = re.fullmatch(r"v(\d+)(?:\.\d+){0,2}", ref)
+                        self.assertIsNotNone(match, "テンプレは @vN か @vN.M.P で書き、適用時に SHA を pin する")
+                        self.assertGreaterEqual(int(match.group(1)), NODE24_MIN_MAJOR[action])
+                        if action == "pnpm/action-setup" and int(match.group(1)) == 6:
+                            # @v6 の浮動タグは 2026-10-26 時点で v6.0.10 を指し、pnpm 12 に対応した v6.1.0 より古い
+                            self.assertNotEqual(ref, "v6")
 
 
 if __name__ == "__main__":

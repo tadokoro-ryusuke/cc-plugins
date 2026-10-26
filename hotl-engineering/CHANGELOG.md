@@ -3,7 +3,42 @@
 このスキルへの変更は必ずここに記録する（HANDOFF の運用ルール）。
 references の内容変更・description の意味的変更は PR で提案し、承認を得てから反映する。
 
-## 2.1.0 — 2026-10-25
+## 2.1.0 — 2026-10-26
+
+**BREAKING（eval の雛形を適用している人向け）**: judge のゲートを、3軸の合計点の平均から、各軸を合格線で
+二値化した軸ごとの合格率に変えた。合計点は、どの軸が落ちたのか分からず、人間との一致も測りにくいため
+（採点方式と判事の較正の正本は ai-engineering:llm-evals）。
+
+- thresholds.json: `judge_total_floor` / `judge_total_drop_allowed` を `judge_axis_pass_rate_floor` /
+  `judge_axis_pass_rate_drop_allowed` に置き換え、`judge.pass_score`（既定 4）を足した。古いキーが残っていれば
+  run_evals.py は評価を始めずに止まる
+- run_evals.py: 合格線を下回った軸があるケースは、軸名を付けて fail として報告する（must-pass は全軸の合格が
+  必要なのは従来どおり）。summary は `judge_axis_pass_rate`・`judge_axis_mean`・`judge_pass_score` を持ち、
+  `judge_total_mean` は無くなった。軸ごとの合格率を持たない baseline や、別の合格線で作った baseline は、
+  理由を出して止まる（比較を黙って飛ばさない）。ADJUST.md に移行手順を足した
+- run_evals.py: 率の閾値（下限・許容低下幅など）と baseline の軸ごとの合格率は、0〜1 の有限の数だけを受け付ける。
+  NaN・null・範囲外は、比較を黙って偽にしてゲートを開けるので、評価を始める前に止める。baseline の
+  `recall_at_5_mean` も、null（対象外）か 0〜1 の有限の数だけを受け付ける
+- eval-design.md: L2 は段階尺度を診断に使い、ゲートは合格線での二値化にする理由を書いた。L3 の較正を
+  「±1点一致率 85%」から、合格線で二値化した軸ごとの一致率（明確なケースでおよそ 90%）に変えた
+- judge_rubric.md: 存在しない evals/README.md を指していた較正記録の参照を直した
+- trigger-boundaries.md: 採点方式と判事の較正の相談を ai-engineering:llm-evals に送る行を足した
+- ci.yml: 依存監査の閾値の基準（dev-core:security-by-design Step 5）を指すコメントを足した
+- **actions を Node 24 で動く版に上げた**（GitHub のホストランナーから Node 20 は 2026-09-23 に外れた）。
+  checkout v7、setup-node v7、setup-python v7、upload-artifact v7、download-artifact v8、github-script v9、
+  create-github-app-token v3、configure-aws-credentials v6、azure/login v3、paths-filter v4、gitleaks-action v3、
+  sticky-pull-request-comment v3、pnpm/action-setup v6.1.0。claude-code-action は v1 のまま（v2 は無い）
+  - **ai-review**: download-artifact v5 以降は、pattern が1件だけに当たると path の直下に展開する。通常の PR では
+    light の判定ファイルだけなので、validator が読む `verdicts/ai-review-verdict-light/` から外れ、ゲートが常に
+    「欠落」と判定する。判定ファイルを名前で1つずつ、tier ごとのディレクトリに取得するようにした。
+    download-artifact v8 は展開した後に digest の不一致をエラーにするので、取得の結果（outcome）を validator に
+    渡し、success でなければ不完全な証拠として扱う。**check_review_verdicts.py と ai-review.yml は一緒に更新する**
+    （新しい validator は `LIGHT_DOWNLOAD` / `DEEP_DOWNLOAD` が無いと不完全として扱う）
+  - **agent-implement**: App トークンは `app-id` のまま（v3.1 以降は `client-id` が推奨だが、actionlint 1.7.12 が
+    未対応でエラーになるため）
+  - Node の既定版を 24 にした（v22 は 2027-04-30 に EOL）。deploy.yml の shellcheck の指摘を直し、
+    `id-token: write` を workflow 全体から各 job に移した（zizmor の excessive-permissions）
+  - ADJUST.md: SHA ピンを強制するポリシーの影響、self-hosted runner の版、pnpm の版の選び方を足した
 
 **BREAKING（テンプレートを適用する人向け）**: モデル ID をテンプレートに書かず、リポジトリ変数で指定する。
 既定だった Sonnet 4.5 は deprecated（Anthropic 運営基盤での退役は 2026-11-30）で、適用先が気づかないまま

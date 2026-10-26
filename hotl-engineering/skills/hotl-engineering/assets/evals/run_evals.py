@@ -4,6 +4,8 @@ run_evals.py — 検索QAエージェント eval ハーネス
 
 L1: 決定的チェック(recall@5, MRR, must_not, refusal)
 L2: LLM-as-judge(Bedrock 東京 / sampling パラメータは送らない / 3票中央値)
+    各軸の段階スコア(1-5)を合格線(judge.pass_score)で二値化し、軸ごとに合格率を出す。
+    軸は合算しない(採点方式の正本は ai-engineering:llm-evals Step 2)
 ゲート判定: thresholds.json + baseline 比較 → exit code
 
 使い方:
@@ -23,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import statistics
@@ -47,6 +50,65 @@ SAMPLING_KEYS = ("temperature", "top_p", "top_k")
 
 def ignored_sampling_keys(cfg: dict) -> list[str]:
     return [key for key in SAMPLING_KEYS if key in cfg]
+
+
+# 2.1.0 で合計点のゲートから軸ごとの合格率のゲートに変えた。古いキーは黙って無視せず止める
+RATE_THRESHOLD_KEYS = ("must_pass_rate", "recall_at_5_drop_allowed",
+                       "judge_axis_pass_rate_floor", "judge_axis_pass_rate_drop_allowed")
+THRESHOLD_KEYS = (*RATE_THRESHOLD_KEYS, "must_not_violations")
+LEGACY_THRESHOLD_KEYS = ("judge_total_floor", "judge_total_drop_allowed")
+# 境界ちょうどの値(例: 0.9 と 1.0 - 0.1)を浮動小数点の誤差で落とさないための許容
+EPSILON = 1e-9
+
+
+def is_fraction(value) -> bool:
+    """0 以上 1 以下の有限の数か。bool・文字列・None・NaN・無限大は認めない(比較を黙って偽にするため)"""
+    return type(value) in (int, float) and math.isfinite(value) and 0 <= value <= 1
+
+
+def validate_thresholds(thresholds: dict) -> None:
+    if legacy := [key for key in LEGACY_THRESHOLD_KEYS if key in thresholds]:
+        raise ValueError(
+            f"thresholds use the summed judge score keys {legacy}, which hotl 2.1.0 replaced with "
+            "judge_axis_pass_rate_floor / judge_axis_pass_rate_drop_allowed (see CHANGELOG)")
+    if missing := [key for key in THRESHOLD_KEYS if key not in thresholds]:
+        raise ValueError(f"thresholds are missing {missing}")
+    for key in RATE_THRESHOLD_KEYS:
+        if not is_fraction(thresholds[key]):
+            raise ValueError(f"threshold {key} must be a finite number from 0 to 1, got {thresholds[key]!r}")
+    violations = thresholds["must_not_violations"]
+    if type(violations) is not int or violations < 0:
+        raise ValueError(f"threshold must_not_violations must be a non-negative integer, got {violations!r}")
+
+
+def judge_pass_score(cfg: dict) -> int:
+    score = cfg.get("pass_score", 4)
+    if type(score) is not int or not 2 <= score <= 5:
+        raise ValueError("judge pass_score must be an integer from 2 to 5")
+    return score
+
+
+def load_baseline(path: str, pass_score: int) -> dict:
+    baseline = json.loads(Path(path).read_text())["summary"]
+    if not isinstance(baseline, dict) or not baseline:
+        raise ValueError("baseline summary is missing or invalid")
+    rates = baseline.get("judge_axis_pass_rate")
+    if not isinstance(rates, dict) or set(rates) != set(AXES):
+        raise ValueError(
+            "baseline has no per-axis judge pass rates (it was written before hotl 2.1.0, which "
+            "gated on judge_total_mean): regenerate the baseline with this run_evals.py")
+    # 欠けた軸(judge まで進んだケースが無い失敗実行など)を baseline にすると、その軸の回帰比較が消える
+    recall = baseline.get("recall_at_5_mean")
+    if recall is not None and not is_fraction(recall):
+        raise ValueError(f"baseline recall_at_5_mean must be null or a finite number from 0 to 1, got {recall!r}")
+    if bad := {axis: rate for axis, rate in rates.items() if not is_fraction(rate)}:
+        raise ValueError(f"baseline judge pass rates must be finite numbers from 0 to 1, got {bad!r}: "
+                         "regenerate the baseline from a complete run")
+    if baseline.get("judge_pass_score") != pass_score:
+        raise ValueError(
+            f"baseline was scored with judge pass_score {baseline.get('judge_pass_score')}, "
+            f"not {pass_score}: regenerate the baseline")
+    return baseline
 
 
 # ---------------------------------------------------------------------------
@@ -210,14 +272,18 @@ def gate(summary: dict, thresholds: dict, baseline: dict | None) -> tuple[bool, 
         )
     if summary["must_not_violations"] > thresholds["must_not_violations"]:
         failures.append(f"must_not violation {summary['must_not_violations']} 件")
-    if summary["judge_total_mean"] < thresholds["judge_total_floor"]:
-        failures.append(
-            f"judge 平均 {summary['judge_total_mean']:.2f} < 絶対下限 {thresholds['judge_total_floor']}"
-        )
+    rates = summary["judge_axis_pass_rate"]
+    if summary["n_cases"] and all(rate is None for rate in rates.values()):
+        failures.append("judge まで進んだケースが0件")
+    for axis in AXES:
+        rate = rates[axis]
+        if rate is not None and rate < thresholds["judge_axis_pass_rate_floor"] - EPSILON:
+            failures.append(
+                f"judge {axis} の合格率 {rate:.0%} < 絶対下限 {thresholds['judge_axis_pass_rate_floor']:.0%}"
+            )
 
     if baseline:
         b_recall = baseline.get("recall_at_5_mean")
-        b_judge = baseline.get("judge_total_mean")
         if (
             b_recall is not None
             and summary["recall_at_5_mean"] is not None
@@ -226,10 +292,13 @@ def gate(summary: dict, thresholds: dict, baseline: dict | None) -> tuple[bool, 
             failures.append(
                 f"recall@5 回帰: {summary['recall_at_5_mean']:.3f} < baseline {b_recall:.3f} - {thresholds['recall_at_5_drop_allowed']}"
             )
-        if b_judge is not None and summary["judge_total_mean"] < b_judge - thresholds["judge_total_drop_allowed"]:
-            failures.append(
-                f"judge 回帰: {summary['judge_total_mean']:.2f} < baseline {b_judge:.2f} - {thresholds['judge_total_drop_allowed']}"
-            )
+        drop = thresholds["judge_axis_pass_rate_drop_allowed"]
+        for axis in AXES:
+            rate, b_rate = rates[axis], baseline["judge_axis_pass_rate"][axis]
+            if rate is not None and rate < b_rate - drop - EPSILON:
+                failures.append(
+                    f"judge {axis} の回帰: 合格率 {rate:.0%} < baseline {b_rate:.0%} - {drop:.0%}"
+                )
     return (len(failures) == 0), failures
 
 
@@ -244,8 +313,13 @@ def write_report(out: Path, summary: dict, results: list[dict], ok: bool, failur
         f"- must-pass: {summary['must_pass_rate']:.0%}  |  must_not violation: {summary['must_not_violations']} 件",
         f"- recall@5 平均: {fmt(summary['recall_at_5_mean'])}"
         + (f"(baseline {fmt(baseline.get('recall_at_5_mean'))})" if baseline else ""),
-        f"- judge 総合平均: {summary['judge_total_mean']:.2f} / 15"
-        + (f"(baseline {baseline.get('judge_total_mean', 0):.2f})" if baseline else ""),
+        f"- judge の軸ごとの合格率(score ≥ {summary['judge_pass_score']}): "
+        + " / ".join(
+            f"{axis} {pct(summary['judge_axis_pass_rate'][axis])}"
+            + (f"(baseline {pct(baseline['judge_axis_pass_rate'][axis])})" if baseline else "")
+            for axis in AXES),
+        "- judge の軸ごとの平均点(診断用。ゲートには使わない): "
+        + " / ".join(f"{axis} {fmt(summary['judge_axis_mean'][axis])}" for axis in AXES),
         "",
     ]
     if failures:
@@ -273,6 +347,10 @@ def fmt(v):
     return f"{v:.3f}" if isinstance(v, (int, float)) else "n/a"
 
 
+def pct(v):
+    return f"{v:.0%}" if isinstance(v, (int, float)) else "n/a"
+
+
 # ---------------------------------------------------------------------------
 def main() -> int:
     ap = argparse.ArgumentParser()
@@ -288,22 +366,20 @@ def main() -> int:
               "(see ADJUST.md)", file=sys.stderr)
         return 2
 
-    out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
     all_thresholds = json.loads(Path(args.thresholds).read_text())
     thresholds = all_thresholds[args.suite]
+    validate_thresholds(thresholds)
     judge_cfg = all_thresholds.get("judge", {})
+    pass_score = judge_pass_score(judge_cfg)
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
     if ignored := ignored_sampling_keys(judge_cfg):
         print(f"judge: ignoring sampling parameters {', '.join(ignored)} "
               "(not accepted by anthropic SDK >= 1.0)", file=sys.stderr)
     rubric = RUBRIC_PATH.read_text(encoding="utf-8")
 
     # --baseline を明示したのにファイルが無い・壊れている場合は比較を黙って無効化しない
-    baseline = None
-    if args.baseline:
-        baseline = json.loads(Path(args.baseline).read_text())["summary"]
-        if not isinstance(baseline, dict) or not baseline:
-            raise ValueError("baseline summary is missing or invalid")
+    baseline = load_baseline(args.baseline, pass_score) if args.baseline else None
 
     cases = [
         json.loads(line)
@@ -348,20 +424,18 @@ def main() -> int:
                        fail_reason=f"judge error: {type(e).__name__}")
             results.append(row)
             continue
-        total = sum(judge[a]["score"] for a in AXES)
-        row.update(judge=judge, judge_total=total)
-
-        # ケース単位の合否: must_pass は judge 全軸 4 以上を要求
-        if case.get("must_pass") and any(judge[a]["score"] < 4 for a in AXES):
-            row.update(failed=True,
-                       fail_reason=f"must-pass case below bar (total={total})")
-        elif total < 8:  # 明白な品質不良は個別 fail として可視化
-            row.update(failed=True, fail_reason=f"low judge total ({total})")
+        # 各軸を合格線で二値化する。合格線を下回った軸があるケースは、レポートで見えるよう fail にする
+        judge_pass = {a: judge[a]["score"] >= pass_score for a in AXES}
+        row.update(judge=judge, judge_pass=judge_pass)
+        below = [a for a in AXES if not judge_pass[a]]
+        if below:
+            kind = "must-pass case" if case.get("must_pass") else "case"
+            row.update(failed=True, fail_reason=f"{kind} below judge pass line on {', '.join(below)}")
         results.append(row)
 
     # --- 集計 ---
     recalls = [r["recall_at_5"] for r in results if r.get("recall_at_5") is not None]
-    totals = [r["judge_total"] for r in results if "judge_total" in r]
+    judged = [r for r in results if "judge_pass" in r]
     mp = [r for r in results if r["must_pass"]]
     mp_failed = [r["id"] for r in mp if r["failed"]]
     summary = {
@@ -370,7 +444,11 @@ def main() -> int:
         "expected_revision": args.expected_revision,
         "infrastructure_failed_ids": [r["id"] for r in results if r.get("infrastructure_error")],
         "recall_at_5_mean": statistics.mean(recalls) if recalls else None,
-        "judge_total_mean": statistics.mean(totals) if totals else 0.0,
+        "judge_pass_score": pass_score,
+        "judge_axis_pass_rate": {
+            a: (sum(r["judge_pass"][a] for r in judged) / len(judged)) if judged else None for a in AXES},
+        "judge_axis_mean": {
+            a: statistics.mean(r["judge"][a]["score"] for r in judged) if judged else None for a in AXES},
         "must_pass_rate": 1.0 - (len(mp_failed) / len(mp)) if mp else 1.0,
         "must_pass_failed_ids": mp_failed,
         "must_not_violations": sum(len(r.get("must_not_violations") or []) for r in results),
