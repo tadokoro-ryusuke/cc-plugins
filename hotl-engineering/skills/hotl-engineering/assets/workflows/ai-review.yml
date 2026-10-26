@@ -84,11 +84,31 @@ jobs:
           role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE }}
           aws-region: ap-northeast-1
 
-      - uses: anthropics/claude-code-action@v1
+      # モデル ID はリポジトリ変数で指定する(テンプレートには書かない)。未設定ならエージェントを動かす前に止める
+      - name: Require the model variable
+        id: model
         env:
-          VERDICT_PATH: ${{ runner.temp }}/review-light/verdict.json
+          MODEL: ${{ vars.HOTL_MODEL_LIGHT }}
+        run: |
+          if [ -z "$MODEL" ]; then
+            echo "::error::Set the repository variable HOTL_MODEL_LIGHT (see ADJUST.md)"
+            exit 1
+          fi
+
+      # 判定ファイルの置き場所を、エージェントの前に新しく用意する(前回の判定を残さない)
+      - name: Prepare the verdict directory
+        id: verdict-dir
+        run: |
+          rm -rf "$RUNNER_TEMP/review-light"
+          mkdir -p "$RUNNER_TEMP/review-light"
+
+      - uses: anthropics/claude-code-action@v1
         with:
           use_bedrock: "true"
+          # 使えるのは読み取り、PR へのコメント(上流の PR レビュー例と同じ手段)、判定ファイル1つへの書き込みだけ。
+          # github_token を明示し、書き込み権限を持つ Claude GitHub App トークンを渡さない。
+          # リポジトリ(PR の head を含む)の .claude/settings.json や .mcp.json で権限が広がらないよう、user 設定だけを読む
+          github_token: ${{ github.token }}
           prompt: |
             このPRをレビューしてください。CLAUDE.md のレビュー規範に従うこと。
 
@@ -107,14 +127,18 @@ jobs:
             ## 出力
             1. PRコメントで結果サマリ(CP2で人間が3分で読める分量)
             2. 個別指摘は該当行へのインラインコメント
-            3. 環境変数 VERDICT_PATH の親ディレクトリを作成し、今回のレビュー結果を
-               そのパスに書き込む。リポジトリ内にある verdict は決して流用しない。
+            3. 今回のレビュー結果を、Write で `${{ runner.temp }}/review-light/verdict.json` に
+               書き込む(ディレクトリは用意済み)。リポジトリ内にある verdict は決して流用しない。
                {"critical": <非負整数>, "high": <非負整数>,
                 "head_sha": "${{ github.event.pull_request.head.sha }}"} を書き込む。
                指摘ゼロなら件数は 0。必ずこの head revision をレビューすること
           claude_args: |
             --max-turns 5
-            --model apac.anthropic.claude-sonnet-4-5-20250929-v1:0
+            --model ${{ vars.HOTL_MODEL_LIGHT }}
+            --setting-sources user
+            --strict-mcp-config
+            --tools "Read,Grep,Glob,Bash,Write"
+            --allowedTools "Read,Grep,Glob,mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Edit(/${{ runner.temp }}/review-light/verdict.json)"
 
       # ゲート判定用の structured 出力(集約 job が読む)
       - name: Upload verdict
@@ -150,11 +174,30 @@ jobs:
           role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE }}
           aws-region: ap-northeast-1
 
-      - uses: anthropics/claude-code-action@v1
+      # モデル ID はリポジトリ変数で指定する(テンプレートには書かない)。未設定ならエージェントを動かす前に止める
+      - name: Require the model variable
+        id: model
         env:
-          VERDICT_PATH: ${{ runner.temp }}/review-deep/verdict.json
+          MODEL: ${{ vars.HOTL_MODEL_DEEP }}
+        run: |
+          if [ -z "$MODEL" ]; then
+            echo "::error::Set the repository variable HOTL_MODEL_DEEP (see ADJUST.md)"
+            exit 1
+          fi
+
+      # 判定ファイルの置き場所を、エージェントの前に新しく用意する(前回の判定を残さない)
+      - name: Prepare the verdict directory
+        id: verdict-dir
+        run: |
+          rm -rf "$RUNNER_TEMP/review-deep"
+          mkdir -p "$RUNNER_TEMP/review-deep"
+
+      - uses: anthropics/claude-code-action@v1
         with:
           use_bedrock: "true"
+          # 使えるのは読み取り、PR へのコメント(上流の PR レビュー例と同じ手段)、判定ファイル1つへの書き込みだけ。
+          # github_token を明示し、書き込み権限を持つ Claude GitHub App トークンを渡さない
+          github_token: ${{ github.token }}
           prompt: |
             このPRは認証・権限・DBスキーマ・インフラ等のクリティカルパスに触れて
             います(Tier 2)。攻撃者の視点で深堀りレビューしてください。
@@ -176,13 +219,17 @@ jobs:
             観点ごとに「問題なし / 指摘あり(根拠付き)」を明記した監査形式の
             レポートをPRコメントに投稿。攻撃シナリオが成立する指摘は PoC 手順
             の概要まで書くこと。
-            環境変数 VERDICT_PATH の親ディレクトリを作成し、新しい verdict をその
-            パスに書き込むこと。リポジトリ内の verdict は流用しない。この head をレビューする。
+            新しい verdict を、Write で `${{ runner.temp }}/review-deep/verdict.json` に書き込むこと
+            (ディレクトリは用意済み)。リポジトリ内の verdict は流用しない。この head をレビューする。
             {"critical": <非負整数>, "high": <非負整数>,
              "head_sha": "${{ github.event.pull_request.head.sha }}"} を書き込むこと。
           claude_args: |
             --max-turns 8
-            --model apac.anthropic.claude-opus-4-6-v1:0
+            --model ${{ vars.HOTL_MODEL_DEEP }}
+            --setting-sources user
+            --strict-mcp-config
+            --tools "Read,Grep,Glob,Bash,Write"
+            --allowedTools "Read,Grep,Glob,mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Edit(/${{ runner.temp }}/review-deep/verdict.json)"
 
       # ゲート判定用の structured 出力(集約 job が読む)
       - name: Upload verdict

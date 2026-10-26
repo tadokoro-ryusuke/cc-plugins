@@ -1,9 +1,11 @@
 """配布する YAML を構文解析し、埋め込まれた認可・preflight コードをオフラインで実行する。"""
 
+from fnmatch import fnmatchcase
 import json
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -30,9 +32,78 @@ TRIAGE_READ_ONLY_COMMANDS = ("az monitor activity-log list", "az monitor log-ana
                              "gh pr list", "gh run list")
 
 
+# エージェントを動かす job と、モデル ID を受け取るリポジトリ変数。テンプレートにはモデル ID を書かない
+AGENT_MODEL_VARS = {("incident-triage.yml", "triage"): "HOTL_MODEL_LIGHT",
+                    ("ai-review.yml", "review"): "HOTL_MODEL_LIGHT",
+                    ("ai-review.yml", "deep-review"): "HOTL_MODEL_DEEP",
+                    ("agent-implement.yml", "implement"): "HOTL_MODEL_LIGHT"}
+# レビュー job と判定ファイルの置き場所。エージェントはコメントと判定ファイルの書き込みだけができる
+REVIEW_VERDICT_DIRS = {"review": "review-light", "deep-review": "review-deep"}
+
+
+def agent_step(steps):
+    index = next(i for i, step in enumerate(steps) if "claude-code-action" in step.get("uses", ""))
+    return index, steps[index]
+
+
+# エージェントごとに使えるツールの集合（--tools）。上流の action は同じフラグの複数回指定を累積するので、
+# 検査も全部の指定を合わせて行う
+AGENT_TOOLS = {("incident-triage.yml", "triage"): {"Read", "Grep", "Glob", "Bash"},
+               ("ai-review.yml", "review"): {"Read", "Grep", "Glob", "Bash", "Write"},
+               ("ai-review.yml", "deep-review"): {"Read", "Grep", "Glob", "Bash", "Write"},
+               ("agent-implement.yml", "implement"): {"Read", "Grep", "Glob", "Edit", "MultiEdit", "Write", "Bash"}}
+FLAG_ALIASES = {"--allowed-tools": "--allowedTools", "--disallowed-tools": "--disallowedTools"}
+# 上流の action は、この2つのフラグは複数回の指定を累積し、それ以外のフラグは最後の指定を使う
+ACCUMULATED_FLAGS = ("--allowedTools", "--disallowedTools")
+
+
+def parse_claude_args(claude_args):
+    """claude_args を shell と同じ規則で読み、累積するフラグと最後の指定が効くフラグに分ける。"""
+    # 上流と同じく、# で始まる行を除き、累積するフラグは後ろに続く値をすべて取り込む
+    text = "\n".join(line for line in claude_args.splitlines() if not line.strip().startswith("#"))
+    tokens = shlex.split(text)
+    accumulated = {flag: [] for flag in ACCUMULATED_FLAGS}
+    last = {}
+    i = 0
+    while i < len(tokens):
+        name = FLAG_ALIASES.get(tokens[i], tokens[i])
+        values = []
+        while i + 1 < len(tokens) and not tokens[i + 1].startswith("--"):
+            values.append(tokens[i + 1])
+            i += 1
+            if name not in accumulated:
+                break
+        i += 1
+        if name in accumulated:
+            for value in values:
+                accumulated[name] += [tool.strip() for tool in value.split(",") if tool.strip()]
+        else:
+            last[name] = values[0] if values else None
+    return accumulated, last
+
+
 def tool_list(claude_args, flag):
-    match = re.search(flag + r'\s+"([^"]*)"', claude_args)
-    return [tool.strip() for tool in match.group(1).split(",")] if match else []
+    accumulated, last = parse_claude_args(claude_args)
+    if flag in accumulated:
+        return accumulated[flag]
+    return [tool.strip() for tool in (last.get(flag) or "").split(",") if tool.strip()]
+
+
+def rule_matches(rule, tool):
+    """Claude Code の許可ルール(Tool または Tool(pattern))が、ツールの呼び出しに当たるかを近似する。"""
+    rule_name, _, rule_pattern = rule.partition("(")
+    tool_name, _, tool_argument = tool.partition("(")
+    if rule_name != tool_name:
+        return False
+    if not rule_pattern:
+        return True
+    pattern = rule_pattern[:-1]
+    if pattern.endswith(":*"):
+        pattern = pattern[:-2] + " *"
+    argument = tool_argument[:-1] if tool_argument else ""
+    if argument.endswith(":*"):
+        argument = argument[:-2] + " x"
+    return fnmatchcase(argument, pattern) or fnmatchcase(argument + " x", pattern)
 
 
 def is_read_only_triage_tool(tool):
@@ -258,6 +329,194 @@ echo "https://github.com/fixture/repo/issues/1"
         gates = ROOT / ".github/workflows/hotl-gates.yml"
         self.assertEqual(pinned_sdk(gates), spec)
         self.assertEqual(yaml.safe_load(gates.read_text())["jobs"]["test"]["env"].get("HOTL_REQUIRE_SDK"), "1")
+
+    def test_agent_models_come_from_required_repository_variables(self):
+        # 退役するモデル ID をテンプレートに残さない。未設定なら、エージェントを動かす前に失敗する
+        for path in WORKFLOWS.glob("*.yml"):
+            with self.subTest(workflow=path.name):
+                self.assertNotIn("anthropic.claude-", path.read_text())
+        for (name, job_name), variable in AGENT_MODEL_VARS.items():
+            with self.subTest(workflow=name, job=job_name):
+                steps = workflow(name)["jobs"][job_name]["steps"]
+                index, agent = agent_step(steps)
+                self.assertIn(f"--model ${{{{ vars.{variable} }}}}", agent["with"]["claude_args"])
+                guard = next(step for step in steps[:index] if step.get("id") == "model")
+                self.assertEqual(guard["env"]["MODEL"], f"${{{{ vars.{variable} }}}}")
+                with tempfile.TemporaryDirectory() as directory:
+                    self.assertNotEqual(run_step(guard, {"MODEL": ""}, directory).returncode, 0)
+                    self.assertEqual(run_step(guard, {"MODEL": "fixture-model"}, directory).returncode, 0)
+        gate = workflow("eval-gate.yml")["jobs"]["eval"]
+        self.assertEqual(gate["env"]["JUDGE_MODEL"], "${{ vars.HOTL_JUDGE_MODEL }}")
+
+    def test_agents_get_only_their_tools_and_ignore_repository_settings(self):
+        # --allowedTools は事前承認の追加で、上限ではない。リポジトリ（PR の head を含む）の
+        # .claude/settings.json の allow や .mcp.json で権限が広がらないよう、user 設定だけを読む
+        for (name, job_name), expected in AGENT_TOOLS.items():
+            with self.subTest(workflow=name, job=job_name):
+                _, agent = agent_step(workflow(name)["jobs"][job_name]["steps"])
+                claude_args = agent["with"]["claude_args"]
+                _, last = parse_claude_args(claude_args)
+                self.assertEqual(last.get("--setting-sources"), "user")
+                self.assertIn("--strict-mcp-config", last)
+                self.assertEqual(set(tool_list(claude_args, "--tools")), expected)
+                # 必要なツールと、事前承認したツールが、拒否のルールに当たっていない
+                denied = tool_list(claude_args, "--disallowedTools")
+                for tool in sorted(expected) + tool_list(claude_args, "--allowedTools"):
+                    with self.subTest(tool=tool):
+                        self.assertFalse(any(rule_matches(rule, tool) for rule in denied))
+
+    def test_review_agents_can_only_comment_and_write_their_verdict(self):
+        jobs = workflow("ai-review.yml")["jobs"]
+        for job_name, folder in REVIEW_VERDICT_DIRS.items():
+            with self.subTest(job=job_name):
+                steps = jobs[job_name]["steps"]
+                index, agent = agent_step(steps)
+                self.assertEqual(agent["with"].get("github_token"), "${{ github.token }}")
+                claude_args = agent["with"]["claude_args"]
+                self.assertLessEqual(set(tool_list(claude_args, "--tools")), {"Read", "Grep", "Glob", "Bash", "Write"})
+                verdict = f"${{{{ runner.temp }}}}/{folder}/verdict.json"
+                # 上流の PR レビュー例と同じコメント手段に、判定ファイル1つへの書き込みだけを足す
+                self.assertEqual(set(tool_list(claude_args, "--allowedTools")), {
+                    "Read", "Grep", "Glob", "mcp__github_inline_comment__create_inline_comment",
+                    "Bash(gh pr comment:*)", "Bash(gh pr diff:*)", "Bash(gh pr view:*)", f"Edit(/{verdict})"})
+                self.assertIn(verdict, agent["with"]["prompt"])
+                prepare = next(step for step in steps[:index] if step.get("id") == "verdict-dir")
+                with tempfile.TemporaryDirectory() as directory:
+                    stale = Path(directory) / folder / "verdict.json"
+                    stale.parent.mkdir()
+                    stale.write_text('{"critical": 0, "high": 0}')
+                    result = run_step(prepare, {"RUNNER_TEMP": directory}, directory)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertTrue(stale.parent.is_dir())
+                    self.assertFalse(stale.exists())
+
+    def test_implementation_agent_tools_are_explicit_and_scoped(self):
+        steps = workflow("agent-implement.yml")["jobs"]["implement"]["steps"]
+        index, agent = agent_step(steps)
+        claude_args = agent["with"]["claude_args"]
+        file_tools = {"Read", "Grep", "Glob", "Edit", "MultiEdit", "Write"}
+        self.assertLessEqual(set(tool_list(claude_args, "--tools")), file_tools | {"Bash"})
+        allowed = tool_list(claude_args, "--allowedTools")
+        issue = "${{ github.event.issue.number }}"
+        branch = f"agent/issue-{issue}"
+        # 計画コメント・ブランチ・検証・commit・push・Draft PR に必要な分だけ。push 先は Issue のブランチに固定する
+        # PR の作成は事前承認しない(後の step が固定の引数で作る)
+        self.assertEqual({tool for tool in allowed if tool.startswith("Bash")}, {
+            f"Bash(gh issue comment {issue}:*)", f"Bash(git switch -c {branch})", "Bash(git status)",
+            "Bash(git diff:*)", "Bash(git add:*)", "Bash(git commit:*)", f"Bash(git push -u origin {branch})",
+            "Bash(pnpm lint)", "Bash(pnpm typecheck)", "Bash(pnpm test:*)"})
+        pr_dir = "${{ runner.temp }}/agent-pr"
+        # 何も付けない Edit / Write は作業ツリーの外(Actions の環境ファイルなど)への書き込みも承認するので使わない
+        self.assertEqual({tool for tool in allowed if not tool.startswith("Bash")},
+                         {"Read", "Grep", "Glob", "Edit(/${{ github.workspace }}/**)",
+                          f"Edit(/{pr_dir}/title.txt)", f"Edit(/{pr_dir}/body.md)"})
+        self.assertIn(f"{pr_dir}/title.txt", agent["with"]["prompt"])
+        # 依存はエージェントの前にロックファイルどおり入れる(エージェントには install を許さない)
+        self.assertTrue(any("pnpm install --frozen-lockfile" in step.get("run", "") for step in steps[:index]))
+
+    def test_pull_request_is_opened_by_a_separate_trusted_job(self):
+        # エージェントもリポジトリのコードも動かない新しいランナーで作る(前の job の環境ファイルの影響を受けない)
+        jobs = workflow("agent-implement.yml")["jobs"]
+        opener_job = jobs["open-pr"]
+        self.assertEqual(opener_job["needs"], "implement")
+        self.assertEqual(opener_job["permissions"], {"contents": "read", "pull-requests": "write"})
+        for step in opener_job["steps"]:
+            with self.subTest(step=step.get("name") or step.get("uses")):
+                self.assertNotIn("claude-code-action", step.get("uses", ""))
+                self.assertNotIn("actions/checkout", step.get("uses", ""))
+                self.assertNotIn("pnpm", step.get("run", ""))
+        self.assertEqual(jobs["implement"]["outputs"]["before"], "${{ steps.before.outputs.sha }}")
+        self.assertEqual(next(s for s in opener_job["steps"] if s.get("id") == "open-pr")["env"]["BEFORE"],
+                         "${{ needs.implement.outputs.before }}")
+
+    def test_branch_head_is_recorded_before_the_agent(self):
+        steps = workflow("agent-implement.yml")["jobs"]["implement"]["steps"]
+        index, _ = agent_step(steps)
+        before = next(step for step in steps[:index] if step.get("id") == "before")
+        mock = """#!/usr/bin/env bash
+case "$MODE" in
+  found) echo abc123 ;;
+  missing) echo 'gh: Not Found (HTTP 404)' >&2; exit 1 ;;
+  error) echo 'gh: Bad credentials (HTTP 401)' >&2; exit 1 ;;
+esac
+"""
+        for mode, code, expected in (("found", 0, "sha=abc123"), ("missing", 0, "sha=none"), ("error", 1, None)):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                bin_dir = root / "bin"
+                bin_dir.mkdir()
+                (bin_dir / "gh").write_text(mock)
+                (bin_dir / "gh").chmod(0o755)
+                outputs = root / "outputs"
+                outputs.write_text("")
+                result = run_step(before, {"MODE": mode, "RUNNER_TEMP": str(root), "GITHUB_OUTPUT": str(outputs),
+                                           "GH_REPO": "fixture/repo", "BRANCH": "agent/issue-7"}, root,
+                                  path_prefix=str(bin_dir))
+                if code == 0:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn(expected, outputs.read_text())
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+
+    def test_trusted_step_opens_the_draft_pull_request(self):
+        steps = workflow("agent-implement.yml")["jobs"]["open-pr"]["steps"]
+        opener = next(step for step in steps if step.get("id") == "open-pr")
+        self.assertEqual(opener["env"]["BRANCH"], "agent/issue-${{ github.event.issue.number }}")
+        self.assertEqual(opener["env"]["BASE"], "${{ github.event.repository.default_branch }}")
+        mock = """#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$CALLS"
+case "$*" in
+  "api "*)
+    case "$HEAD_MODE" in
+      missing) echo 'gh: Not Found (HTTP 404)' >&2; exit 1 ;;
+      error) echo 'gh: Bad credentials (HTTP 401)' >&2; exit 1 ;;
+      *) echo "$HEAD_MODE" ;;
+    esac ;;
+  "pr list"*) [ "$EXISTING" = 1 ] && printf '%s\\n' 5 ;;
+esac
+exit 0
+"""
+        cases = (
+            ("not-pushed", "missing", "none", "0", "body", 0, False),
+            ("auth-error", "error", "none", "0", "body", 1, False),
+            ("unchanged", "abc", "abc", "0", "body", 0, False),
+            ("existing", "def", "abc", "1", "body", 0, False),
+            ("created", "def", "none", "0", "受入条件の対応表", 0, True),
+            ("empty-body", "def", "abc", "0", "  \n", 0, True),
+        )
+        for case, head_mode, before, existing, body_text, code, creates in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                bin_dir = root / "bin"
+                bin_dir.mkdir()
+                (bin_dir / "gh").write_text(mock)
+                (bin_dir / "gh").chmod(0o755)
+                pr_dir = root / "agent-pr"
+                pr_dir.mkdir()
+                (pr_dir / "title.txt").write_text("feat: fixture\n")
+                (pr_dir / "body.md").write_text(body_text)
+                calls = root / "calls"
+                calls.write_text("")
+                env = {"CALLS": str(calls), "HEAD_MODE": head_mode, "EXISTING": existing, "BEFORE": before,
+                       "GH_REPO": "fixture/repo", "BRANCH": "agent/issue-7", "BASE": "main", "ISSUE": "7",
+                       "PR_DIR": str(pr_dir), "RUNNER_TEMP": str(root), "RUN_URL": "https://example.invalid/run"}
+                result = run_step(opener, env, root, path_prefix=str(bin_dir))
+                if code == 0:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+                create = [line for line in calls.read_text().splitlines() if line.startswith("pr create")]
+                if not creates:
+                    self.assertEqual(create, [])
+                    continue
+                self.assertEqual(len(create), 1)
+                for expected in ("--repo fixture/repo", "--draft", "--head agent/issue-7", "--base main",
+                                 "--title feat: fixture"):
+                    self.assertIn(expected, create[0])
+                body = (pr_dir / "body.md").read_text()
+                self.assertIn("Closes #7", body)
+                if case == "empty-body":
+                    self.assertIn("https://example.invalid/run", body)
 
     def test_ci_does_not_claim_changed_file_coverage(self):
         # jest-coverage-report-action の threshold は全体カバレッジで、入力形式も vitest と合わない

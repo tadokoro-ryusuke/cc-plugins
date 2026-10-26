@@ -17,6 +17,19 @@
 #     届く経路)。外部者が Issue を起票できる環境では、environment approval の追加・
 #     起票者の trusted 判定・CP1 で人間が本文を確定してからラベルを付ける運用を
 #     必ず組み合わせること
+#   - エージェントに直接のコマンドとして事前承認するのは --allowedTools で明示したものだけ
+#     (計画コメント、Issue のブランチの作成と push、lint / typecheck / test)。push 先は
+#     Issue のブランチに固定し、gh api・merge・force push・依存の追加は与えない。
+#     リポジトリ側の settings と .mcp.json は読まない(--setting-sources user / --strict-mcp-config)
+#   - ファイルの編集は作業ツリーの中と、PR のタイトル・本文の2ファイルだけを事前承認する
+#     (作業ツリーの外の Actions の環境ファイルなどを書き換えさせない)
+#   - PR はエージェントに作らせない。エージェントはタイトルと本文をファイルに書くだけにし、
+#     エージェントもリポジトリのコードも動かない別の job が、repo・head・base・Draft を固定して作る。
+#     この実行でブランチの先端が変わったときだけ作り、既にある PR は変えない
+#   - 残るリスク: lint / typecheck / test と git commit(フック)はリポジトリのコードを実行し、
+#     この job の認証情報(書き込み可能なトークン、Bedrock 用の AWS 認証)が環境にある。
+#     Issue 経由の prompt injection で書かれたコードが、それを読み出しうる。その子プロセスの
+#     中の操作は上の事前承認では制限されない。上の承認運用で抑える
 # =============================================================================
 name: Agent Implement
 
@@ -57,6 +70,8 @@ jobs:
     if: needs.authorize.outputs.authorized == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      before: ${{ steps.before.outputs.sha }}
     permissions:
       contents: write
       issues: write
@@ -71,11 +86,55 @@ jobs:
         with:
           fetch-depth: 0
 
+      # ADAPT: 依存はエージェントの前にロックファイルどおり入れる(エージェントには install を許さない)。
+      # パッケージマネージャと Node の版は ci.yml と揃える
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE }}
           aws-region: ap-northeast-1
+
+      # モデル ID はリポジトリ変数で指定する(テンプレートには書かない)。未設定ならエージェントを動かす前に止める
+      - name: Require the model variable
+        id: model
+        env:
+          MODEL: ${{ vars.HOTL_MODEL_LIGHT }}
+        run: |
+          if [ -z "$MODEL" ]; then
+            echo "::error::Set the repository variable HOTL_MODEL_LIGHT (see ADJUST.md)"
+            exit 1
+          fi
+
+      # PR のタイトルと本文の置き場所を、エージェントの前に新しく用意する
+      - name: Prepare the pull request draft directory
+        id: pr-dir
+        run: |
+          rm -rf "$RUNNER_TEMP/agent-pr"
+          mkdir -p "$RUNNER_TEMP/agent-pr"
+
+      # エージェントの前のブランチの先端を記録する。PR は、この実行で先端が変わったときだけ作る
+      - name: Record the branch head before the agent
+        id: before
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: agent/issue-${{ github.event.issue.number }}
+        run: |
+          if sha=$(gh api "repos/$GH_REPO/git/ref/heads/$BRANCH" --jq .object.sha 2>"$RUNNER_TEMP/before.err"); then
+            echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          elif grep -q 'HTTP 404' "$RUNNER_TEMP/before.err"; then
+            echo "sha=none" >> "$GITHUB_OUTPUT"
+          else
+            cat "$RUNNER_TEMP/before.err" >&2
+            exit 1
+          fi
 
       - uses: anthropics/claude-code-action@v1
         with:
@@ -84,22 +143,116 @@ jobs:
             Issue #${{ github.event.issue.number }} を実装してください。
 
             ## 手順(SDD: plan → implement → verify)
-            1. Issue 本文の受入条件を読み、実装計画を Issue にコメント投稿
-               (影響ファイル・アプローチ・リスク)。受入条件が曖昧・矛盾して
+            1. Issue 本文の受入条件を読み、実装計画を `gh issue comment ${{ github.event.issue.number }}`
+               で投稿(影響ファイル・アプローチ・リスク)。受入条件が曖昧・矛盾して
                いる場合は実装せず、質問コメントを投稿して終了すること
-            2. ブランチ `agent/issue-${{ github.event.issue.number }}` を作成
+            2. `git switch -c agent/issue-${{ github.event.issue.number }}` でブランチを作成
             3. CLAUDE.md の規約に従い実装。受入条件ごとに対応するテストを先に
                書く(TDD)。テストなしの実装は不可
-            4. lint / typecheck / test をローカル実行し、全部通るまで修正
-            5. Draft PR を作成。PR 本文には以下を必ず含める:
+            4. `pnpm lint`・`pnpm typecheck`・`pnpm test` を実行し、全部通るまで修正。
+               仕様とテストが矛盾して通せないと判断したら、テストも実装も曲げず、根拠を
+               書いた質問コメントを Issue に投稿して終了すること
+            5. `git add`・`git commit` の後、`git push -u origin agent/issue-${{ github.event.issue.number }}`
+               で push する。PR は作らない(後の step が Draft で作る)。代わりに、PR のタイトルを1行で
+               `${{ runner.temp }}/agent-pr/title.txt` に、本文を `${{ runner.temp }}/agent-pr/body.md` に
+               Write で書く。本文には以下を必ず含める:
                - `Closes #${{ github.event.issue.number }}`
                - 受入条件と検証結果の対応表
                - 自己申告のリスクポイント(人間レビュアーが見るべき箇所)
+               - 変更・削除した既存テストとその根拠(無ければ「なし」)
 
             ## 禁止事項
             - Issue に書かれていないスコープの変更(気づいた改善は別Issueを起票)
             - 依存パッケージの追加(必要なら計画コメントで承認を求める)
             - migration を含む変更での既存カラム削除
+            - 既存のテスト・スナップショット・カバレッジ閾値を、Issue の受入条件に根拠のない形で
+              削除・skip 化・緩和して通すこと
           claude_args: |
             --max-turns 30
-            --model apac.anthropic.claude-sonnet-4-5-20250929-v1:0
+            --model ${{ vars.HOTL_MODEL_LIGHT }}
+            --setting-sources user
+            --strict-mcp-config
+            --tools "Read,Grep,Glob,Edit,MultiEdit,Write,Bash"
+            --allowedTools "Read,Grep,Glob,Edit(/${{ github.workspace }}/**),Bash(gh issue comment ${{ github.event.issue.number }}:*),Bash(git switch -c agent/issue-${{ github.event.issue.number }}),Bash(git status),Bash(git diff:*),Bash(git add:*),Bash(git commit:*),Bash(git push -u origin agent/issue-${{ github.event.issue.number }}),Bash(pnpm lint),Bash(pnpm typecheck),Bash(pnpm test:*),Edit(/${{ runner.temp }}/agent-pr/title.txt),Edit(/${{ runner.temp }}/agent-pr/body.md)"
+
+      # PR のタイトルと本文を、PR を作る job に渡す(エージェントが書いたデータとして扱う)
+      - name: Keep the pull request draft for the next job
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-pr
+          path: ${{ runner.temp }}/agent-pr/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # PR は、エージェントもリポジトリのコードも動かない別の job で作る(新しいランナーなので、
+  # 前の job で書き換えられた環境ファイルの影響を受けない)。repo・head・base・Draft は固定する。
+  # ADAPT: GITHUB_TOKEN で作った PR では pull_request の workflow が自動では走らない。PR 上で CI や
+  # ai-review を走らせたいなら、独自の GitHub App を用意して vars.HOTL_APP_ID と
+  # secrets.HOTL_APP_PRIVATE_KEY を設定する(ADJUST.md 参照)
+  open-pr:
+    needs: implement
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Fetch the pull request draft
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: agent-pr
+          path: ${{ runner.temp }}/agent-pr
+
+      - name: Create a GitHub App token for the pull request
+        id: app-token
+        if: vars.HOTL_APP_ID != ''
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.HOTL_APP_ID }}
+          private-key: ${{ secrets.HOTL_APP_PRIVATE_KEY }}
+          # PR の作成に必要な権限だけに絞る(App に付与された権限すべてを引き継がない)
+          permission-contents: read
+          permission-pull-requests: write
+
+      - name: Open the draft pull request
+        id: open-pr
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: agent/issue-${{ github.event.issue.number }}
+          BASE: ${{ github.event.repository.default_branch }}
+          BEFORE: ${{ needs.implement.outputs.before }}
+          ISSUE: ${{ github.event.issue.number }}
+          PR_DIR: ${{ runner.temp }}/agent-pr
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # ブランチの先端を API で確かめる。404 は「push されていない」、それ以外のエラーは失敗にする
+          if ! head=$(gh api "repos/$GH_REPO/git/ref/heads/$BRANCH" --jq .object.sha 2>"$RUNNER_TEMP/head.err"); then
+            if grep -q 'HTTP 404' "$RUNNER_TEMP/head.err"; then
+              echo "No branch $BRANCH was pushed; no pull request is created"
+              exit 0
+            fi
+            cat "$RUNNER_TEMP/head.err" >&2
+            exit 1
+          fi
+          # この実行で先端が変わっていなければ作らない(過去の実行で残ったブランチを採用しない)
+          if [ -z "$BEFORE" ] || [ "$head" = "$BEFORE" ]; then
+            echo "Branch $BRANCH did not move in this run; no pull request is created"
+            exit 0
+          fi
+          # 既にある PR は、人間が Ready にしたものも含めて変えない
+          if [ -n "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
+            echo "A pull request for $BRANCH already exists; it is left unchanged"
+            exit 0
+          fi
+          mkdir -p "$PR_DIR"
+          title=$(head -n 1 "$PR_DIR/title.txt" 2>/dev/null || true)
+          [ -n "$title" ] || title="Implement #$ISSUE"
+          body="$PR_DIR/body.md"
+          if ! [ -f "$body" ] || ! grep -q '[^[:space:]]' "$body"; then
+            printf 'エージェントが本文を書かなかった。Actions run を参照: %s\n' "$RUN_URL" > "$body"
+          fi
+          grep -qE "Closes #${ISSUE}([^0-9]|$)" "$body" || printf '\nCloses #%s\n' "$ISSUE" >> "$body"
+          gh pr create --repo "$GH_REPO" --draft --head "$BRANCH" --base "$BASE" \
+            --title "$title" --body-file "$body"
