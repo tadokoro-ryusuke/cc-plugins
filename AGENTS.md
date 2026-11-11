@@ -62,20 +62,35 @@ dev-core のスキルは2層に分かれます:
 
 ## 検証コマンド
 
-プラグイン・スキル・マニフェストを変更したら、コミット前に必ず実行する。
+プラグイン・スキル・マニフェスト・スクリプトを変更したら、コミット前に必ず実行する。CI（`.github/workflows/skills-drift-check.yml`）と同じコマンドを並べている。
 
 ```bash
 node scripts/check-skills-drift.mjs        # 構成 drift 検証（Node 標準のみ・追加依存なし）
+node scripts/check-plugin-agents.mjs       # agent の model / effort / effort pins と、agent・skill 参照の検証
 node scripts/validate-skill-evals.mjs      # behavior eval schema・skill参照検証
 node scripts/validate-skill-evals.mjs --plugin indie-product-marketing   # indie の行動ケース
 node scripts/validate-claude-hooks.mjs     # hook event・handler type・script参照検証
+node --test scripts/*.test.mjs             # 検証・eval 生成・発火計測のスクリプトのテスト
+bash dev-core/scripts/test-session-start-context.sh      # dev-core の hook のテスト（3本）
+bash dev-core/scripts/test-stop-quality-gate.sh
+bash dev-core/scripts/test-block-dangerous-commands.sh
+node --test design-core/skills/ui-visual-defaults/scripts/contrast.test.mjs   # コントラスト検査のテスト
 claude plugin validate . --strict          # マーケットプレイス全体の公式検証
 claude plugin validate <plugin> --strict   # 変更した各プラグインごとに実行する公式検証
 ```
 
-注意: `claude plugin validate --strict` は description 欠落しか検出しない。
-name とディレクトリ名の不一致・description の 1024 字超過などは素通りするため、
-**drift チェッカを一次ゲート**として扱う（validate は補助）。
+hotl-engineering か `scripts/tests/` を変えたら、hotl の回帰テストも実行する（CI は `.github/workflows/hotl-gates.yml`）。PyYAML と、eval-gate テンプレートと同じ版の anthropic SDK が要る。
+
+```bash
+python3 -m pip install PyYAML==6.0.2 "anthropic[bedrock]>=1.17,<2"
+PYTHONDONTWRITEBYTECODE=1 HOTL_REQUIRE_SDK=1 python3 -m unittest discover -s scripts/tests -v
+```
+
+CI は、負例の fixture（`scripts/fixtures/` の不正な agent と hook）で検査が失敗することも確かめる。手順は `skills-drift-check.yml` にある。
+
+注意: `claude plugin validate --strict` は、manifest・marketplace・MCP・hook の書式を検査する。
+ただし、SKILL.md の name とディレクトリ名の不一致、description の 1024 字超過、agent の model / effort の値は素通りする（2026-11-12、Claude Code 2.1.322 で確認）。
+そのため **drift チェッカと `check-plugin-agents.mjs` を一次ゲート**として扱う（validate は補助）。
 
 ## 編集ルール
 
