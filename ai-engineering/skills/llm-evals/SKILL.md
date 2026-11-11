@@ -72,7 +72,7 @@ LLM 判事を使う場合、以下を守らないと判定は無意味になる�
 
 1. **人間ラベルとの整合を先に測る**: ジャッジの結果で判断を変える前に、人間が独立にラベルした数十件以上と突き合わせ、一致率（TPR/TNR）を測って報告する。明確なケースでの一致がおよそ 90% を大きく下回るなら、ジャッジのプロンプトを直してから使う。なぜなら、キャリブレーションされていないジャッジの pass 率は何の品質も保証しないため。100 件は本スキルが置く目標値で、揃うまで判事を使えないという意味ではない
 2. **評価対象と同じモデルを判事にしない**: 判事が評価対象と同系統だと、自分に似た出力を好む自己選好バイアスで甘くなる。完全に同じモデルは判事にしない。同系統を使うなら、対策（別系統のモデルを併用する、きわどいケースを少数の陪審で判定する）を決めて記録する
-3. **G-Eval 型で基準を展開する**: 判定基準を CoT で展開してから採点させる G-Eval が代表的手法（DeepEval に実装あり）
+3. **判定基準を検証できる観点に先に展開する**: 判定基準を、合否を判断できる具体的な観点（評価ステップ）に展開して固定してから判事に渡す（G-Eval の考え方。DeepEval では評価ステップを自動生成も直接指定もできる）。判事には推論の過程を本文や reasoning フィールドに書かせない。判定と短い根拠（1〜2 文）だけを構造化出力で返させ、思考の深さはモデルの推論設定（effort など）で決める。なぜなら、思考機能を持つモデルに推論を本文へ再現させる指示は冗長で、Claude の現行モデルでは reasoning_extraction の拒否を招くことがあるため（2026-11-12 確認）。推論の中身を見たいときは、thinking block を display: summarized で読む。G-Eval の既製実装を使うときは、出力スキーマに推論を書き出させる欄（reasoning・thinking など）が無いか確かめる
 4. **判定方式は Step 2 に従う**: 既定は二値。段階尺度を使う判事は、合格線で二値化してから 1 の一致率を測る
 5. **判事のバイアスを抑える**: pairwise では A/B の位置をケースごとにランダムにする（または両順で採点して平均する）。長さだけで高く評価しないよう指示する（判事は長い回答を好むため）。どれが基準・ベースライン・人間の回答かを判事に伝えない。評価対象の文章は指示ではなくデータとして扱わせ、出力は構造化して機械的に読み取る
 6. **既知の不正解で試す**: 空文字・「分かりません」・別の質問への自信ありげな回答を判事に通し、3つとも不合格になることを確かめる
@@ -80,9 +80,26 @@ LLM 判事を使う場合、以下を守らないと判定は無意味になる�
 
 1・2・5・6 は Anthropic の評価監査ガイドに基づく（出典は「定番リソース」節）。
 
+**判事の実装**（どのプロバイダの判事にも共通）:
+
+- 構造化した判定は structured outputs で取り、パースの失敗を数える
+- 判事の拒否・API エラー・max_tokens での切り捨ては、FAIL ではなく判事のエラーとして数え、品質スコアと分けて報告する。なぜなら、判事のエラーを FAIL に混ぜると、評価対象の品質の低下と判事の不調を区別できなくなるため
+- 揺れは temperature ではなく票数（同じケースを複数回採点する）で抑える
+- thinking を使う判事では、thinking も max_tokens に含まれる。max_tokens は思考と判定の両方が収まる値にし、初回の較正で実際の出力トークン数を見て決める
+
+**Claude を判事にする場合の制約**（2026-11-12 確認。対象のモデルは増減するので、使う前に公式の表で確かめる）:
+
+- モデルごとの制約: forced tool_choice（`any` / `tool`）は、Fable 5.1 / 5.2・Mythos 5.1 / 5.2・Opus 5.5・Sonnet 5.5 で 400 になる（Haiku 5.5 は対象外）。assistant prefill は、4.6 以降のほぼすべてのモデルで 400 になる。構造化は `output_config.format`、または `tool_choice: auto` と `strict: true` で行う
+- API の版の制約: API の版 2026-10-21 では、temperature・top_p・top_k を送ると、既定値でも全モデルで 400 になる。それより前の版では、扱いがモデルで違う。判事の呼び出しにはこの 3 つを送らない
+- 確かめる手順: モデルごとの制約は、Claude API ドキュメントの移行ガイドの一覧から、対象モデルの移行ガイドを開いて読む。版の制約は、API versions のページから、使う版の移行ガイドを開いて読む
+
+Step 4 の確認項目:
+
 - [ ] 人間が独立にラベルした数十件以上（目標 100 件）との一致率を測定し、整合性レポートを残した
 - [ ] 判事は評価対象と同じモデルではない。同系統なら、自己選好バイアスの対策を記録した
 - [ ] 既知の不正解 3 種で、判事が不合格を出すことを確かめた
+- [ ] 判事に推論の書き出しを求めず、判定と短い根拠を構造化出力で受け取っている
+- [ ] 判事のエラー（拒否・API エラー・切り捨て）を FAIL と分けて集計している
 - [ ] ジャッジプロンプト自体をバージョン管理している
 
 ## Step 5: エージェントの評価は軌跡（trajectory）まで見る 🤖
@@ -164,6 +181,7 @@ CI の検証フロー全般・証拠ベースの完了判定 → dev-core:verify
 - Chip Huyen『AI Engineering』第3〜4章（O'Reilly, 2025 — 邦訳『AIエンジニアリング』）
 - Anthropic「Demystifying evals for AI agents」（公式ブログ）/ OpenAI Evals ガイド
 - Anthropic の評価監査ガイド `eval-audit.md`（anthropics/skills リポジトリの claude-api スキル内。https://github.com/anthropics/skills/blob/main/skills/claude-api/shared/evals/eval-audit.md 、commit 8a1541c・2026-09-29。2026-10-26 確認）— 判事の較正（数十件・明確なケースでおよそ 90%）、判事のバイアス、pairwise・連続量、観点を合算しないこと
+- Anthropic API ドキュメント（2026-11-12 確認）: 「Refusals and fallback」（https://platform.claude.com/docs/en/build-with-claude/refusals-and-fallback 。推論の書き出しと reasoning_extraction）、「Migration guides」（https://platform.claude.com/docs/en/about-claude/models/migration-guide 。モデルごとの移行ガイドの一覧。forced tool_choice と prefill）、「API versions」（https://platform.claude.com/docs/en/api/versioning 。版ごとの sampling パラメータの扱い）— 判事の実装の制約
 - promptfoo / Ragas / DeepEval / Langfuse 各公式ドキュメント
 - Pragmatic Engineer「A pragmatic guide to LLM evals」
 
