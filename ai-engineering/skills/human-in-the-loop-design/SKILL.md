@@ -78,6 +78,14 @@ in-the-loop に分類した操作について、ゲートの位置を決める:
 - [ ] 範囲超過時の挙動は「安全側で停止して承認を待つ」に固定する。「超過したが続行」を既定にしない
 - [ ] Claude Code では permissions の allow/ask/deny ルール + hooks がこの思想のツール実装例。allow = スコープ内自律、ask = 超過時承認、deny = 禁止に対応させる
 
+**プロンプトや指示ファイルに書く承認ルール**: モデルは、書かれた承認ルールを文字どおりに適用する。範囲を広く書くと、定型作業まで止まる。例（2026-11-12 確認）: Prompting Claude Fable 5.2 の試験では、「この会話の外の人へのメッセージ送信」を承認の対象にすると、同僚への定型の依頼の約半分が保留された。
+
+- [ ] 承認が要る操作を、具体的な操作名で列挙する
+- [ ] 承認が要らない定型の手順も列挙する（例: 安全に再試行できる呼び出しの再試行）。「もっと自由に動いて」のような曖昧な指示は効かない
+- [ ] 承認して続けさせるときは「続けて」ではなく、承認する操作を書く（例: 「ステージングの DB でマイグレーションを実行してよい」）
+- [ ] 禁止と例外の書き方は dev-core:conventions-as-guardrails Step 3 に従う
+- [ ] プロンプト側の規則を緩めても、不可逆操作のゲート（hooks / permissions）は残す。なぜなら、プロンプトの規則はモデルの解釈とプロンプトインジェクションに左右され、決定的に強制できないため（→ Step 5）
+
 ## Step 5: 承認応答の 4 型と実装対応
 
 人間の応答は 4 型に整理する（LangGraph interrupt() パターンが参照実装）。approve/reject の 2 択で設計しないこと。なぜなら、「少し直せば通る」提案を reject しかできない UI は、人間に「面倒だから approve」を選ばせ形骸化を早めるため。
@@ -209,6 +217,7 @@ EU AI Act の適用時期（注）: 第 14 条を含む高リスク AI の義務
 - [ ] in の承認ゲートが不可逆操作の直前 1 点に置かれ、判断材料（何を・なぜ・影響範囲・差分）が提示される
 - [ ] on の操作すべてにロールバック手段と事後レビューの経路がある
 - [ ] スコープ（予算・範囲・時間帯）が明文化され、超過時の挙動が「安全側で停止」になっている
+- [ ] プロンプトや指示ファイルの承認ルールが、承認の要る操作と要らない手順を具体的に列挙している
 - [ ] 承認応答が approve / edit / reject / respond の 4 型で設計され、2 択になっていない
 - [ ] 監査ログが構造化で最初から入っており、エージェント自身がログを消せない構成になっている
 - [ ] 運用者不在時の停止条件・承認タイムアウト・緊急停止手段が決まっている
@@ -229,5 +238,6 @@ EU AI Act の適用時期（注）: 第 14 条を含む高リスク AI の義務
 - OpenTelemetry GenAI semantic conventions: https://github.com/open-telemetry/semantic-conventions-genai
 - 上の EU・日本・OpenTelemetry の出典は 2026-10-26 に一次ソースを開いて確認した
 - Claude Code 公式ドキュメント（permissions / hooks / sandboxing）
+- Anthropic「Prompting Claude Fable 5.2」の Approvals と Keep caution from piling up（https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5-2 。2026-11-12 確認。プロンプトに書く承認ルールの根拠）
 - OWASP Agentic AI – Threats and Mitigations / OWASP Top 10 for Agentic Applications for 2026（genai.owasp.org。版と使い分け → ai-system-design Step 7）
 - Meta「Agents Rule of Two: A Practical Approach to AI Agent Security」（2025-10-31。セッション単位のチェックの根拠。正本 → ai-system-design Step 7）

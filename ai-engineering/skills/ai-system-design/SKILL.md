@@ -52,11 +52,25 @@ LLM を含むシステムの方式設計を、以下の Step 順に進める。�
 
 推論量の設定（effort / reasoning effort）は、モデル名と並ぶ設計軸として扱う。同じモデルでも effort によって品質・コスト・レイテンシが変わるため、モデル名だけでは構成が決まらない。
 
+- **effort は省略せず、リクエストに明示して記録する**。API の既定 effort はモデルで違う（例: 2026-11-12 確認では、Fable 5.2 と Sonnet 5.5 は high、Opus 5.5 と Haiku 5.5 は medium）。省略したまま比べると、別の level どうしを比べることになる
+- **思考量は文章ではなく effort で操作する**。「考えすぎるな」のような文は、新しいモデルでは効かないことがある（例: Fable 5.2 の medium 以上）。思考を減らしたいなら effort を下げる。thinking は max_tokens に数えられるので、高い effort では max_tokens に余裕を取る
+- **最上位モデルを既定にしない**。迷ったら Opus 系から始める。effort を上げても eval が足りないときだけ、上位のモデル（例: Fable 系。2026-11-12 確認では Fable 5.2 の単価は Opus 5.5 の 2 倍）を比較に加える
 - **カスケードを組む前に、同じモデルで effort を sweep する**。小さいモデルへ振り分ける構成（カスケード・ルーター）は、振り分けの誤りと運用の複雑さを背負う。同じモデルを低い effort で回すだけで足りることがある
 - **1つのモデルで足りる作業では、オーケストレーションは割高になりやすい**。オーケストレーターと子の構成が得をしやすいのは、定型作業が大量にあるときと、1つのコンテキストに収まらないときである。テストなどの失敗シグナルがあるなら、低い effort で全件を回し、失敗した分だけ effort を上げて再実行する構成も候補になる
-- **サブエージェントは親のプロンプトキャッシュを使えない**。文脈の先頭が親と異なるため、子を立てるたびにシステムプロンプトと渡した文脈を新たに読み込む費用がかかる。分割の利得がこの費用を上回るかで判断する
+- **サブエージェントは親のプロンプトキャッシュを使えない**。文脈の先頭が親と異なるため、子を立てるたびにシステムプロンプトと渡した文脈を新たに読み込む費用がかかる。分割の利得がこの費用を上回るかで判断する。子が既定でどのモデルと effort で動くかも確かめる
 - **無人のループでは、テキストだけの応答終了（end_turn）を完了とみなさない**。長いタスクの途中で、進捗報告だけを返して止まるモデルがある。完了はテスト・スキーマ・状態などの完了条件で判定し、自動で続けさせる回数には上限を置く（停止条件 → Step 7）
 - **固定値ではなく、eval で決める**。モデルと effort の組み合わせは代表的なタスクの評価セットで比較してから決め、計測日と一緒に記録する。モデルが更新されると較正も変わるため、更新時に測り直す（評価設計 → ai-engineering:llm-evals 参照）
+- **モデルは性能だけでなく、提供の条件でも絞られる**。データ保持（30 日保持が必須で ZDR では使えないモデルがある）、提供基盤とエンドポイント、処理リージョン、その基盤で使えない機能を、構成図のモデル選定に書く（成果物テンプレ 1）
+  - 例（2026-11-12 確認）: Fable 5.2 は 30 日保持が必須で、Claude API では ZDR の組織から呼ぶと 400 になる。Bedrock では bedrock-runtime の `global.` と `us.` の推論プロファイルでだけ提供される
+  - 可用性・リージョン・推論プロファイルは、ライブの公式ドキュメントと各クラウドのモデルカードで確かめる。保持条件と顧客への説明 → compliance-core:genai-ip-clearance Step 5
+
+**モデルの挙動に合わせたプロンプト側の対処**（完了条件・停止条件・承認ゲートの代わりではなく、その補助）:
+
+- その挙動を観察したときに、1 つずつ足す。足すたびに効果とトークン費用を測る
+- **早期停止**: 長い多段の作業の途中でターンを終えるモデルがある（例: Fable 5.2 は low・medium で起きやすい）。公式の「Finishing work」の文は、普通の障害（エラー・タイムアウト・空の結果）は診断して乗り越え、意図的なブロッカーは越えずに報告する、という区別を書いたものである。足すのは、停止を観察したときか、low・medium で無人のエージェント作業を回すときに限る。出力は増え（公式の試験で約 3 割）、確認を求める回数も減る。そのため、危険・不可逆な操作の確認はハーネス側に残す（文面 → 出典の Prompting Claude Fable 5.2）
+- **委譲の増加**: プロンプト・スキル・agent 定義が委譲を促すと、子を多く立てるモデルがある。まず委譲を促す行を見直す。それでも多いときだけ、子を立てるツールの説明に、子のコストと委譲が見合う場面を書く
+- **進捗が見えない**: ツール呼び出しの合間の進捗を thinking block で返すモデルがある（例: Fable 5.2）。display の既定（omitted）では中身が空なので、text だけを描画する UI は無言に見える。人が見守る構成では、display を summarized（または beta の updates）にして描画する
+- **承認ルール**: プロンプトに書いた承認ルールは、モデルが文字どおりに適用する。書き方 → human-in-the-loop-design Step 4。禁止と例外の書き方 → dev-core:conventions-as-guardrails Step 3
 
 ## Step 3: ツール設計
 
@@ -97,6 +111,14 @@ MCP 2026-07-28 リビジョンの要点（2026-10-26 確認。この日時点の
 1. **Compaction** — 会話履歴を要約圧縮して続行する
 2. **Structured note-taking** — 決定事項・進捗をコンテキスト外のファイルに書き出す（ファイルこそが長期記憶）
 3. **サブエージェント分離** — 大量読み取りを伴う調査を子に逃がし、親のコンテキストを守る
+
+**会話履歴を自前で組み立てるなら、append-only を既定にする**（Claude API を直接呼ぶ構成）。なぜなら、現行の Claude モデルには preserved thinking があり、thinking block はそれより前の system・tools・履歴に結びつくため。それらを書き換えたあとで thinking block を送り返すと、400 になる（The block is bound to a different conversation）。
+
+- 強制の範囲はモデルとアカウントで違う。例（2026-11-12 確認）: Fable 5.2 と Mythos 5.2 は全アカウント。Opus 5.5・Sonnet 5.5・Haiku 5.5・Fable 5.1 は、2026-08-31 以降に作ったアカウントで既定で強制される。範囲は出典の Preserved thinking のページで確かめる
+- 400 を招く操作の例: 直近だけ残して前を要約で差し替える圧縮、古いターンのローリング切り捨て、古いツール結果の刈り込み、リクエストごとの system の作り直し、会話の途中での tools の差し替え
+- 圧縮は、サーバー側の compaction か context editing を使う。system と tools はセッション中固定する。変えるときは新しい会話で行うか、会話の途中の system message・ツール変更（beta）として追記する。MCP connector を使うなら、ツール一覧を固定する
+- `prefix_mismatch_behavior` の `drop_block`（beta）は 400 を避けるが、推論が捨てられて出力トークンが増えうる。直すまでのつなぎにとどめる
+- Claude Code・Agent SDK・Managed Agents が履歴を管理する場合は対象外
 
 システムプロンプトは「高度（altitude）」を調整する: ハードコードされた分岐の羅列（低すぎ）と曖昧な指示（高すぎ）の中間、**明確なヒューリスティクス + 判断余地**の粒度で書く。few-shot はルールの羅列より「多様で正準的な例」を選ぶ。
 
@@ -139,9 +161,17 @@ RAG を作る場合は**段階論**で進める: **Naive → Advanced → Modula
 ガードレールは 4 層で設計する。「プロンプトで指示」だけで済ませてはならない。なぜなら、指示はプロンプトインジェクションで上書きされ得るため、決定的（コードで強制される）な層が必須:
 
 1. **入力フィルタ** — モデレーション、信頼できない入力（Web・メール・顧客文書・Issue/PR コメント・ログ・MCP ツールの description と応答）のマーキング、レート制限
-2. **出力検証** — スキーマ検証、対外送信前のチェック、機微情報の漏えい検査
+2. **出力検証** — スキーマ検証、対外送信前のチェック、機微情報の漏えい検査、拒否の分岐（下記）
 3. **停止条件** — 最大ターン数・トークン予算・タイムアウト・同一エラー 3 回で停止。**最初から入れる**。なぜなら、停止条件のないループは暴走時に止める手段がないため。完了の判定は、モデルが応答を終えたことではなく完了条件で行う（→ Step 2「モデルと effort の選定」）
 4. **権限分離** — 信頼できない入力を読んだコンテキストから書込系・対外送信系ツールを呼ばせない。実行分離は OS サンドボックス / コンテナ・VM / ネットワーク egress 制御の 3 層で考え、deny-by-default とする
+
+**拒否の分岐**（出力検証の一部）: 安全分類器を持つモデルは、拒否を HTTP 200 で返す。例（2026-11-12 確認）: Claude の現行モデル（Fable 系・Opus 5 以降・Sonnet 5.5・Haiku 5.5 など）は `stop_reason: "refusal"` と `stop_details.category` を返す。
+
+- content を読む前に stop_reason で分岐する。拒否を正常な応答として扱わない
+- cyber や bio に近い業務（脆弱性診断・セキュリティツールなど）の案件では、正当な依頼でも拒否されうる。fallback の方式を設計書に書く。方式は server-side fallback・SDK middleware・自前の再試行のどれか
+- 方式に対応する基盤とモデルは、公式の対応表で確認日付きで確かめる。例（2026-11-12 確認）: Bedrock は server-side fallback に対応しない。Haiku 5.5 には server-side fallback が無い
+- fallback 先のモデルと、fallback 先には前の推論（thinking block）が引き継がれないことも書く
+- 推論を本文や reasoning フィールドに書き出させる指示は置かない。reasoning_extraction として拒否されうる。この拒否は fallback されない
 
 権限分離はセッション単位で確かめる。次の 3 つを 1 つのセッションにそろえない（出典: Meta「Agents Rule of Two: A Practical Approach to AI Agent Security」2025-10-31。1 セッションで満たしてよいのは 3 つのうち 2 つまで、という規則）:
 
@@ -174,7 +204,12 @@ RAG を作る場合は**段階論**で進める: **Naive → Advanced → Modula
 ```
 - 方式: ワークフロー(パターン名) / エージェント / ハイブリッド
 - 構成: シングル / マルチ(マネージャー型 or ハンドオフ型)
-- モデル選定: 各ノードのモデルと effort、選定理由(コスト/レイテンシ/精度)と比較に使った eval
+- モデル選定: 各ノードのモデルと effort(明示した値)、選定理由(コスト/レイテンシ/精度)と比較に使った eval、確認日
+  - 提供基盤とエンドポイント: Claude API / Claude Platform on AWS / Bedrock(bedrock-runtime か bedrock-mantle か、推論プロファイル) / Google Cloud / Foundry
+  - データ保持: 30日保持が要るか / ZDR で使えるか
+  - 処理リージョン: 国内処理が要るか
+  - その基盤で使えない機能: server-side fallback・advisor・Batch など
+- 拒否時の扱い: stop_reason の分岐 / fallback の方式(server-side・SDK middleware・自前)と fallback 先
 - データフロー: 入力 → [各ノード] → 出力(信頼できない入力の流入点を明記)
 - セッションごとの A/B/C: 信頼できない入力・機微データ/重要システム・状態変更/外部送信のどれを持つか
 - MCP: 対象リビジョン / 使う機能とその状態(Active・Deprecated) / 認可方式(事前登録・CIMD・DCR)
@@ -223,7 +258,10 @@ RAG を作る場合は**段階論**で進める: **Naive → Advanced → Modula
 - [ ] より単純な構成（ワークフロー / シングル）で足りない理由を実測または要件で説明できる
 - [ ] 全ツールに description・エラー応答設計・リスク格付けがある
 - [ ] 停止条件（ターン数・予算・タイムアウト・同一エラー回数）が入っている
-- [ ] 各ノードのモデルと effort を、代表的なタスクの eval で比較して決めている
+- [ ] 各ノードのモデルと effort を、代表的なタスクの eval で比較して決めている。effort は省略せずに明示している
+- [ ] モデル選定に、データ保持・提供基盤とエンドポイント・処理リージョン・その基盤で使えない機能が、確認日付きで書かれている
+- [ ] 会話履歴を自前で組み立てる場合、append-only である（system と tools をセッション中固定し、前のターンを書き換えない）
+- [ ] 拒否を返すモデルを使う場合、content を読む前に stop_reason で分岐し、fallback の方式と fallback 先を決めている
 - [ ] 信頼できない入力の流入点と、そこからの権限分離が構成図に描かれている。A・B・C の 3 つがそろうセッションが自律実行になっていない
 - [ ] MCP を使う場合、対象リビジョンと使う機能の状態が設計書にあり、新規に Deprecated の機能を採用していない
 - [ ] コンテキスト予算表で常駐/JIT の根拠が「毎ターン必要か」で説明されている
@@ -236,6 +274,8 @@ RAG を作る場合は**段階論**で進める: **Naive → Advanced → Modula
 
 - Anthropic「Building Effective AI Agents」「Effective Context Engineering for AI Agents」「Writing Effective Tools for Agents」「How we built our multi-agent research system」
 - Anthropic API ドキュメント「Effort」「Optimizing for cost and intelligence」「Prompting Claude Opus 5.5」
+- Anthropic API ドキュメント（2026-11-12 確認）: 「Prompting Claude Fable 5.2」（https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5-2 ）、「What's new in Claude Fable 5.2」（https://platform.claude.com/docs/en/models/fable-5-2/whats-new-fable-5-2 ）、「Preserved thinking」（https://platform.claude.com/docs/en/build-with-claude/preserved-thinking ）、「Refusals and fallback」（https://platform.claude.com/docs/en/build-with-claude/refusals-and-fallback ）
+- 注: Prompting Claude Opus 5.5 にある「treat that answer as done」の 2 文は、Fable 5.2 に持ち込まない。Prompting Claude Fable 5.2 によると、high でこの 2 文を使うと、前の回答の誤りを指摘しにくくなる
 - OpenAI「A Practical Guide to Building Agents」
 - OWASP GenAI LLM Top 10 2026（https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/ 。Preface と項目の原文は https://github.com/GenAI-Security-Project/GenAI-LLM-Top10/tree/main/2026/final 。genai.owasp.org/llm-top-10/ は 2025 版の表示が残っているので版の確認に使わない）
 - OWASP Top 10 for Agentic Applications for 2026（https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/ ）
