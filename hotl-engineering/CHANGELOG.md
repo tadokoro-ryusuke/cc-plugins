@@ -47,6 +47,8 @@ thinking が既定で有効な現行モデルと、Claude Fable 5.2 のリリー
   - 変数には alias や ARN ではなく、`claude-` を含む推論プロファイル ID を入れる
   - claude-code-action の SHA が、中で入れる Claude Code の版と CLAUDE.md の復元を決める
   - judge の thinking と `max_tokens`、effort、モデルと effort を組で記録すること
+  - LIGHT・DEEP のモデルや effort を替えるときは、強制済みのゲートの `AI_REVIEW_ENFORCE` を外さず、新しい設定を
+    観測専用のレビューとして並べて比べてから切り替える
 - references: F4 に、effort を明示して複数の level で比べることと、引き継ぐプロンプト・スキル・agent 定義・memory を
   旧モデル向けの文言について監査することを足した。agent version の束（principles.md の原則7、eval-gate.yml）に
   effort とハーネスの版を入れた。原則11と CLAUDE.md.template の運用ルールに、理由と適用範囲を付けて追記し、

@@ -143,8 +143,19 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
       - 拒否で終わると判定ファイルが書かれず、validator は不完全な証拠として扱う(Phase 2 ではマージが止まる)。
         観測期間に拒否の件数を記録する。拒否が続くなら、PoC の指示を「攻撃が成立する根拠(到達経路と前提条件)を
         示す」に弱めることも検討する
-- [ ] LIGHT・DEEP のモデル変数や effort を替えるときは、Phase 1(`AI_REVIEW_ENFORCE` 未設定)に戻すか、同じ PR 群で
-      新旧の verdict を並べて比べてから切り替える。CRITICAL の件数の出方は、モデルと effort の組で変わる
+- [ ] LIGHT・DEEP のモデル変数や effort を替えるときは、同じ PR 群で新旧の verdict を並べて比べてから切り替える。
+      CRITICAL の件数の出方は、モデルと effort の組で変わる
+      - `AI_REVIEW_ENFORCE` で強制済みのゲートでは、強制と今のモデルをゲートに残したまま比べる。切り替えのために
+        `AI_REVIEW_ENFORCE` を外さない(Phase 1 に戻さない)。外すと、CRITICAL があっても required check が通る。
+        強制済みのゲートを較正の手順で弱めないこと(references/principles.md の原則6)。Phase 1 に戻せるのは、まだ
+        強制していないゲートだけ。Phase 1 のリポジトリは Phase 1 のまま、新しい設定の実行だけを昇格の判断に数える
+      - 新しいモデルと effort は、観測専用のレビューとして並べて動かす。新旧の verdict(CRITICAL・HIGH の件数、
+        見逃し、偽陽性)を比べ、ゲートの責任者の承認を得てから変数を切り替える
+      - たとえば ai-review.yml を、required check ではない別の workflow に写す。写しには専用の `concurrency` の group を
+        付ける(`ai-review-<PR 番号>` を共有すると、`cancel-in-progress` で強制側の実行が取り消される)。
+        `ai-review-gate` の job は名前を変えるか外す(この名前が required check)。モデルと effort は写し専用の変数から
+        読み、`AI_REVIEW_ENFORCE` は読まない。権限・`--allowedTools`・setting sources・base の書き出しは元の job と
+        揃える。PR のコメントには写しと分かる印を付ける。実際の CI では確かめていない
 
 ## workflows/agent-implement.yml
 - [ ] Issue テンプレート(受入条件必須)を .github/ISSUE_TEMPLATE/ に併設する
