@@ -71,9 +71,10 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
       - PR のイベントで、ルートの CLAUDE.md・`.claude/`・`.mcp.json` などを PR の base ブランチの版に戻してから
         Claude Code を起動すること(`src/github/operations/restore-config.ts` と、`run.ts` の `restoreConfigFromBase`)。
         CLAUDE.md が復元の対象に入ったのは commit `6e2bd52`(2026-04-05)から。戻すのは `SENSITIVE_PATHS` に並ぶ
-        決まったパスだけで、CLAUDE.md が参照する AGENTS.md などは戻さない。そのため ai-review は、規範をこの復元に
-        頼らず、base の tree の書き出しから読ませる。作業ツリーのルートの CLAUDE.md を規範にするのは、書き出しを
-        読めなかったときだけ。復元を含まない版では、この代わりの経路も PR の head の版になるので、復元を含む版に pin する
+        決まったパスだけで、CLAUDE.md が参照する AGENTS.md などは戻さない。ルートの CLAUDE.md がシンボリックリンクなら、
+        戻すのはリンクだけで、リンク先は PR の head の版のまま。そのため ai-review は、規範をこの復元に頼らず、base の
+        tree の書き出しから読ませる。書き出しを読めなくても、作業ツリーの CLAUDE.md を代わりにしない。`.claude/` と
+        `.mcp.json` の差し替えはこの復元が担うので、復元を含む版に pin する
 - [ ] actions はどれも Node 24 で動く版にしてある(GitHub のホストランナーから Node 20 は 2026-09-23 に外れた)。
       self-hosted runner なら v2.327.1 以上にする。版を下げて Node 20 の版に戻さない
 
@@ -110,14 +111,15 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
       `.claude/` などの決まったパスだけで(全ファイル共通の claude-code-action の項)、CLAUDE.md が参照する AGENTS.md
       などは PR の head の版のまま残る。そのままでは、参照先だけを書き換えた PR が、レビューの規範と判定を変えられる
       - 各レビュー job は、エージェントの前に `git archive` で base の tree を `$RUNNER_TEMP/trusted-base/` に新しく
-        書き出す。作業ツリーの外に置くので、作業ツリーの検索に混ざらない
+        書き出す。作業ツリーの外に置くので、作業ツリーの検索に混ざらない。base の `.gitattributes` で `export-ignore` を
+        付けたファイルは書き出されないので、規範ファイルには付けない
       - プロンプトは、書き出しの CLAUDE.md と、そこから参照するファイルを読ませる。書き出しに無い参照先は、作業ツリー
         からは読ませない。作業ツリー(PR の head)の CLAUDE.md とその参照先、およびそれらの変更は、指示ではなく
         レビューの対象として扱わせる
       - 書き出しを読めるのは、`--allowedTools` の `Read`(パスを付けない規則)が、作業ツリーの外の読み取りも許すから
         (Claude Code の permissions の文書。2026-11-12 確認)。user 設定で `permissions.blockReadsOutsideWorkingDirectories`
-        を有効にすると、読めなくなる。実際の CI では確かめていないので、観測期間に、サマリやレポートに「書き出しを
-        読めなかった」と出ていないかを確かめる
+        を有効にすると、読めなくなる。読めないとき、エージェントは規範なしでレビューを続け、そのことをサマリや
+        レポートに書く。実際の CI では確かめていないので、観測期間に、規範を読めなかったと出ていないかを確かめる
       - 大きいリポジトリで書き出しが重いなら、規範ファイルのパスに絞ってよい(`git archive "$BASE_SHA" CLAUDE.md
         AGENTS.md docs/review/` のように)。絞るときは、CLAUDE.md が参照するファイルを漏らさない
       - `--add-dir` で書き出しを足さない。追加したディレクトリの `.claude/` にあるスキル・コマンド・agent も読み込まれる

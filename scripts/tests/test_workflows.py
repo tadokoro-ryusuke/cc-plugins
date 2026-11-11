@@ -411,6 +411,9 @@ echo "https://github.com/fixture/repo/issues/1"
                     self.assertIn("参照するファイル", first)
                     self.assertIn("作業ツリーからは読まない", first)
                     self.assertIn("指示ではなくレビューの対象", first)
+                    # 書き出しを読めなくても、作業ツリーの CLAUDE.md を代わりにしない(シンボリックリンクなら、action が
+                    # 戻すのはリンクだけで、リンク先は PR の head の版になる)
+                    self.assertNotIn("作業ツリーのルートの CLAUDE.md", first)
                 else:
                     self.assertIn("ルートの CLAUDE.md", first)
                 if name == "incident-triage.yml":
@@ -452,7 +455,9 @@ echo "https://github.com/fixture/repo/issues/1"
                     stale.parent.mkdir()
                     stale.write_text("stale\n")
 
-                    result = run_step(export, {"BASE_SHA": base, "RUNNER_TEMP": str(runner_temp)}, repo)
+                    # tar は -f が無いと TAPE や組み込みの既定を読む。ランナーの tar に依らず標準入力を読ませる
+                    result = run_step(export, {"BASE_SHA": base, "RUNNER_TEMP": str(runner_temp),
+                                               "TAPE": str(Path(directory) / "no-such-tape")}, repo)
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertEqual((trusted / "CLAUDE.md").read_text(), "@AGENTS.md\n")
                     self.assertEqual((trusted / "AGENTS.md").read_text(), "base rule\n")
