@@ -170,7 +170,7 @@ RAG を作る場合は**段階論**で進める: **Naive → Advanced → Modula
 - content を読む前に stop_reason で分岐する。拒否を正常な応答として扱わない
 - cyber や bio に近い業務（脆弱性診断・セキュリティツールなど）の案件では、正当な依頼でも拒否されうる。fallback の方式を設計書に書く。方式は server-side fallback・SDK middleware・自前の再試行のどれか
 - 方式に対応する基盤とモデルは、公式の対応表で確認日付きで確かめる。例（2026-11-12 確認）: Bedrock は server-side fallback に対応しない。Haiku 5.5 には server-side fallback が無い
-- fallback 先のモデルと、fallback 先には前の推論（thinking block）が引き継がれないことも書く
+- fallback 先のモデルと、前のモデルの推論（thinking block）を fallback 先が読めるかも書く。読めるかはモデルの組と基盤で違う。読めない block は API がエラーにせず捨てる。例（2026-11-12 確認）: Fable 5.2 の block を読めるのは Fable 5.2 と Mythos 5.2 だけ。Claude API と Google Cloud（Google managed）では、Haiku 5.5 の block を Opus 5.5・Sonnet 5.5・Fable 5.2・Mythos 5.2 が読める。組み合わせは出典の Preserved thinking のページ（Switching models mid-conversation）で確かめる
 - 推論を本文や reasoning フィールドに書き出させる指示は置かない。reasoning_extraction として拒否されうる。この拒否は fallback されない
 
 権限分離はセッション単位で確かめる。次の 3 つを 1 つのセッションにそろえない（出典: Meta「Agents Rule of Two: A Practical Approach to AI Agent Security」2025-10-31。1 セッションで満たしてよいのは 3 つのうち 2 つまで、という規則）:
@@ -209,7 +209,7 @@ RAG を作る場合は**段階論**で進める: **Naive → Advanced → Modula
   - データ保持: 30日保持が要るか / ZDR で使えるか
   - 処理リージョン: 国内処理が要るか
   - その基盤で使えない機能: server-side fallback・advisor・Batch など
-- 拒否時の扱い: stop_reason の分岐 / fallback の方式(server-side・SDK middleware・自前)と fallback 先
+- 拒否時の扱い: stop_reason の分岐 / fallback の方式(server-side・SDK middleware・自前)と fallback 先 / fallback 先が前の thinking block を読めるか(確認日)
 - データフロー: 入力 → [各ノード] → 出力(信頼できない入力の流入点を明記)
 - セッションごとの A/B/C: 信頼できない入力・機微データ/重要システム・状態変更/外部送信のどれを持つか
 - MCP: 対象リビジョン / 使う機能とその状態(Active・Deprecated) / 認可方式(事前登録・CIMD・DCR)
