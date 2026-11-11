@@ -29,9 +29,16 @@
  *   effort-pin-missing    allowlist で固定した agent に effort が無い
  *   effort-unpinned       allowlist に無い agent が effort を持つ（固定は理由付きの allowlist に限る）
  *   model-invalid         model が inherit / opus / sonnet / haiku / fable でも claude- で始まる完全 ID でもない
- *   haiku-effort          Haiku 4.5（model: haiku）に effort がある（effort 非対応）
- *   ignored-key           プラグイン agent では無視されるキー（hooks / mcpServers / permissionMode）がある
+ *   effort-unsupported-model
+ *                         Claude Code の effort 表に無い旧モデルの完全 ID（Haiku 4.5・Sonnet 4.5・Opus 4.5 と
+ *                         それ以前）に effort がある。alias では判定しない。haiku は Anthropic API では Haiku 5.5
+ *                         （effort 対応）、Bedrock などでは Haiku 4.5（非対応）と、解決先がプロバイダで変わるため
+ *                         （sonnet も同じ）
+ *   ignored-key           プラグイン agent では無視されるキー（hooks / mcpServers / permissionMode / initialPrompt）がある
  *   when-to-use           whenToUse / when_to_use がある（description に統合する）
+ *   agent-subfolder       agents/ のサブフォルダに .md がある。Claude Code は再帰的に読み込み、
+ *                         <plugin>:<フォルダ>:<name> の3段の名前にするが、allowlist のキーと参照の検査は
+ *                         <plugin>:<name> の2段しか扱えないので、agents/ の直下に置く
  *
  * 参照の規則（skills/**\/SKILL.md、workflows/**\/SKILL.md、agents/*.md が対象。README・CHANGELOG・docs は対象外）:
  *   ref-missing           参照先のプラグインに該当する agent / skill / workflow が無い
@@ -75,12 +82,28 @@ const MODEL_ALIASES = new Set(["inherit", "opus", "sonnet", "haiku", "fable"]);
 /** 完全なモデル ID の接頭辞。 */
 const FULL_MODEL_ID_PREFIX = "claude-";
 
-/** effort に対応しないモデル（alias と完全 ID の接頭辞）。Haiku 4.5 は effort 非対応。 */
-const EFFORT_UNSUPPORTED_MODEL_ALIASES = new Set(["haiku"]);
-const EFFORT_UNSUPPORTED_MODEL_ID_PREFIXES = ["claude-haiku-4-5"];
+/**
+ * Claude Code の effort 表に無い旧モデルの完全 ID（denylist）。表に無いモデルでは effort が効かない。
+ * 出典: https://code.claude.com/docs/en/model-config#adjust-effort-level（2026-11-12 確認）。
+ * 新しいモデルは表に載る前提で通す（allowlist にすると、モデルが出るたびに CI が落ちる）。
+ * alias は判定しない。haiku / sonnet は Anthropic API では effort 対応の Haiku 5.5 / Sonnet 5.5、
+ * Bedrock などでは非対応の Haiku 4.5 / Sonnet 4.5 に解決され、プロバイダで結果が変わるため。
+ * 接頭辞だけで判定すると claude-opus-4 が 4.6〜4.8（effort 対応）まで拾うので、版の後ろを区切りで確かめる。
+ * 区切りは日付（-）、Google Cloud の版（@）、[1m] のような接尾辞（[）。
+ */
+const EFFORT_UNSUPPORTED_MODEL_IDS = [
+  /^claude-haiku-4-5(?=$|[-@[])/,
+  /^claude-sonnet-4-5(?=$|[-@[])/,
+  /^claude-opus-4-5(?=$|[-@[])/,
+  /^claude-opus-4-1(?=$|[-@[])/,
+  // Opus 4 と Sonnet 4: claude-opus-4-0 などの版 alias と、claude-sonnet-4-20250514 などの日付付き ID。
+  /^claude-(?:opus|sonnet)-4(?:-0)?(?=$|[@[]|-\d{8}(?:$|[-@[]))/,
+  // Claude 3 系とそれ以前。
+  /^claude-(?:3|2|instant)(?![0-9])/,
+];
 
 /** プラグイン agent では無視されるキー。 */
-const IGNORED_PLUGIN_AGENT_KEYS = ["hooks", "mcpServers", "permissionMode"];
+const IGNORED_PLUGIN_AGENT_KEYS = ["hooks", "mcpServers", "permissionMode", "initialPrompt"];
 
 /** 旧形式のトリガー記述キー。 */
 const WHEN_TO_USE_KEYS = ["whenToUse", "when_to_use"];
@@ -404,6 +427,25 @@ function findAgentFiles(root) {
 }
 
 /**
+ * agents/ のサブフォルダにある .md を再帰的に集める（agent-subfolder の検出用）。
+ * @param {string} root プラグインのルート。
+ * @returns {string[]}
+ */
+function findNestedAgentFiles(root) {
+  /** @param {string} dir @returns {string[]} */
+  const walk = (dir) =>
+    listDir(dir).flatMap((entry) => {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) return walk(path);
+      return entry.isFile() && entry.name.endsWith(".md") ? [path] : [];
+    });
+  const agentsDir = join(root, "agents");
+  return listDir(agentsDir)
+    .filter((entry) => entry.isDirectory())
+    .flatMap((entry) => walk(join(agentsDir, entry.name)));
+}
+
+/**
  * agent ファイルの実行時の名前（frontmatter の name、無ければファイル名）。
  * @param {string} path
  * @returns {string}
@@ -500,11 +542,12 @@ function validateAgent(pluginName, path, pins, pinsLabel, violations) {
       `model "${model}" は ${[...MODEL_ALIASES].join(" / ")} か、${FULL_MODEL_ID_PREFIX} で始まる完全 ID でなければならない`,
     );
   }
-  const effortUnsupported =
-    EFFORT_UNSUPPORTED_MODEL_ALIASES.has(model) ||
-    EFFORT_UNSUPPORTED_MODEL_ID_PREFIXES.some((prefix) => model.startsWith(prefix));
+  const effortUnsupported = EFFORT_UNSUPPORTED_MODEL_IDS.some((pattern) => pattern.test(model));
   if (modelField !== undefined && effortUnsupported && effortField !== undefined) {
-    report("haiku-effort", `model "${model}"（Haiku 4.5）は effort に対応しないので effort を置かない`);
+    report(
+      "effort-unsupported-model",
+      `model "${model}" は Claude Code の effort 表に無いモデルで、effort が効かない。effort を外すか、effort 表にあるモデルにする`,
+    );
   }
 
   for (const key of IGNORED_PLUGIN_AGENT_KEYS) {
@@ -646,6 +689,11 @@ function main() {
     for (const path of findAgentFiles(plugin.root)) {
       agentCount += 1;
       validateAgent(plugin.name, path, pins, displayPath(pinsPath), violations);
+    }
+    for (const path of findNestedAgentFiles(plugin.root)) {
+      violations.push(
+        `${displayPath(path)}: [agent-subfolder] agents/ のサブフォルダの agent は <plugin>:<フォルダ>:<name> の名前で読み込まれ、effort の固定と参照の検査が扱えない。agents/ の直下に置く`,
+      );
     }
   }
 

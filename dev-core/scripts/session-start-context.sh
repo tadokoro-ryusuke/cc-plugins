@@ -51,7 +51,7 @@ cat <<'EOF'
 [dev-core] Session discipline:
 - Use test-first for executable behavior changes and regressions; match other checks to risk and scope, and honor required project gates.
 - Inspect evidence now. Reuse prior results only when relevant inputs and environment still match and project rules permit; label them as prior executions and invalidate affected evidence after changes.
-- Investigate facts, continue with safe reversible defaults, and escalate only material or side-effecting decisions.
+- Investigate facts and continue with safe reversible defaults. Escalate only product-judgment, scope, public-contract, or security decisions, and actions with irreversible or external effects (push, publish, deploy, writes to shared or production data, deleting data or files outside the task scope).
 - Independently verify subagent claims before relying on them.
 - Keep plan progress, decisions, evidence, blockers, and the current next action durable in the active plan before stopping or compaction.
 - Three Strikes: after 3 similar unsuccessful fixes on the same failing path, stop that path, diagnose, and report; continue independent authorized work. Preserve attempt history across agent changes.
