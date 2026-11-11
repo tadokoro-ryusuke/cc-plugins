@@ -7,6 +7,7 @@ CI(hotl-gates.yml)は固定した版の SDK を入れ、HOTL_REQUIRE_SDK=1 で�
 """
 
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -45,9 +46,8 @@ class JudgeSdkContractTests(unittest.TestCase):
             self.fail("HOTL_REQUIRE_SDK=1 だが anthropic SDK を import できない")
         self.runner = load_runner_with_real_sdk()
 
-    def test_default_judge_config_is_accepted_by_the_pinned_sdk(self):
-        cfg = json.loads((ASSETS / "evals/thresholds.json").read_text())["judge"]
-        vote = json.dumps({axis: {"score": 5, "reason": "fixture"} for axis in self.runner.AXES})
+    def judge_with_fixture_reply(self, cfg, content, stop_reason="end_turn"):
+        """固定した SDK の Bedrock クライアントで judge を呼び、送った本文を返す。返答は fixture。"""
         requests = []
 
         def handler(request):
@@ -55,8 +55,8 @@ class JudgeSdkContractTests(unittest.TestCase):
             return httpx.Response(200, json={
                 "id": "msg_fixture", "type": "message", "role": "assistant",
                 "model": self.runner.JUDGE_MODEL,
-                "content": [{"type": "text", "text": vote}],
-                "stop_reason": "end_turn", "stop_sequence": None,
+                "content": content,
+                "stop_reason": stop_reason, "stop_sequence": None,
                 "usage": {"input_tokens": 1, "output_tokens": 1},
             })
 
@@ -64,16 +64,40 @@ class JudgeSdkContractTests(unittest.TestCase):
             aws_region="ap-northeast-1", aws_access_key="fixture", aws_secret_key="fixture",
             http_client=httpx.Client(transport=httpx.MockTransport(handler)))
         case = {"id": "fixture", "category": "answer", "query": "fixture"}
-
         with patch.object(self.runner, "JUDGE_MODEL", "fixture-judge-model"):
             result = self.runner.eval_l2(client, case, {}, "rubric", cfg)
+        return result, requests
+
+    def vote_content(self):
+        vote = json.dumps({axis: {"score": 5, "reason": "fixture"} for axis in self.runner.AXES})
+        return [{"type": "text", "text": vote}]
+
+    def test_default_judge_config_is_accepted_by_the_pinned_sdk(self):
+        cfg = json.loads((ASSETS / "evals/thresholds.json").read_text())["judge"]
+        result, requests = self.judge_with_fixture_reply(cfg, self.vote_content())
 
         self.assertEqual(len(requests), cfg["votes"])
         self.assertEqual({axis: result[axis]["score"] for axis in self.runner.AXES},
                          {axis: 5 for axis in self.runner.AXES})
-        # 既定の judge(旧世代)は Bedrock で API 2026-10-21 に対応しない(Bedrock legacy ページ)。
+        # judge に 4.6 以前のモデル(Haiku 4.5 など)を選んだ場合、Bedrock では API 2026-10-21 に対応しない。
         # SDK 2.x はこの版を送るので、judge を 4.7 以降へ移すまで SDK の major を上げない
         self.assertEqual({request.get("anthropic_version") for request in requests}, {"bedrock-2023-05-31"})
+        # 既定では effort を送らない(モデルの API の既定が効く)
+        self.assertFalse([request for request in requests if "output_config" in request])
+
+    def test_configured_effort_reaches_the_bedrock_request_body(self):
+        # 固定した SDK の messages.create が output_config を受け付け、Bedrock の本文に載せることを確かめる
+        # (2.0.2 では、SDK が受け付けない引数で全票が TypeError になった)
+        _, requests = self.judge_with_fixture_reply({"votes": 1, "effort": "high"}, self.vote_content())
+        self.assertEqual([request.get("output_config") for request in requests], [{"effort": "high"}])
+
+    def test_a_reply_cut_at_max_tokens_after_thinking_is_reported(self):
+        # thinking が既定で有効な judge は、thinking だけで max_tokens に達し、本文の無いまま止まりうる
+        content = [{"type": "thinking", "thinking": "", "signature": "fixture"}]
+        with patch("sys.stderr", new_callable=io.StringIO) as stderr, self.assertRaises(ValueError):
+            self.judge_with_fixture_reply({"votes": 1}, content, stop_reason="max_tokens")
+        self.assertIn("stop_reason=max_tokens", stderr.getvalue())
+        self.assertIn("judge.max_tokens", stderr.getvalue())
 
 
 if __name__ == "__main__":

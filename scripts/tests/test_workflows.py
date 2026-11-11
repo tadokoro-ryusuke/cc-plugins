@@ -39,6 +39,16 @@ AGENT_MODEL_VARS = {("incident-triage.yml", "triage"): "HOTL_MODEL_LIGHT",
                     ("agent-implement.yml", "implement"): "HOTL_MODEL_LIGHT"}
 # レビュー job と判定ファイルの置き場所。エージェントはコメントと判定ファイルの書き込みだけができる
 REVIEW_VERDICT_DIRS = {"review": "review-light", "deep-review": "review-deep"}
+# エージェントごとの effort のリポジトリ変数と、未設定のときの既定。effort を省くと、モデル変数を替えるだけで
+# effort も黙って変わる(Claude Code の既定はモデルごとに違う)。モデル変数と組で記録する(ADJUST.md)
+AGENT_EFFORT_VARS = {("incident-triage.yml", "triage"): ("HOTL_EFFORT_TRIAGE", "medium"),
+                     ("ai-review.yml", "review"): ("HOTL_EFFORT_LIGHT", "medium"),
+                     ("ai-review.yml", "deep-review"): ("HOTL_EFFORT_DEEP", "high"),
+                     ("agent-implement.yml", "implement"): ("HOTL_EFFORT_IMPLEMENT", "medium")}
+EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
+# 拒否(cyber など)のときの fallback 先。Bedrock では Opus の pin が無いと fallback がすべてのモデルで無効になる
+FALLBACK_MODEL_VARS = {"ANTHROPIC_DEFAULT_OPUS_MODEL": "HOTL_FALLBACK_OPUS_MODEL",
+                       "ANTHROPIC_DEFAULT_SONNET_MODEL": "HOTL_FALLBACK_SONNET_MODEL"}
 
 
 def agent_step(steps):
@@ -353,10 +363,60 @@ echo "https://github.com/fixture/repo/issues/1"
                 guard = next(step for step in steps[:index] if step.get("id") == "model")
                 self.assertEqual(guard["env"]["MODEL"], f"${{{{ vars.{variable} }}}}")
                 with tempfile.TemporaryDirectory() as directory:
-                    self.assertNotEqual(run_step(guard, {"MODEL": ""}, directory).returncode, 0)
-                    self.assertEqual(run_step(guard, {"MODEL": "fixture-model"}, directory).returncode, 0)
+                    env = {"EFFORT": "medium", "GITHUB_OUTPUT": str(Path(directory) / "outputs")}
+                    self.assertNotEqual(run_step(guard, {**env, "MODEL": ""}, directory).returncode, 0)
+                    self.assertEqual(run_step(guard, {**env, "MODEL": "fixture-model"}, directory).returncode, 0)
         gate = workflow("eval-gate.yml")["jobs"]["eval"]
         self.assertEqual(gate["env"]["JUDGE_MODEL"], "${{ vars.HOTL_JUDGE_MODEL }}")
+
+    def test_agent_effort_is_explicit_and_comes_from_a_variable_with_a_default(self):
+        for (name, job_name), (variable, default) in AGENT_EFFORT_VARS.items():
+            with self.subTest(workflow=name, job=job_name):
+                steps = workflow(name)["jobs"][job_name]["steps"]
+                index, agent = agent_step(steps)
+                guard = next(step for step in steps[:index] if step.get("id") == "model")
+                self.assertEqual(guard["env"]["EFFORT"], f"${{{{ vars.{variable} || '{default}' }}}}")
+                # shlex では ${{ }} が分かれるので、引数の文字列そのもので確かめる
+                self.assertIn("--effort ${{ steps.model.outputs.effort }}", agent["with"]["claude_args"])
+                for level in EFFORT_LEVELS:
+                    with tempfile.TemporaryDirectory() as directory:
+                        outputs = Path(directory) / "outputs"
+                        result = run_step(guard, {"MODEL": "fixture-model", "EFFORT": level,
+                                                  "GITHUB_OUTPUT": str(outputs)}, directory)
+                        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                        self.assertIn(f"effort={level}", outputs.read_text().splitlines())
+                # 綴りの誤りや ultracode は、既定の effort で黙って動かさず、エージェントの前に止める
+                for bad in ("", "ultracode", "HIGH", "high extra"):
+                    with tempfile.TemporaryDirectory() as directory:
+                        outputs = Path(directory) / "outputs"
+                        result = run_step(guard, {"MODEL": "fixture-model", "EFFORT": bad,
+                                                  "GITHUB_OUTPUT": str(outputs)}, directory)
+                        self.assertNotEqual(result.returncode, 0, bad)
+                        self.assertIn(variable, result.stdout)
+                        self.assertFalse(outputs.exists() and outputs.read_text().strip())
+
+    def test_agent_prompts_read_the_trusted_claude_md_first(self):
+        # --setting-sources user ではプロジェクトの CLAUDE.md が自動で読み込まれないので、プロンプトの先頭で読ませる。
+        # PR のイベントでは action がルートの CLAUDE.md を base の版に戻す。PR が変えた CLAUDE.md は指示にしない
+        for name, job_name in AGENT_MODEL_VARS:
+            with self.subTest(workflow=name, job=job_name):
+                _, agent = agent_step(workflow(name)["jobs"][job_name]["steps"])
+                first = agent["with"]["prompt"].strip().split("\n\n")[0]
+                self.assertIn("ルートの CLAUDE.md", first)
+                self.assertIn("Read", first)
+                if name == "ai-review.yml":
+                    self.assertIn("指示ではなくレビューの対象", first)
+                if name == "incident-triage.yml":
+                    self.assertIn("runbooks/", first)
+
+    def test_refusal_fallback_targets_come_from_repository_variables(self):
+        # action はこの2つを job の env から Claude Code に渡す。変数が未設定なら空のまま渡り、従来と変わらない。
+        # テンプレートにはモデル ID を書かない
+        for name, job_name in AGENT_MODEL_VARS:
+            with self.subTest(workflow=name, job=job_name):
+                env = workflow(name)["jobs"][job_name].get("env") or {}
+                for key, variable in FALLBACK_MODEL_VARS.items():
+                    self.assertEqual(env.get(key), f"${{{{ vars.{variable} }}}}")
 
     def test_agents_get_only_their_tools_and_ignore_repository_settings(self):
         # --allowedTools は事前承認の追加で、上限ではない。リポジトリ（PR の head を含む）の

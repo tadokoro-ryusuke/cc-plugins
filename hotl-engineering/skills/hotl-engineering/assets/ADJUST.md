@@ -10,9 +10,50 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
       - `HOTL_MODEL_LIGHT`: ai-review(全 PR)・incident-triage・agent-implement
       - `HOTL_MODEL_DEEP`: ai-review の Tier 2 深堀りレビュー
       - `HOTL_JUDGE_MODEL`: eval-gate の judge(生成側と別のモデルが理想)
-      - 値は Bedrock で組織が有効化済みのモデルの ID か inference profile ID にする。現行モデルの ID は Anthropic の
-        「Claude in Amazon Bedrock」と「Claude on Amazon Bedrock(legacy)」のモデル表で確認する。deprecated の
-        モデル(Sonnet 4.5 など)は選ばない。設定した日付と、モデル表を確認した日付を記録する
+      - 値は Bedrock で組織が有効化済みの推論プロファイル ID(`claude-` を含む ID)にする。現行モデルの ID は
+        Anthropic の「Claude in Amazon Bedrock」と「Claude on Amazon Bedrock(legacy)」のモデル表で確認する。
+        deprecated のモデル(Sonnet 4.5 など)は選ばない。設定した日付と、モデル表を確認した日付を記録する
+      - alias(`sonnet` / `opus` / `haiku` / `fable`)は入れない。Bedrock では alias が旧世代のモデルに解決される
+        ことがある(2026-11-12 確認: `sonnet` は Sonnet 4.5、`haiku` は Haiku 4.5)
+      - アプリケーション推論プロファイルの ARN は避ける(下の effort の項)
+- [ ] Bedrock のモデルのライフサイクルは、Anthropic とは別に決まる。AWS の model lifecycle(Active / Legacy / EOL /
+      public extended access)で確かめ、Legacy のモデルは選ばない。Legacy のモデルは、15日使わないとアクセスを
+      失うことがある。めったに走らない incident-triage では特に避ける(障害のときに初めて失敗する)
+      - 例(2026-11-12 確認): Sonnet 4.5 は、ap-northeast-1 を含む商用リージョンで 2026-10-08 に Legacy になった。
+        public extended access は 2027-01-08 から、EOL は 2027-04-08。Anthropic 運営基盤での退役(2026-11-30)とは
+        日程が違う
+- [ ] データの処理地域は、プロジェクトの要件で決める。テンプレートの要件は「コードを Anthropic の直 API に出さない」
+      ことで、国内処理までは約束しない。処理地域は推論プロファイルで決まる。Geo プロファイル(`jp.`・`apac.` など)は
+      その地域の中で、Global プロファイル(`global.`)は世界中でルーティングされる
+      - 国内処理が要件なら、`jp.` の Geo プロファイルがあるモデルを選ぶ。2026-11-12 時点では Opus 5.5 と Haiku 5.5 に
+        ある(東京と大阪へルーティング)。選ぶ前に AWS の model card で確かめ直す
+      - Sonnet 5.5 と Fable 5.2 は、東京からは `global.` しか使えない(2026-11-12 確認)。2.0.x のテンプレートが
+        使っていた `apac.` より、処理地域が広がる
+      - Fable 5.2 は bedrock-runtime のエンドポイントでしか使えない(bedrock-mantle は不可)。テンプレートの経路
+        (claude-code-action と run_evals.py)は bedrock-runtime を使う
+- [ ] effort はモデル変数と組で決め、組で記録する。テンプレートは各エージェントに `--effort` を明示し、値を
+      リポジトリ変数で受け取る。変数が無ければ既定を使い、不正な値はエージェントを動かす前に止める
+      - `HOTL_EFFORT_LIGHT`(既定 medium): ai-review の全 PR
+      - `HOTL_EFFORT_DEEP`(既定 high): ai-review の Tier 2 深堀りレビュー
+      - `HOTL_EFFORT_IMPLEMENT`(既定 medium): agent-implement
+      - `HOTL_EFFORT_TRIAGE`(既定 medium): incident-triage
+      - effort を省くと、モデル変数を替えるだけで effort も黙って変わる。Claude Code の既定はモデルごとに違う
+        (2026-11-12 確認: Fable 5.2・Opus 5.5・Sonnet 5.5・Haiku 5.5 は medium、Opus 4.7 は xhigh、ほかは high)
+      - 使える level はモデルで違う。対応しない level を指定すると、Claude Code はそれ以下で最も高い level で動かす。
+        effort に対応しないモデル(Haiku 4.5 など)では効かない
+      - Claude Code は、モデル ID を既知のパターンと照らして、effort と thinking への対応を判定する。アプリケーション
+        推論プロファイルの ARN のような ID では判定できず、これらの機能が無効になる(`--effort` も効かない)。
+        能力を宣言する `ANTHROPIC_DEFAULT_*_MODEL_SUPPORTED_CAPABILITIES` は pin したモデル向けの変数で、
+        claude-code-action が Claude Code に渡す env の一覧に無い。`--model` に渡した ARN に効くかは確かめていない
+      - `--effort` は、Claude Code 2.1.72 の changelog に修正の記載があり、遅くともその版から使える。`xhigh` は
+        2.1.111 から。claude-code-action が入れる Claude Code の版は、pin した SHA で決まる(下の項)
+- [ ] エージェントは `--setting-sources user` で動くので、プロジェクトの CLAUDE.md は自動では読み込まれない
+      (Claude Code 2.1.322 で確認)。各プロンプトの先頭で、リポジトリのルートの CLAUDE.md を Read で読ませている。
+      プロンプトを書き換えるときも、この指示を残す。`--setting-sources user` は外さない(ai-review の節)
+      - ルートの CLAUDE.md だけを規範として読ませる。PR のイベントで base の版に戻るのはルートの CLAUDE.md で、
+        サブディレクトリの CLAUDE.md は PR の head の版のまま
+      - agent-implement と incident-triage は PR のイベントではないので、既定ブランチの checkout を読む。
+        incident-triage は runbooks/ も読ませる
 - [ ] AWS リージョン(ap-northeast-1)→ 組織のリージョン
 - [ ] secrets 名(GITHUB_OIDC_ROLE / AZURE_CLIENT_ID* / TEAMS_WEBHOOK_URL 等)→ 実在の secrets に合わせ、未作成なら作成手順を成果物に添える
 - [ ] サードパーティ actions(`dorny/paths-filter` / `marocchino/sticky-pull-request-comment` /
@@ -20,6 +61,15 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
       (テンプレは可読性のため `@vN` で書いてある。CI 自体が Tier 2 である以上、適用時に pin が既定)。
       Organization / enterprise の allowed actions policy で SHA ピンを強制している場合、pin していない
       workflow は実行時に失敗する。pin と更新は Renovate などで機械化し、手作業にしない
+- [ ] `anthropics/claude-code-action` も commit SHA に pin する。SHA が次の2つを決めるので、pin を上げる前と、
+      モデル変数や effort を替える前に確かめる。Renovate の更新 PR でも確かめる
+      - 中で入れる Claude Code の版(`src/entrypoints/run.ts` の `claudeCodeVersion`。2026-11-12 時点の v1 は 2.1.322)。
+        モデルごとに必要な版がある(例: Fable 5.2 は 2.1.321 以上)。足りなければ pin を上げる
+      - PR のイベントで、ルートの CLAUDE.md・`.claude/`・`.mcp.json` などを PR の base ブランチの版に戻してから
+        Claude Code を起動すること(`src/github/operations/restore-config.ts` と、`run.ts` の `restoreConfigFromBase`)。
+        CLAUDE.md が復元の対象に入ったのは commit `6e2bd52`(2026-04-05)から。ai-review のプロンプトは、この復元を
+        前提に作業ツリーの CLAUDE.md を読ませる。復元を含まない版を使うなら、`git show <base.sha>:CLAUDE.md` のように、
+        信頼できる base から読ませる
 - [ ] actions はどれも Node 24 で動く版にしてある(GitHub のホストランナーから Node 20 は 2026-09-23 に外れた)。
       self-hosted runner なら v2.327.1 以上にする。版を下げて Node 20 の版に戻さない
 
@@ -52,6 +102,29 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
 - [ ] エージェントの `claude_args` から `--setting-sources user` と `--strict-mcp-config` を外さない。`--allowedTools` は
       事前承認の追加で上限ではないため、外すとリポジトリ(PR の head を含む)の `.claude/settings.json` の allow や
       `.mcp.json` で権限が広がる
+- [ ] レビューのエージェントが読む作業ツリーの CLAUDE.md は、claude-code-action が PR の base の版に戻したもの
+      (全ファイル共通の claude-code-action の項)。プロンプトは、PR の差分にある CLAUDE.md の変更を、指示ではなく
+      レビューの対象として扱わせる
+- [ ] light review は `--max-turns 5` で、CLAUDE.md を読む分の手番が増える。プロンプトは差分の取得と同じ手番で
+      読ませているが、観測期間に手番が足りているか(判定ファイルが毎回書かれているか)を確かめる
+- [ ] LIGHT か DEEP に、安全分類器を持つモデル(Fable 系・Opus 5.5・Sonnet 5.5・Opus 5)を使うなら、拒否のときの
+      fallback 先を設定する。攻撃者の視点の深堀りレビューは cyber の分類に当たりやすく、初回のリクエストから
+      拒否されうる
+      - Bedrock では、Opus の pin(`ANTHROPIC_DEFAULT_OPUS_MODEL`)が無く、プロバイダのモデル一覧に Opus 4.8 も無いと、
+        fallback はどのモデルでも無効になり、拒否のまま終わる(Claude Code の model-config の「Enable fallback on
+        Bedrock, Agent Platform, and Foundry」。2026-11-12 確認)
+      - テンプレートは各エージェントの job の env で、`ANTHROPIC_DEFAULT_OPUS_MODEL` をリポジトリ変数
+        `HOTL_FALLBACK_OPUS_MODEL` から、`ANTHROPIC_DEFAULT_SONNET_MODEL` を `HOTL_FALLBACK_SONNET_MODEL` から受け取る。
+        claude-code-action はこの2つを job の env から Claude Code に渡す。変数が未設定なら空のまま渡り、従来と変わらない
+      - 値には、組織で有効化済みの別の Opus(例: Opus 4.8)と Sonnet(例: Sonnet 5)の推論プロファイル ID を入れる。
+        fallback 先は、元のモデル以上のコンテキストウィンドウ(Bedrock では既定で 1M)を持つ必要がある。拒否した
+        モデル自身や、別の系列のモデルを入れると、拒否のまま終わる
+      - Sonnet 5.5 は、Opus の pin に加えて Sonnet の pin(か、モデル一覧の Sonnet 5)が要る
+      - 拒否で終わると判定ファイルが書かれず、validator は不完全な証拠として扱う(Phase 2 ではマージが止まる)。
+        観測期間に拒否の件数を記録する。拒否が続くなら、PoC の指示を「攻撃が成立する根拠(到達経路と前提条件)を
+        示す」に弱めることも検討する
+- [ ] LIGHT・DEEP のモデル変数や effort を替えるときは、Phase 1(`AI_REVIEW_ENFORCE` 未設定)に戻すか、同じ PR 群で
+      新旧の verdict を並べて比べてから切り替える。CRITICAL の件数の出方は、モデルと effort の組で変わる
 
 ## workflows/agent-implement.yml
 - [ ] Issue テンプレート(受入条件必須)を .github/ISSUE_TEMPLATE/ に併設する
@@ -91,7 +164,18 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
       上げるときは、judge を Bedrock で 2026-10-21 に対応したモデル(Claude 4.7 以降)へ移し、
       IAM・エンドポイントの変更をあわせて行う。上げる前にネットワークなしの契約テスト
       (cc-plugins の scripts/tests/test_hotl_sdk_contract.py が例)を新しい版で通す
-- [ ] judge のモデル(`HOTL_JUDGE_MODEL`)を変えるときは、eval-gate の結果と L3 の人間較正を新旧で比べてから切り替える
+- [ ] judge の `max_tokens` は thinking の分を見込む。thinking が既定で有効な judge(Opus 5 以降、Sonnet 5 以降、
+      Haiku 5.5、Fable 系)は、`thinking` を送らなくても考え、thinking も `max_tokens` に含まれる。Opus 4.7 / 4.8 は、
+      省略すると thinking なしで動く。テンプレートの既定は 16000。初回の較正で `usage.output_tokens` を見て決める。
+      SDK は、非ストリーミングの呼び出しで約 21,333 を超える値を送る前に拒否するので、それより上げない
+      - 足りないと、票は JSON を書き切る前に止まる。run_evals.py は、捨てた票ごとに理由と `stop_reason` を出す。
+        `stop_reason=max_tokens` なら、`judge.max_tokens` を上げるか `judge.effort` を下げる
+- [ ] judge の effort は、`thresholds.json` の `judge.effort`(low / medium / high / xhigh / max)で指定できる。
+      指定したときだけ送り、不正な値なら評価を始めずに止まる。指定しなければモデルの API の既定が効き、
+      Claude Code の既定とは違うことがある(2026-11-12 確認: Messages API の既定は Fable 5.2 と Sonnet 5.5 が high、
+      Opus 5.5 と Haiku 5.5 が medium)。effort を受け付けないモデル(Haiku 4.5 など)では指定しない
+- [ ] judge のモデルと effort は組で記録する(レポートと results.json に両方が出る)。どちらかを変えるときは、
+      eval-gate の結果と L3 の人間較正を新旧で比べてから切り替える
 - [ ] レビュー済み baseline は、`--baseline` を付けない較正実行で明示的に初期化し、workflow を
       有効化する前に保存する。通常運用でのダウンロード欠落・失敗で比較を無効化しない
 - [ ] レポート/artifact の出力先はランナーの新しい一時ディレクトリ(`$RUNNER_TEMP` 配下)にする。
@@ -139,6 +223,11 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
 - [ ] アラート → repository_dispatch の中継(Function/Logic App)は別途実装が必要
 
 ## templates/
-- [ ] CLAUDE.md.template → プロジェクトの絶対規範・コマンド・規約に全面書き換え(雛形の構造だけ維持)
+- [ ] CLAUDE.md.template → プロジェクトの絶対規範・コマンド・規約に全面書き換え(雛形の構造だけ維持)。
+      リポジトリのルートに置く(workflow のエージェントはルートの CLAUDE.md を読む)
+- [ ] 「よくある間違い」に追記する行には、理由と適用範囲を付ける。モデルを替えたときと定期的に見直し、理由が
+      無くなった行は削る。モデルは溜まった注意書きをよく守るので、要らない承認を求めたり、定型の作業を止めたり
+      することがある。絶対に守らせる行には、適用範囲と理由を書き、例外の経路(「〜の前に人間の承認を得る」)を
+      規則の中に書く
 - [ ] CODEOWNERS.template → 実ユーザー名、Tier 2 パス
 - [ ] setup-branch-protection.sh → Phase 2 で実行(Phase 1 では実行しない)

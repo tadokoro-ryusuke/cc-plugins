@@ -8,7 +8,8 @@
 #
 # 思想:
 #   - 「プロンプト変更はコード変更と同じ重さの変更管理対象」
-#   - デプロイ単位は agent version(モデル+プロンプト+ツール定義の束)
+#   - デプロイ単位は agent version(モデル+effort+プロンプト+ツール定義の束。Claude Code 経由で
+#     動かすエージェントはハーネスの版も含める)
 #   - ゲートは (a) must-pass ケース100%(権限境界・injection)
 #             (b) 平均スコアが baseline - 許容幅 以上
 #   - レポートは PR コメント + artifact(90日)+ S3 退避(J-SOX証跡)
@@ -67,6 +68,7 @@ jobs:
       TARGET_API_KEY: ${{ secrets.TARGET_STAGING_API_KEY }}
       # judge に使うモデル(Bedrock 東京)。生成側と分けるのが理想。
       # リポジトリ変数 HOTL_JUDGE_MODEL で指定する(未設定なら run_evals.py が評価を始めずに失敗する)。
+      # judge の max_tokens と effort は thresholds.json の judge で指定し、モデルと組で記録する。
       # 選び方は ADJUST.md を参照
       JUDGE_MODEL: ${{ vars.HOTL_JUDGE_MODEL }}
     steps:

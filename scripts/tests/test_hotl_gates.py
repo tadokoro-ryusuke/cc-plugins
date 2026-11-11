@@ -402,5 +402,159 @@ class JudgeSamplingTests(unittest.TestCase):
         self.assertIn("unexpected keyword argument 'temperature'", stderr.getvalue())
 
 
+class JudgeVoteDiagnosticsTests(unittest.TestCase):
+    """票を捨てるときは、理由と stop_reason(あれば stop_details)を stderr に出す。
+
+    thinking が既定で有効な judge では thinking が max_tokens に含まれ、JSON を書き切る前に止まりうる。
+    理由を出さないと、最後の "incomplete or invalid judge votes" だけが残り、原因が分からない。
+    判事の本文は golden set の秘匿データを含みうるので、ログには出さない。
+    """
+
+    CASE = {"id": "fixture", "category": "answer", "query": "fixture"}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.runner = load_eval_runner()
+
+    def message(self, text=None, stop_reason="end_turn", stop_details=None, thinking=False):
+        content = []
+        if thinking:
+            content.append(types.SimpleNamespace(type="thinking", thinking=""))
+        if text is not None:
+            content.append(types.SimpleNamespace(type="text", text=text))
+        return types.SimpleNamespace(content=content, stop_reason=stop_reason, stop_details=stop_details)
+
+    def dropped(self, message):
+        create = Mock(return_value=message)
+        client = types.SimpleNamespace(messages=types.SimpleNamespace(create=create))
+        with patch("sys.stderr", new_callable=io.StringIO) as stderr, self.assertRaises(ValueError):
+            self.runner.eval_l2(client, self.CASE, {}, "rubric", {"votes": 1})
+        return stderr.getvalue()
+
+    def test_each_silent_drop_path_reports_its_reason_and_stop_reason(self):
+        complete = {axis: {"score": 5, "reason": "fixture"} for axis in AXES_FOR_TESTS}
+        cases = {
+            "no JSON": "SECRET_FIXTURE だけで JSON が無い",
+            # max_tokens で切れると、正規表現は閉じていない断片に当たり、JSON として読めない
+            "does not parse": '{"correctness": {"score": 5, "reason": "SECRET_FIXTURE"}, "faithfulness": {"sc',
+            "rubric": json.dumps({**complete, "completeness": {"score": 9, "reason": "SECRET_FIXTURE"}}),
+        }
+        for reason, text in cases.items():
+            with self.subTest(reason=reason):
+                log = self.dropped(self.message(text, stop_reason="end_turn"))
+                self.assertIn("judge vote dropped", log)
+                self.assertIn(reason, log)
+                self.assertIn("stop_reason=end_turn", log)
+                self.assertNotIn("SECRET_FIXTURE", log)
+
+    def test_a_reply_cut_at_max_tokens_says_how_to_fix_it(self):
+        # thinking だけで上限に達し、本文が無いまま止まる
+        log = self.dropped(self.message(stop_reason="max_tokens", thinking=True))
+        self.assertIn("stop_reason=max_tokens", log)
+        self.assertIn("judge.max_tokens", log)
+        self.assertIn("judge.effort", log)
+
+    def test_a_refusal_reports_the_stop_details_without_the_explanation(self):
+        details = types.SimpleNamespace(type="refusal", category="cyber", explanation="SECRET_FIXTURE")
+        log = self.dropped(self.message(stop_reason="refusal", stop_details=details))
+        self.assertIn("stop_reason=refusal", log)
+        self.assertIn("cyber", log)
+        self.assertNotIn("SECRET_FIXTURE", log)
+
+    def test_a_reply_without_stop_fields_is_still_reported(self):
+        # 古い SDK や fixture のように stop_reason を持たない返答でも、理由は出す
+        message = types.SimpleNamespace(content=[types.SimpleNamespace(type="text", text="no json")])
+        log = self.dropped(message)
+        self.assertIn("no JSON", log)
+        self.assertIn("stop_reason=None", log)
+
+
+AXES_FOR_TESTS = ("correctness", "faithfulness", "completeness")
+
+
+class JudgeRequestTests(unittest.TestCase):
+    """judge の max_tokens と effort。effort は指定したときだけ output_config で送る。"""
+
+    VOTE = json.dumps({axis: {"score": 5, "reason": "fixture"} for axis in AXES_FOR_TESTS})
+
+    @classmethod
+    def setUpClass(cls):
+        cls.runner = load_eval_runner()
+
+    def judge_params(self, cfg):
+        message = types.SimpleNamespace(content=[types.SimpleNamespace(type="text", text=self.VOTE)])
+        create = Mock(return_value=message)
+        client = types.SimpleNamespace(messages=types.SimpleNamespace(create=create))
+        with patch.object(self.runner, "JUDGE_MODEL", "fixture-judge-model"):
+            self.runner.eval_l2(client, {"id": "fixture", "category": "answer", "query": "fixture"}, {},
+                                "rubric", {"votes": 1, **cfg})
+        return create.call_args.kwargs
+
+    def test_effort_is_sent_only_when_configured(self):
+        self.assertNotIn("output_config", self.judge_params({}))
+        for level in ("low", "medium", "high", "xhigh", "max"):
+            with self.subTest(level=level):
+                self.assertEqual(self.judge_params({"effort": level})["output_config"], {"effort": level})
+
+    def test_max_tokens_without_a_configured_value_leaves_room_for_thinking(self):
+        # thinking は max_tokens に含まれる。1024 では thinking と3軸の理由が収まらない
+        self.assertEqual(self.judge_params({})["max_tokens"], 16000)
+        self.assertEqual(self.judge_params({"max_tokens": 8192})["max_tokens"], 8192)
+
+    def test_invalid_effort_is_rejected(self):
+        for bad in ("ultracode", "HIGH", "", True, 3, ["high"]):
+            with self.subTest(bad=bad), self.assertRaisesRegex(ValueError, "effort"):
+                self.runner.judge_effort({"effort": bad})
+        self.assertIsNone(self.runner.judge_effort({}))
+
+    def test_invalid_effort_stops_before_evaluating(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "cases.jsonl").write_text(json.dumps(
+                {"id": "case", "category": "answer", "query": "fixture", "suite": ["smoke"]}))
+            (root / "thresholds.json").write_text(json.dumps({
+                "smoke": EvalGateTests.THRESHOLDS, "judge": {"votes": 1, "pass_score": 4, "effort": "extreme"}}))
+            args = ["evals", "--dataset", str(root / "cases.jsonl"), "--thresholds",
+                    str(root / "thresholds.json"), "--out", str(root / "out")]
+            target = Mock(return_value={"answer": "ok"})
+            with patch.object(sys, "argv", args), patch.object(self.runner, "call_target", target), \
+                 patch.object(self.runner, "JUDGE_MODEL", "fixture-judge-model"), \
+                 contextlib.redirect_stdout(io.StringIO()), self.assertRaisesRegex(ValueError, "effort"):
+                self.runner.main()
+            target.assert_not_called()
+            self.assertFalse((root / "out").exists())
+
+    def test_the_report_records_the_judge_effort_with_the_model(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "cases.jsonl").write_text(json.dumps(
+                {"id": "case", "category": "answer", "query": "fixture", "suite": ["smoke"]}))
+            for effort, expected in (("high", "high"), (None, None)):
+                judge = {"votes": 1, "pass_score": 4, **({"effort": effort} if effort else {})}
+                (root / "thresholds.json").write_text(json.dumps({"smoke": EvalGateTests.THRESHOLDS, "judge": judge}))
+                args = ["evals", "--dataset", str(root / "cases.jsonl"), "--thresholds",
+                        str(root / "thresholds.json"), "--out", str(root / "out")]
+                scores = {axis: {"score": 5, "reason": "fixture"} for axis in AXES_FOR_TESTS}
+                with self.subTest(effort=effort), patch.object(sys, "argv", args), \
+                     patch.object(self.runner, "call_target", return_value={"answer": "ok"}), \
+                     patch.object(self.runner, "eval_l2", return_value=scores), \
+                     patch.object(self.runner, "JUDGE_MODEL", "fixture-judge-model"), \
+                     contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(self.runner.main(), 0)
+                    summary = json.loads((root / "out/results.json").read_text())["summary"]
+                    self.assertEqual(summary["judge_effort"], expected)
+                    report = (root / "out/report.md").read_text()
+                    self.assertIn("fixture-judge-model", report)
+                    self.assertIn(f"effort: {expected or 'API の既定'}", report)
+
+    def test_shipped_judge_config_fits_a_non_streaming_call(self):
+        # SDK は max_tokens が約 21,333 を超える非ストリーミングの呼び出しを、送る前に拒否する
+        judge = json.loads((ASSETS / "evals/thresholds.json").read_text())["judge"]
+        self.assertGreaterEqual(judge["max_tokens"], 8192)
+        self.assertLessEqual(judge["max_tokens"], 21333)
+        # 既定では effort を送らない(effort を受け付けない旧モデルを judge にしても 400 にしない)
+        self.assertNotIn("effort", judge)
+
+
 if __name__ == "__main__":
     unittest.main()
