@@ -112,7 +112,7 @@ Claude Code の現行hook仕様では SessionStart/PreCompact は prompt handler
 **推奨するセッションの使い分け**
 
 - 計画（`/dev-core:task`・`/dev-core:grill`）: high 以上
-- 実行（`/dev-core:execute`）: Opus 5.5・Sonnet 5.5 なら medium。Opus 5.5 の既定値で、Anthropic の評価ではコーディングで Opus 5 の high と同等以上。Fable 系なら medium まで下げず、high も選択肢にする（API の移行ガイドは Fable 5.2 を high から始めるよう勧め、low・medium では長い作業の途中終了が増えるとしている。Claude Code の既定は medium）
+- 実行（`/dev-core:execute`）: Fable 系以外（Opus 5.5・Sonnet 5.5 など）なら medium。Opus 5.5 の既定値で、Anthropic の評価ではコーディングで Opus 5 の high と同等以上。Fable 系なら medium まで下げず、high も選択肢にする（API の移行ガイドは Fable 5.2 を high から始めるよう勧め、low・medium では長い作業の途中終了が増えるとしている。Claude Code の既定は medium）
 - xhigh / max は、効果を測れた作業に限る
 - effort をこのセッションだけ変えるなら、`/effort` のスライダーで level を選んで `s` を押す（2.1.257 以上）。`/effort medium` のように level を打つと、そのモデルの既定として保存され、次の計画セッションも同じ level で始まる
 
