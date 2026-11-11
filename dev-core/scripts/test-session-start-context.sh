@@ -40,7 +40,9 @@ assert_discipline() {
     'Reuse prior results only when relevant inputs and environment still match' \
     'label them as prior executions' \
     'continue with safe reversible defaults' \
-    'escalate only material or side-effecting decisions' \
+    'Escalate only product-judgment, scope, public-contract, or security decisions' \
+    'actions with irreversible or external effects' \
+    'deleting data or files outside the task scope' \
     'Independently verify subagent claims' \
     'durable in the active plan' \
     'on the same failing path' \
@@ -52,6 +54,11 @@ assert_discipline() {
   done
   if printf '%s\n' "$text" | grep -F 'Stop after three similar failed attempts' >/dev/null; then
     echo "session-start-context.sh ($label) still emits the retired Three Strikes wording" >&2
+    exit 1
+  fi
+  # 「side-effecting」はファイル編集やテストの実行まで含むと読めるので、承認の対象には使わない。
+  if printf '%s\n' "$text" | grep -F 'side-effecting' >/dev/null; then
+    echo "session-start-context.sh ($label) still emits the retired side-effecting escalation wording" >&2
     exit 1
   fi
 }
