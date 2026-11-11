@@ -354,7 +354,7 @@ def write_report(out: Path, summary: dict, results: list[dict], ok: bool, failur
     lines = [
         f"## Eval レポート — {'✅ PASS' if ok else '❌ FAIL'}",
         "",
-        f"- suite: `{summary['suite']}` / cases: {summary['n_cases']} / judge: `{JUDGE_MODEL}`"
+        f"- suite: `{summary['suite']}` / cases: {summary['n_cases']} / judge: `{summary['judge_model']}`"
         f"(effort: {summary['judge_effort'] or 'API の既定'})",
         f"- must-pass: {summary['must_pass_rate']:.0%}  |  must_not violation: {summary['must_not_violations']} 件",
         f"- recall@5 平均: {fmt(summary['recall_at_5_mean'])}"
@@ -493,7 +493,8 @@ def main() -> int:
         "infrastructure_failed_ids": [r["id"] for r in results if r.get("infrastructure_error")],
         "recall_at_5_mean": statistics.mean(recalls) if recalls else None,
         "judge_pass_score": pass_score,
-        # judge のモデルと組で記録する(None はモデルの API の既定)
+        # judge のモデルと effort を組で記録する(effort の None はモデルの API の既定)
+        "judge_model": JUDGE_MODEL,
         "judge_effort": effort,
         "judge_axis_pass_rate": {
             a: (sum(r["judge_pass"][a] for r in judged) / len(judged)) if judged else None for a in AXES},

@@ -542,6 +542,8 @@ class JudgeRequestTests(unittest.TestCase):
                      contextlib.redirect_stdout(io.StringIO()):
                     self.assertEqual(self.runner.main(), 0)
                     summary = json.loads((root / "out/results.json").read_text())["summary"]
+                    # results.json だけでも、judge のモデルと effort を組で追える
+                    self.assertEqual(summary["judge_model"], "fixture-judge-model")
                     self.assertEqual(summary["judge_effort"], expected)
                     report = (root / "out/report.md").read_text()
                     self.assertIn("fixture-judge-model", report)

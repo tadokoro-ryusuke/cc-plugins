@@ -51,8 +51,10 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
 - [ ] エージェントは `--setting-sources user` で動くので、プロジェクトの CLAUDE.md は自動では読み込まれない
       (Claude Code 2.1.322 で確認)。各プロンプトの先頭で、リポジトリのルートの CLAUDE.md を Read で読ませている。
       プロンプトを書き換えるときも、この指示を残す。`--setting-sources user` は外さない(ai-review の節)
-      - ルートの CLAUDE.md だけを規範として読ませる。PR のイベントで base の版に戻るのはルートの CLAUDE.md で、
-        サブディレクトリの CLAUDE.md は PR の head の版のまま
+      - ai-review は、PR の base の tree を `$RUNNER_TEMP/trusted-base/` に書き出し、そこにある CLAUDE.md と、
+        そこから参照するファイル(AGENTS.md など)を規範として読ませる。作業ツリー(PR の head)の規範ファイルは、
+        指示ではなくレビューの対象として扱わせる(ai-review の節)
+      - サブディレクトリの CLAUDE.md は、規範として読ませない
       - agent-implement と incident-triage は PR のイベントではないので、既定ブランチの checkout を読む。
         incident-triage は runbooks/ も読ませる
 - [ ] AWS リージョン(ap-northeast-1)→ 組織のリージョン
@@ -68,9 +70,10 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
         モデルごとに必要な版がある(例: Fable 5.2 は 2.1.321 以上)。足りなければ pin を上げる
       - PR のイベントで、ルートの CLAUDE.md・`.claude/`・`.mcp.json` などを PR の base ブランチの版に戻してから
         Claude Code を起動すること(`src/github/operations/restore-config.ts` と、`run.ts` の `restoreConfigFromBase`)。
-        CLAUDE.md が復元の対象に入ったのは commit `6e2bd52`(2026-04-05)から。ai-review のプロンプトは、この復元を
-        前提に作業ツリーの CLAUDE.md を読ませる。復元を含まない版を使うなら、`git show <base.sha>:CLAUDE.md` のように、
-        信頼できる base から読ませる
+        CLAUDE.md が復元の対象に入ったのは commit `6e2bd52`(2026-04-05)から。戻すのは `SENSITIVE_PATHS` に並ぶ
+        決まったパスだけで、CLAUDE.md が参照する AGENTS.md などは戻さない。そのため ai-review は、規範をこの復元に
+        頼らず、base の tree の書き出しから読ませる。作業ツリーのルートの CLAUDE.md を規範にするのは、書き出しを
+        読めなかったときだけ。復元を含まない版では、この代わりの経路も PR の head の版になるので、復元を含む版に pin する
 - [ ] actions はどれも Node 24 で動く版にしてある(GitHub のホストランナーから Node 20 は 2026-09-23 に外れた)。
       self-hosted runner なら v2.327.1 以上にする。版を下げて Node 20 の版に戻さない
 
@@ -103,11 +106,23 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
 - [ ] エージェントの `claude_args` から `--setting-sources user` と `--strict-mcp-config` を外さない。`--allowedTools` は
       事前承認の追加で上限ではないため、外すとリポジトリ(PR の head を含む)の `.claude/settings.json` の allow や
       `.mcp.json` で権限が広がる
-- [ ] レビューのエージェントが読む作業ツリーの CLAUDE.md は、claude-code-action が PR の base の版に戻したもの
-      (全ファイル共通の claude-code-action の項)。プロンプトは、PR の差分にある CLAUDE.md の変更を、指示ではなく
-      レビューの対象として扱わせる
-- [ ] light review は `--max-turns 5` で、CLAUDE.md を読む分の手番が増える。プロンプトは差分の取得と同じ手番で
-      読ませているが、観測期間に手番が足りているか(判定ファイルが毎回書かれているか)を確かめる
+- [ ] レビューの規範は、PR の base の版から読ませる。claude-code-action が base の版に戻すのは、ルートの CLAUDE.md や
+      `.claude/` などの決まったパスだけで(全ファイル共通の claude-code-action の項)、CLAUDE.md が参照する AGENTS.md
+      などは PR の head の版のまま残る。そのままでは、参照先だけを書き換えた PR が、レビューの規範と判定を変えられる
+      - 各レビュー job は、エージェントの前に `git archive` で base の tree を `$RUNNER_TEMP/trusted-base/` に新しく
+        書き出す。作業ツリーの外に置くので、作業ツリーの検索に混ざらない
+      - プロンプトは、書き出しの CLAUDE.md と、そこから参照するファイルを読ませる。書き出しに無い参照先は、作業ツリー
+        からは読ませない。作業ツリー(PR の head)の CLAUDE.md とその参照先、およびそれらの変更は、指示ではなく
+        レビューの対象として扱わせる
+      - 書き出しを読めるのは、`--allowedTools` の `Read`(パスを付けない規則)が、作業ツリーの外の読み取りも許すから
+        (Claude Code の permissions の文書。2026-11-12 確認)。user 設定で `permissions.blockReadsOutsideWorkingDirectories`
+        を有効にすると、読めなくなる。実際の CI では確かめていないので、観測期間に、サマリやレポートに「書き出しを
+        読めなかった」と出ていないかを確かめる
+      - 大きいリポジトリで書き出しが重いなら、規範ファイルのパスに絞ってよい(`git archive "$BASE_SHA" CLAUDE.md
+        AGENTS.md docs/review/` のように)。絞るときは、CLAUDE.md が参照するファイルを漏らさない
+      - `--add-dir` で書き出しを足さない。追加したディレクトリの `.claude/` にあるスキル・コマンド・agent も読み込まれる
+- [ ] light review は `--max-turns 5` で、CLAUDE.md とその参照先を読む分の手番が増える。プロンプトは差分の取得と
+      同じ手番で読ませているが、観測期間に手番が足りているか(判定ファイルが毎回書かれているか)を確かめる
 - [ ] LIGHT か DEEP に、安全分類器を持つモデル(Fable 系・Opus 5.5・Sonnet 5.5・Opus 5)を使うなら、拒否のときの
       fallback 先を設定する。攻撃者の視点の深堀りレビューは cyber の分類に当たりやすく、初回のリクエストから
       拒否されうる
@@ -177,8 +192,8 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
       指定したときだけ送り、不正な値なら評価を始めずに止まる。指定しなければモデルの API の既定が効き、
       Claude Code の既定とは違うことがある(2026-11-12 確認: Messages API の既定は Fable 5.2 と Sonnet 5.5 が high、
       Opus 5.5 と Haiku 5.5 が medium)。effort を受け付けないモデル(Haiku 4.5 など)では指定しない
-- [ ] judge のモデルと effort は組で記録する(レポートと results.json に両方が出る)。どちらかを変えるときは、
-      eval-gate の結果と L3 の人間較正を新旧で比べてから切り替える
+- [ ] judge のモデルと effort は組で記録する(レポートと results.json の summary の `judge_model`・`judge_effort` に
+      両方が出る)。どちらかを変えるときは、eval-gate の結果と L3 の人間較正を新旧で比べてから切り替える
 - [ ] レビュー済み baseline は、`--baseline` を付けない較正実行で明示的に初期化し、workflow を
       有効化する前に保存する。通常運用でのダウンロード欠落・失敗で比較を無効化しない
 - [ ] レポート/artifact の出力先はランナーの新しい一時ディレクトリ(`$RUNNER_TEMP` 配下)にする。

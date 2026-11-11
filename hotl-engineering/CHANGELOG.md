@@ -20,14 +20,16 @@ thinking が既定で有効な現行モデルと、Claude Fable 5.2 のリリー
   - run_evals.py: 任意の `judge.effort`（low / medium / high / xhigh / max）を受け、指定したときだけ
     `output_config={"effort": ...}` を送る。固定している SDK（`>=1.17,<2`。2026-11-12 時点で範囲内は 1.17.0 だけ）が
     受け付け、Bedrock の本文に載ることを契約テストで確かめた。不正な値は評価を始める前に止める。レポートと
-    results.json に judge の effort を出す（モデルと組で記録する）
+    results.json の summary に、judge のモデルと effort を組で出す（`judge_model`・`judge_effort`）
 - **CI のエージェントに CLAUDE.md が自動では注入されない（P2）**: 2.1.0 で付けた `--setting-sources user` では、
   プロジェクトの CLAUDE.md も読み込まれない（Claude Code 2.1.322 で確認）。2.1.0 にはこの副作用の記載が無かった。
   `--setting-sources user` は外さず、ai-review（light と deep）・agent-implement・incident-triage のプロンプトの先頭で、
-  ルートの CLAUDE.md（incident-triage では runbooks/ も）を Read で読ませる。ai-review では、PR の差分にある
-  CLAUDE.md の変更を、指示ではなくレビューの対象として扱わせる。PR のイベントでは claude-code-action がルートの
-  CLAUDE.md を base の版に戻してから起動するので、pin した SHA がこの復元を含むかの確認を ADJUST.md に足した。
-  CLAUDE.md.template の冒頭の説明も直した
+  ルートの CLAUDE.md（incident-triage では runbooks/ も）を Read で読ませる。ai-review は、PR の base の tree を
+  作業ツリーの外（`$RUNNER_TEMP/trusted-base/`）に書き出し、そこにある CLAUDE.md と、そこから参照するファイル
+  （AGENTS.md など）を規範として読ませる。PR のイベントで claude-code-action が base の版に戻すのは、ルートの
+  CLAUDE.md や `.claude/` などの決まったパスだけで、参照先は PR の head の版のまま残るため。作業ツリー（PR の head）の
+  規範ファイルとその変更は、指示ではなくレビューの対象として扱わせる。pin した SHA がこの復元を含むかの確認も
+  ADJUST.md に足した。CLAUDE.md.template の冒頭の説明も直した
 - **effort の明示**: 各エージェントの `claude_args` に `--effort` を足した。値はリポジトリ変数（`HOTL_EFFORT_LIGHT`・
   `HOTL_EFFORT_DEEP`・`HOTL_EFFORT_IMPLEMENT`・`HOTL_EFFORT_TRIAGE`）で上書きでき、未設定なら light review は medium、
   deep review は high、agent-implement と incident-triage は medium で動く。不正な値は、エージェントを動かす前に止める。
@@ -54,8 +56,9 @@ thinking が既定で有効な現行モデルと、Claude Fable 5.2 のリリー
   書き直した。test_hotl_sdk_contract.py の「既定の judge」のコメントを直した
 - 回帰テスト: 捨てた票の理由と stop_reason のログ、判事の本文を出さないこと、effort を送る場合と送らない場合、
   不正な effort で評価の前に止まること、固定した SDK が effort を Bedrock の本文に載せること、thinking だけで
-  `max_tokens` に達した返答のログ、各エージェントの effort の変数と既定と不正値、プロンプトの先頭で CLAUDE.md を
-  読むこと、fallback 先の変数
+  `max_tokens` に達した返答のログ、results.json の judge のモデルと effort、各エージェントの effort の変数と既定と
+  不正値、プロンプトの先頭で CLAUDE.md を読むこと、PR が CLAUDE.md の参照先だけを変えてもレビューの規範は base の版を
+  書き出すこと、fallback 先の変数
 
 ## 2.1.0 — 2026-10-26
 
