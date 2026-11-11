@@ -3,7 +3,8 @@
 run_evals.py — 検索QAエージェント eval ハーネス
 
 L1: 決定的チェック(recall@5, MRR, must_not, refusal)
-L2: LLM-as-judge(Bedrock 東京 / sampling パラメータは送らない / 3票中央値)
+L2: LLM-as-judge(Bedrock 東京 / sampling パラメータは送らない / 3票中央値 /
+    effort は thresholds.json の judge.effort を指定したときだけ送る)
     各軸の段階スコア(1-5)を合格線(judge.pass_score)で二値化し、軸ごとに合格率を出す。
     軸は合算しない(採点方式の正本は ai-engineering:llm-evals Step 2)
 ゲート判定: thresholds.json + baseline 比較 → exit code
@@ -50,6 +51,23 @@ SAMPLING_KEYS = ("temperature", "top_p", "top_k")
 
 def ignored_sampling_keys(cfg: dict) -> list[str]:
     return [key for key in SAMPLING_KEYS if key in cfg]
+
+
+# thinking が既定で有効な judge(Opus 5 以降・Sonnet 5 以降・Haiku 5.5・Fable 系)は、thinking も max_tokens に
+# 含まれる。1024 では thinking と3軸の理由が収まらず、JSON を書き切る前に止まる。SDK は非ストリーミングの
+# 呼び出しで max_tokens が約 21,333 を超えると送る前に拒否するので、それより上げない
+DEFAULT_JUDGE_MAX_TOKENS = 16000
+JUDGE_EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
+
+
+def judge_effort(cfg: dict) -> str | None:
+    """任意の judge.effort。指定したときだけ output_config で送る。未指定ならモデルの API の既定が効く"""
+    effort = cfg.get("effort")
+    if effort is None:
+        return None
+    if type(effort) is not str or effort not in JUDGE_EFFORT_LEVELS:
+        raise ValueError(f"judge effort must be one of {', '.join(JUDGE_EFFORT_LEVELS)}, got {effort!r}")
+    return effort
 
 
 # 2.1.0 で合計点のゲートから軸ごとの合格率のゲートに変えた。古いキーは黙って無視せず止める
@@ -207,6 +225,41 @@ def make_judge_prompt(case: dict, response: dict, rubric: str) -> str:
 ルーブリック指定の JSON のみを出力してください。"""
 
 
+def parse_judge_vote(msg) -> tuple[dict | None, str | None]:
+    """judge の返答から票を取り出す。取り出せないときは、票を捨てる理由を返す"""
+    text = "".join(b.text for b in msg.content if b.type == "text")
+    m = re.search(r"\{.*\}", text, re.DOTALL)
+    if not m:
+        return None, "no JSON object in the reply"
+    try:
+        vote = json.loads(m.group(0))
+    except json.JSONDecodeError:
+        return None, "the JSON in the reply does not parse"
+    if not isinstance(vote, dict):
+        return None, "the JSON in the reply is not an object"
+    if not all(isinstance(vote.get(axis), dict)
+               and type(vote[axis].get("score")) is int
+               and 1 <= vote[axis]["score"] <= 5 for axis in AXES):
+        return None, "the JSON does not match the rubric (each axis needs an integer score from 1 to 5)"
+    return vote, None
+
+
+def report_dropped_vote(reason: str, msg) -> None:
+    """捨てた票の理由と停止の情報を出す。判事の本文と拒否の explanation は秘匿データを含みうるので出さない"""
+    stop_reason = getattr(msg, "stop_reason", None)
+    line = f"  judge vote dropped: {reason} (stop_reason={stop_reason}"
+    details = getattr(msg, "stop_details", None)
+    if details is not None:
+        line += f", stop_details.type={getattr(details, 'type', None)}, category={getattr(details, 'category', None)}"
+    line += ")"
+    if stop_reason == "max_tokens":
+        line += ("; the reply hit judge.max_tokens before the JSON was complete (thinking counts toward it): "
+                 "raise judge.max_tokens or lower judge.effort in thresholds.json")
+    elif stop_reason == "refusal":
+        line += "; the judge model refused this case"
+    print(line, file=sys.stderr)
+
+
 def eval_l2(
     client: AnthropicBedrock, case: dict, response: dict, rubric: str, cfg: dict
 ) -> dict:
@@ -217,9 +270,11 @@ def eval_l2(
         raise ValueError("judge votes must be a positive integer")
     params: dict = {
         "model": JUDGE_MODEL,
-        "max_tokens": int(cfg.get("max_tokens", 1024)),
+        "max_tokens": int(cfg.get("max_tokens", DEFAULT_JUDGE_MAX_TOKENS)),
         "messages": [{"role": "user", "content": prompt}],
     }
+    if (effort := judge_effort(cfg)) is not None:
+        params["output_config"] = {"effort": effort}
     for _ in range(vote_count):
         try:
             msg = client.messages.create(**params)
@@ -227,21 +282,11 @@ def eval_l2(
             # 型名だけでは SDK の破壊的変更(引数の削除など)を追えないので、メッセージの先頭も出す
             print(f"  judge vote failed ({type(e).__name__}: {str(e)[:200]})", file=sys.stderr)
             continue
-        text = "".join(b.text for b in msg.content if b.type == "text")
-        m = re.search(r"\{.*\}", text, re.DOTALL)
-        if not m:
+        vote, reason = parse_judge_vote(msg)
+        if reason:
+            report_dropped_vote(reason, msg)
             continue
-        try:
-            vote = json.loads(m.group(0))
-            if not isinstance(vote, dict):
-                continue
-            if not all(isinstance(vote.get(axis), dict)
-                       and type(vote[axis].get("score")) is int
-                       and 1 <= vote[axis]["score"] <= 5 for axis in AXES):
-                continue
-            votes.append(vote)
-        except json.JSONDecodeError:
-            continue
+        votes.append(vote)
 
     # 票の欠落・不正を品質スコア(0点)に化けさせない。呼び出し側でインフラ失敗として扱う
     if len(votes) != vote_count:
@@ -309,7 +354,8 @@ def write_report(out: Path, summary: dict, results: list[dict], ok: bool, failur
     lines = [
         f"## Eval レポート — {'✅ PASS' if ok else '❌ FAIL'}",
         "",
-        f"- suite: `{summary['suite']}` / cases: {summary['n_cases']} / judge: `{JUDGE_MODEL}`",
+        f"- suite: `{summary['suite']}` / cases: {summary['n_cases']} / judge: `{summary['judge_model']}`"
+        f"(effort: {summary['judge_effort'] or 'API の既定'})",
         f"- must-pass: {summary['must_pass_rate']:.0%}  |  must_not violation: {summary['must_not_violations']} 件",
         f"- recall@5 平均: {fmt(summary['recall_at_5_mean'])}"
         + (f"(baseline {fmt(baseline.get('recall_at_5_mean'))})" if baseline else ""),
@@ -371,6 +417,8 @@ def main() -> int:
     validate_thresholds(thresholds)
     judge_cfg = all_thresholds.get("judge", {})
     pass_score = judge_pass_score(judge_cfg)
+    # 不正な effort は、ケースごとの judge の失敗に紛れさせず、評価を始める前に止める
+    effort = judge_effort(judge_cfg)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     if ignored := ignored_sampling_keys(judge_cfg):
@@ -445,6 +493,9 @@ def main() -> int:
         "infrastructure_failed_ids": [r["id"] for r in results if r.get("infrastructure_error")],
         "recall_at_5_mean": statistics.mean(recalls) if recalls else None,
         "judge_pass_score": pass_score,
+        # judge のモデルと effort を組で記録する(effort の None はモデルの API の既定)
+        "judge_model": JUDGE_MODEL,
+        "judge_effort": effort,
         "judge_axis_pass_rate": {
             a: (sum(r["judge_pass"][a] for r in judged) / len(judged)) if judged else None for a in AXES},
         "judge_axis_mean": {

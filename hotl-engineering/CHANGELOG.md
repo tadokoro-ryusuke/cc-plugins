@@ -3,6 +3,65 @@
 このスキルへの変更は必ずここに記録する（HANDOFF の運用ルール）。
 references の内容変更・description の意味的変更は PR で提案し、承認を得てから反映する。
 
+## 2.2.0 — 2026-11-12
+
+thinking が既定で有効な現行モデルと、Claude Fable 5.2 のリリース（Claude Code 2.1.321）に合わせて、配布テンプレートと
+判断フレームを直した。テンプレートには引き続きモデル ID を書かない。
+
+- **eval-gate の judge（P1）**: thresholds.json の `judge.max_tokens` を 1024 から 16000 に上げた（run_evals.py の既定値も
+  16000）。thinking が既定で有効な judge（Opus 5 以降、Sonnet 5 以降、Haiku 5.5、Fable 系）は、`thinking` を送らなくても
+  考え、thinking も `max_tokens` に含まれる。1024 では JSON を書き切る前に止まりやすく、票が欠けると fail-closed の
+  ゲートが閉じる。SDK は非ストリーミングの呼び出しで約 21,333 を超える値を拒否するので、それより上げない。
+  **適用済みのリポジトリでは、thresholds.json の値を手で直す**。Bedrock で実際に切れる率は測っていない
+  - run_evals.py: 票を黙って捨てていた経路（JSON が無い、JSON として読めない、ルーブリックに合わない）ごとに、理由と
+    `stop_reason`（あれば `stop_details` の type と category）を stderr に出す。`stop_reason` が `max_tokens` なら、
+    `judge.max_tokens` を上げるか `judge.effort` を下げるよう出す。判事の本文と拒否の explanation は出さない
+    （golden set の秘匿データを CI のログに残さない）
+  - run_evals.py: 任意の `judge.effort`（low / medium / high / xhigh / max）を受け、指定したときだけ
+    `output_config={"effort": ...}` を送る。固定している SDK（`>=1.17,<2`。2026-11-12 時点で範囲内は 1.17.0 だけ）が
+    受け付け、Bedrock の本文に載ることを契約テストで確かめた。不正な値は評価を始める前に止める。レポートと
+    results.json の summary に、judge のモデルと effort を組で出す（`judge_model`・`judge_effort`）
+- **CI のエージェントに CLAUDE.md が自動では注入されない（P2）**: 2.1.0 で付けた `--setting-sources user` では、
+  プロジェクトの CLAUDE.md も読み込まれない（Claude Code 2.1.322 で確認）。2.1.0 にはこの副作用の記載が無かった。
+  `--setting-sources user` は外さず、ai-review（light と deep）・agent-implement・incident-triage のプロンプトの先頭で、
+  ルートの CLAUDE.md（incident-triage では runbooks/ も）を Read で読ませる。ai-review は、PR の base の tree を
+  作業ツリーの外（`$RUNNER_TEMP/trusted-base/`）に書き出し、そこにある CLAUDE.md と、そこから参照するファイル
+  （AGENTS.md など）を規範として読ませる。PR のイベントで claude-code-action が base の版に戻すのは、ルートの
+  CLAUDE.md や `.claude/` などの決まったパスだけで、参照先は PR の head の版のまま残るため。作業ツリー（PR の head）の
+  規範ファイルとその変更は、指示ではなくレビューの対象として扱わせる。pin した SHA がこの復元を含むかの確認も
+  ADJUST.md に足した。CLAUDE.md.template の冒頭の説明も直した
+- **effort の明示**: 各エージェントの `claude_args` に `--effort` を足した。値はリポジトリ変数（`HOTL_EFFORT_LIGHT`・
+  `HOTL_EFFORT_DEEP`・`HOTL_EFFORT_IMPLEMENT`・`HOTL_EFFORT_TRIAGE`）で上書きでき、未設定なら light review は medium、
+  deep review は high、agent-implement と incident-triage は medium で動く。不正な値は、エージェントを動かす前に止める。
+  これまでは effort を指定せず、モデル変数を替えるだけで effort も黙って変わっていた
+- **拒否のときの fallback**: 各エージェントの job の env で、`ANTHROPIC_DEFAULT_OPUS_MODEL` と
+  `ANTHROPIC_DEFAULT_SONNET_MODEL` を、リポジトリ変数 `HOTL_FALLBACK_OPUS_MODEL`・`HOTL_FALLBACK_SONNET_MODEL` から受け取る。
+  Bedrock では、Opus の pin もモデル一覧の Opus 4.8 も無いと、cyber などで拒否したときの fallback がどのモデルでも
+  無効になる。変数が未設定なら空のまま渡り、従来と変わらない
+- ADJUST.md: 次を足した
+  - Bedrock のモデルのライフサイクルは Anthropic と別に確かめ、Legacy のモデルは選ばない。Sonnet 4.5 は
+    ap-northeast-1 を含む商用リージョンで 2026-10-08 に Legacy になった（public extended access は 2027-01-08 から、
+    EOL は 2027-04-08。2026-11-12 確認）
+  - 処理地域はプロジェクトの要件で決める。国内処理が要件なら `jp.` の Geo プロファイルがあるモデルを選ぶ。
+    Sonnet 5.5 と Fable 5.2 は、東京からは `global.` だけ
+  - 変数には alias や ARN ではなく、`claude-` を含む推論プロファイル ID を入れる
+  - claude-code-action の SHA が、中で入れる Claude Code の版と CLAUDE.md の復元を決める
+  - judge の thinking と `max_tokens`、effort、モデルと effort を組で記録すること
+  - LIGHT・DEEP のモデルや effort を替えるときは、強制済みのゲートの `AI_REVIEW_ENFORCE` を外さず、新しい設定を
+    観測専用のレビューとして並べて比べてから切り替える
+- references: F4 に、effort を明示して複数の level で比べることと、引き継ぐプロンプト・スキル・agent 定義・memory を
+  旧モデル向けの文言について監査することを足した。agent version の束（principles.md の原則7、eval-gate.yml）に
+  effort とハーネスの版を入れた。原則11と CLAUDE.md.template の運用ルールに、理由と適用範囲を付けて追記し、
+  見直して削る規則を足した。SKILL.md の運用ルールに、モデルのリリースごとの再監査を足した
+- README.md: 2.0.x から 2.1.0 以降へ移るときに、直書きしたプロファイル ID を変数に移す手順を足した
+- 表記: ai-review.yml のヘッダの「--model を置換」を変数の説明に直し、「Sonnet」「Opus」を LIGHT・DEEP のモデルと
+  書き直した。test_hotl_sdk_contract.py の「既定の judge」のコメントを直した
+- 回帰テスト: 捨てた票の理由と stop_reason のログ、判事の本文を出さないこと、effort を送る場合と送らない場合、
+  不正な effort で評価の前に止まること、固定した SDK が effort を Bedrock の本文に載せること、thinking だけで
+  `max_tokens` に達した返答のログ、results.json の judge のモデルと effort、各エージェントの effort の変数と既定と
+  不正値、プロンプトの先頭で CLAUDE.md を読むこと、PR が CLAUDE.md の参照先だけを変えてもレビューの規範は base の版を
+  書き出すこと、fallback 先の変数
+
 ## 2.1.0 — 2026-10-26
 
 **BREAKING（eval の雛形を適用している人向け）**: judge のゲートを、3軸の合計点の平均から、各軸を合格線で

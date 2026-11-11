@@ -80,6 +80,26 @@ evals/cases.json              # スキル自体の検証ケース7件（with-ski
   （`.github/scripts/capture-production-state.sh` / `restore-production-state.sh`）を実装してリハーサルする
 - 詳細は `assets/ADJUST.md` と `CHANGELOG.md` を参照
 
+## 2.0.x から 2.1.0 以降への移行
+
+2.1.0 で、モデル ID をテンプレートからリポジトリ変数に移した。2.0.x を適用したリポジトリでは、2.0.x の既定だった
+Sonnet 4.5 と Opus 4.6 のプロファイル ID が、各ファイルに直書きで残っている。Bedrock の Sonnet 4.5 は、
+ap-northeast-1 を含む商用リージョンで 2026-10-08 に Legacy になった（EOL は 2027-04-08。2026-11-12 確認）。
+
+1. 直書きしたプロファイル ID を探す。2.0.x のテンプレートでは次の場所にあった（テンプレートの `apac.anthropic.…` を、
+   それぞれの環境に合わせて置き換えたもの）
+   - ai-review.yml の `--model`（light と deep の2か所）
+   - agent-implement.yml と incident-triage.yml の `--model`
+   - eval-gate.yml の `JUDGE_MODEL`
+   - run_evals.py の `JUDGE_MODEL` の既定値
+2. 各ファイルを新しい版のテンプレートに置き換え、直書きした ID を消す
+3. リポジトリ変数 `HOTL_MODEL_LIGHT`・`HOTL_MODEL_DEEP`・`HOTL_JUDGE_MODEL` を設定する。未設定の job は、
+   エージェントを動かす前に失敗する。値の選び方（Bedrock のライフサイクル、処理地域、alias を使わないこと）は
+   `assets/ADJUST.md` の「全ファイル共通」に従う
+4. 2.2.0 以降は、effort（`HOTL_EFFORT_*`）と拒否のときの fallback 先（`HOTL_FALLBACK_*`）も変数で指定できる。
+   未設定なら既定で動く
+5. eval の閾値と baseline の形式は 2.1.0 で変わった。`assets/ADJUST.md` の eval-gate の節に従って移す
+
 ## スキルを腐らせない運用ルール
 
 - 相談・適用で原則の不足や誤りが **2回** 露呈したら、references に追記する PR を出す（Issue テンプレート `skill-feedback` を使用）
