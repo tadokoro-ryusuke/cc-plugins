@@ -91,7 +91,9 @@ LLM 判事を使う場合、以下を守らないと判定は無意味になる�
 
 - モデルごとの制約: forced tool_choice（`any` / `tool`）は、Fable 5.1 / 5.2・Mythos 5.1 / 5.2・Opus 5.5・Sonnet 5.5 で 400 になる（Haiku 5.5 は対象外）。assistant prefill は、4.6 以降のほぼすべてのモデルで 400 になる。構造化は `output_config.format`、または `tool_choice: auto` と `strict: true` で行う
 - API の版の制約: API の版 2026-10-21 では、temperature・top_p・top_k を送ると、既定値でも全モデルで 400 になる。それより前の版では、扱いがモデルで違う。判事の呼び出しにはこの 3 つを送らない
-- 確かめる手順: モデルごとの制約は、Claude API ドキュメントの移行ガイドで対象モデルの節を読む。版の制約は、API versions のページから、使う版の移行ガイドを開いて読む
+- 確かめる手順: モデルごとの制約は、Claude API ドキュメントの移行ガイドの一覧から、対象モデルの移行ガイドを開いて読む。版の制約は、API versions のページから、使う版の移行ガイドを開いて読む
+
+Step 4 の確認項目:
 
 - [ ] 人間が独立にラベルした数十件以上（目標 100 件）との一致率を測定し、整合性レポートを残した
 - [ ] 判事は評価対象と同じモデルではない。同系統なら、自己選好バイアスの対策を記録した
@@ -179,7 +181,7 @@ CI の検証フロー全般・証拠ベースの完了判定 → dev-core:verify
 - Chip Huyen『AI Engineering』第3〜4章（O'Reilly, 2025 — 邦訳『AIエンジニアリング』）
 - Anthropic「Demystifying evals for AI agents」（公式ブログ）/ OpenAI Evals ガイド
 - Anthropic の評価監査ガイド `eval-audit.md`（anthropics/skills リポジトリの claude-api スキル内。https://github.com/anthropics/skills/blob/main/skills/claude-api/shared/evals/eval-audit.md 、commit 8a1541c・2026-09-29。2026-10-26 確認）— 判事の較正（数十件・明確なケースでおよそ 90%）、判事のバイアス、pairwise・連続量、観点を合算しないこと
-- Anthropic API ドキュメント（2026-11-12 確認）: 「Refusals and fallback」（https://platform.claude.com/docs/en/build-with-claude/refusals-and-fallback 。推論の書き出しと reasoning_extraction）、「Migration guide」（https://platform.claude.com/docs/en/about-claude/models/migration-guide 。モデルごとの forced tool_choice と prefill）、「API versions」（https://platform.claude.com/docs/en/api/versioning 。版ごとの sampling パラメータの扱い）— 判事の実装の制約
+- Anthropic API ドキュメント（2026-11-12 確認）: 「Refusals and fallback」（https://platform.claude.com/docs/en/build-with-claude/refusals-and-fallback 。推論の書き出しと reasoning_extraction）、「Migration guides」（https://platform.claude.com/docs/en/about-claude/models/migration-guide 。モデルごとの移行ガイドの一覧。forced tool_choice と prefill）、「API versions」（https://platform.claude.com/docs/en/api/versioning 。版ごとの sampling パラメータの扱い）— 判事の実装の制約
 - promptfoo / Ragas / DeepEval / Langfuse 各公式ドキュメント
 - Pragmatic Engineer「A pragmatic guide to LLM evals」
 
