@@ -353,8 +353,10 @@ cc-plugins/
 
 スキルが実際に使われるかを測るときは、次を使います（費用がかかるので CI では回しません。方法と前回の結果は [計測記録](docs/research/skill-reachability-2026-10.md)）。
 
-- `node scripts/gen-plugin-evals.mjs --plugin <名前> [--behavior]`: 行動ケース（`<名前>/evals/skill-behavior-cases.json`。今は dev-core と indie-product-marketing）から `claude plugin eval` のケースを作る。
-- `node scripts/measure-skill-firing.mjs --plugin <名前> --model <固定> [--dry-run]`: 実際のインストール構成で、どのスキルが使われるかを測る。
+- `node scripts/gen-plugin-evals.mjs --plugin <名前> [--behavior]`: 行動ケース（`<名前>/evals/skill-behavior-cases.json`。今は dev-core と indie-product-marketing）から `claude plugin eval` のケースを作る。回すときは `--model` に完全なモデル ID を、`--max-cost-usd` に上限を渡す。`--behavior` で作ったケースには `--judge-model <完全なモデル ID>` が要る（指定しないと、判事は haiku alias に従う）。effort の固定の仕方はスクリプトの冒頭にある。
+- `node scripts/measure-skill-firing.mjs --plugin <名前> --model <完全なモデル ID> --effort <level> [--max-budget-usd <1 件あたりの上限>] [--dry-run]`: 実際のインストール構成で、どのスキルが使われるかを測る。`--effort` を省くと、利用者の環境変数か、モデルごとに保存した effort で動く。
+
+結果を記録するときは、Claude Code の版、モデル、effort を書きます。plugin eval の llm grader を使ったときは、判事のモデルも書きます。モデルの alias は、Claude Code の版によって指す先が変わるので使いません。
 
 ## ライセンス
 

@@ -7,7 +7,15 @@
 //   node scripts/gen-plugin-evals.mjs --plugin-root <dir> --suite <json> --out <dir> [--behavior]
 // 生成先の既定は <plugin>/evals/plugin/。実行は次のとおり:
 //   claude plugin eval ./<plugin> --eval-dir evals/plugin --no-publish --trust-plugin \
-//     --model <固定> --max-cost-usd <上限> [--runs 1 --ablation none]
+//     --model <完全なモデル ID> --judge-model <完全なモデル ID> --max-cost-usd <上限> [--runs 1 --ablation none]
+// 実行の条件を固定する（2026-11-12 確認、Claude Code 2.1.322）:
+//   - --model と --judge-model には完全なモデル ID を渡す（判事の例: claude-sonnet-5-5）。alias は使わない。
+//     alias の指す先は Claude Code の版で変わる（sonnet は 2.1.284 で Sonnet 5.5 に、haiku は 2.1.293 で Haiku 5.5 に移った）
+//   - --behavior で生成したケースを回すときは、--judge-model が必須。llm grader の判事は、指定しないと
+//     background タスクのモデル（haiku alias）になる。日本語の rubric を読むので、Sonnet 級に固定する
+//   - plugin eval には effort のフラグが無い。effort を固定するときは CLAUDE_CODE_EFFORT_LEVEL=<level> を付けて
+//     起動する。docs では、plugin eval は CLAUDE_CODE_* の大半を子に渡す。実際に効くかは未確認なので、初回に trace で確かめる
+//   - 結果を記録するときは、Claude Code の版、--model、effort、判事のモデルを書く
 //
 // 生成の規則:
 //   - 自動発火のケース（プロンプトが /<plugin>: で始まらない）: Skill ツールが呼ばれたかを tool_used で見る。
