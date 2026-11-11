@@ -1,6 +1,6 @@
 # Task: Fable 5.2 リリースの影響調査（2026-11）の改善を実装する
 
-- Status: in progress（draft PR の作成待ち）
+- Status: draft PR 作成済み（マージ待ち。マージはユーザーが行う）
 - Plan file: docs/plans/task-fable52-2026-11.md
 - 調査報告: docs/research/fable-5-2-impact-2026-11.md（正本。§3 と §4 の修正後の内容に従う）
 - 候補ごとの台帳（補足資料）は作者のローカルにだけ置く。Codex のレビュー前の内容なので、報告書と食い違うときは報告書と本書の「上書き」を優先する
@@ -66,11 +66,11 @@ codex-plugins の A' と B' は、ルートの README.md の「Source update mig
 
 | ID | 完了条件 | 証拠 | 状態 |
 |---|---|---|---|
-| AC-1 | 束 A〜D と A'・B' が、それぞれのブランチにコミットされている | 各ブランチの `git log origin/main..HEAD`（cc は 4・4・5・5 件、codex は 3・2 件） | done |
+| AC-1 | 束 A〜D と A'・B' が、それぞれのブランチにコミットされている | 各ブランチの `git log origin/main..HEAD`（cc は hotl 5・dev-core 4・knowledge 5・tooling 7 件、codex は hotl 3・dev-core 2 件） | done |
 | AC-2 | 各束で検証一式が pass する（AGENTS.md の検証コマンド、`node --test scripts/*.test.mjs`、hotl の Python テスト、codex は `validate-codex-plugins.mjs`） | cc の 4 ブランチ: AGENTS.md の一式・CI の負例 fixture・hotl の unittest（PyYAML 6.0.2、anthropic 1.17.0）・marketplace と 8 プラグインの strict validate・`git diff --check` の 23 項目が全部 pass。codex の 2 ブランチ: `validate-codex-plugins.mjs`・`validate-skill-evals.mjs`・unittest（127 件と 111 件）・`git diff --check` が pass（2026-11-12、Claude Code 2.1.322） | done |
 | AC-3 | 振る舞いが変わる変更にテストがある（check-plugin-agents の負例、run_evals の票の理由と stop_reason、measure-skill-firing の --effort と --max-budget-usd、session-start-context の期待文字列） | 各テストを先に書いて失敗を確かめてから実装した（束 A・B・D の実装記録）。ai-review の base の書き出しにもテストがある（`scripts/tests/test_workflows.py`） | done |
-| AC-4 | 束ごとに独立レビュー（Codex）を通し、指摘を実ファイルで確かめて反映した | 下の Progress Log | done |
-| AC-5 | draft PR が作成されている | PR の URL | pending |
+| AC-4 | 束ごとに独立レビュー（Codex）を通し、指摘を実ファイルで確かめて反映した | 下の Progress Log。Codex のレビューの後に入った変更（cc の hotl の c162b71、報告書の追記、本書の一般化、codex の README の衝突の解消とコミットメッセージの修正）は、Codex のレビューを経ていない。検証一式の再実行と advisor の確認だけ | done（一部は独立レビューなし） |
+| AC-5 | draft PR が作成されている | cc #20（A）・#21（B）・#22（C）・#23（D）、codex-plugins #13（A'）・#14（B'。base は A' のブランチ） | done |
 
 ## Progress Log
 
@@ -82,8 +82,10 @@ codex-plugins の A' と B' は、ルートの README.md の「Source update mig
   - 束 D（低 1）: 本書に利用者の設定値とローカルの管理状態が書いてあった。一般化した。
   - A'（中 1・低 1）: 中は「モデルを替えるとき強制ゲートを外して Phase 1 に戻す案内」。強制を保ったまま新旧を比べる手順に直した。低は「Claude Code が AGENTS.md を読む条件」の書き方。
   - B': 指摘 0 件。
-- 2026-11-12: 6 本の検証一式を、実装したエージェントとは別に再実行し、全部 pass した（AC-2）。
+- 2026-11-12: 6 本の検証一式を、実装したエージェントとは別に再実行し、全部 pass した（AC-2）。cc の 4 本をまとめてマージした状態でも pass した。
+- 2026-11-12: A' のレビューの中（強制ゲートを外す案内）は cc の ADJUST にもあったので、cc に逆輸入した（c162b71）。B' は README の同じ位置に項目を足すので、A' の上に積み直した。
+- 2026-11-12: 6 本を push し、draft PR を作った（AC-5）。cc の dev-core の PR は merge commit でマージする（codex の README が cc の commit `b8f65a6` を引くため）。
 
 ## Current Next Action
 
-6 本のブランチを push し、draft PR を作る。B' の PR は A' のブランチを base にする。PR を作ったら AC-5 を更新する。
+ユーザーのレビューとマージを待つ。順序は cc の 4 本が任意、codex は #13 → #14。マージ後に、インストール済みのプラグインを更新するかはユーザーが決める。
