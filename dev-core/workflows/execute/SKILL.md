@@ -17,8 +17,11 @@ allowed-tools: Read, Write, Edit, Agent(dev-core:tdd-practitioner), Agent(dev-co
 3. `git status --short` とプロジェクト指示・`.claude/*.local.md` を確認する。
 4. 既存の安全な worktree/branch なら継続する。clean な local checkout、またはdirty差分が対象planと今回スコープ内の計画作業だけなら、それらを保持したままリポジトリ規約に従うbranchを作成・switchする。無関係な未コミット変更がある場合は切り替えや上書きをしない。
 5. `--commit` と `--pr` の有無を Delivery Strategy に反映する。`--pr` は commit と push も許可する明示的な delivery 指定として扱う。
-6. このターンの実効 effort は `${CLAUDE_EFFORT}` である。開始・再開のたびに Progress Log へ記録する。表示された値が effort の段階名（low / medium / high / xhigh / max）でなければ `unknown` と記録する。
-7. effort が xhigh か max で、Progress Log にまだ案内の記録がなければ、計画の実行には medium を推奨していること（切り替えは `/effort medium`）を一度だけ伝え、案内したことを Progress Log に記録して続行する。xhigh と max は品質の向上を測定できた作業に向く設定で、確定した計画の実行では medium で足りることが多いため。effort はユーザーの選択なので、この skill からは変えず、確認も待たない。
+6. このターンの実効 effort は `${CLAUDE_EFFORT}` である。開始・再開のたびに、effort とモデル名を Progress Log へ記録する。表示された値が effort の段階名（low / medium / high / xhigh / max）でなければ `unknown` と記録する。モデル名を渡す置換変数は無いので、自分が認識しているモデル名を書き、分からなければ `unknown` と記録する。
+7. effort が xhigh か max で、Progress Log にまだ案内の記録がなければ、次の案内を一度だけ伝え、案内したことを Progress Log に記録して続行する。effort はユーザーの選択なので、この skill からは変えず、確認も待たない。
+   - Fable 系以外（Opus 5.5・Sonnet 5.5 など。モデル名が `unknown` のときも）: 計画の実行には medium を推奨する。xhigh と max は品質の向上を測定できた作業に向く設定で、確定した計画の実行では medium で足りることが多いため。
+   - Fable 系: medium まで下げる案内はせず、high を選択肢として示す。Anthropic の Fable 5.2 の移行ガイドは high を出発点とし、low・medium では長い作業の途中終了が増えるとしているため（これは API 側の指針で、Claude Code の既定は medium）。
+   - 切り替え方: このセッションだけなら、`/effort` のスライダーで level を選んで `s` を押す（2.1.257 以上）。`/effort medium` のように level を打つと、そのモデルの既定として保存され、次の計画セッションも同じ level で始まる。
 8. Status を `in-progress` にし、最初の Current Next Action を記録する。
 
 ## 2. Default-Fail Completion Contract
@@ -99,11 +102,17 @@ allowed-tools: Read, Write, Edit, Agent(dev-core:tdd-practitioner), Agent(dev-co
 4. 全 criterion が `satisfied` で、P0/P1 指摘がなく、依頼された delivery が完了した場合だけ Status を `done` にする。
 5. 変更、検証、レビュー（実施したか、しなかった理由）、残存リスクを報告する。
 
-## 7. 無人実行の規律
+## 7. 途中で止めない規律
 
-ユーザーが見ていない実行（非対話モード、バックグラウンド、外側のループ）では、次の条件で完了を判定する。長いタスクの途中で、進捗を報告するテキストだけで end_turn してしまうことがあるため。
+計画の実行では、ユーザーが見ているかどうかに関係なく、次の条件で完了を判定し、作業を進める。長いタスクの途中で、残りを並べる、続行を申し出る、進捗を報告するテキストだけで end_turn する、普通の障害で止まる、ということがあるため。
 
 - テキストだけの end_turn は完了とみなさない。Completion Contract に `pending` が残り、ユーザーの判断待ちもなければ、Current Next Action を実行する。
+- エラー・タイムアウト・空の結果・一時的なツールの失敗のような普通の障害は、まず原因を調べる。本当のブロッカーでなければ、手持ちの権限で乗り越える（安全に繰り返せる操作の再試行、依頼の修正、別の手段）。同じ修正経路での失敗は3回までとする（Stop Rules）。
+- 意図的なブロッカーは越えない。dev-core の tripwire が止めた操作や確認に回した操作、保護されたファイル、意図して渡されていない権限がこれに当たる。止められたことを報告し、別の安全な手段を探す。
+- 不可逆な操作と外部に作用する操作の確認は省かない（§4、Stop Rules）。
+
+ユーザーが見ていない実行（非対話モード、バックグラウンド、外側のループ）では、さらに次も守る。
+
 - 実行中のバックグラウンド agent があるうちは完了にしない。
 - 同じ plan での自動継続は2回までとし、継続するたびに Progress Log に記録する。上限に達したら、Status を `blocked` にして理由と Current Next Action を記録し、ユーザーに返す。上限に達したことは受け入れにはならない。
 
