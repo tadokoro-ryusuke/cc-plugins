@@ -2,7 +2,7 @@
 
 - 調査日: 2026-09-23
 - 対象: cc-plugins `9ed9423`（dev-core 4.4.0）、codex-plugins `321e032`（dev-core 5.5.0）、Claude Code 2.1.280
-- 状態: **実装済み**（Phase A-0〜B を実装し、cc-plugins 側は 2026-09-23 に #9〜#12 で main に merge した。codex-plugins の indie 0.3.1（#7）は未 merge。A-1・A-2 の完了条件のうち、行動ケースの実行と記録は未達。Phase C・D は未実施）。本文は 2.1.280 を対象にした調査時点の記録で、その後の変化は「追記（2026-10-26）」にまとめた
+- 状態: **実装済み**（Phase A-0〜B を実装し、cc-plugins 側は 2026-09-23 に #9〜#12 で main に merge した。codex-plugins の indie 0.3.1（#7）は未 merge。A-1・A-2 の完了条件のうち、行動ケースの実行と記録は未達。Phase C・D は未実施）。本文は 2.1.280 を対象にした調査時点の記録で、その後の変化は「追記（2026-10-26）」と「追記（2026-11-12）」にまとめた
 - レビュー: 3視点の設計パネル、反証レビュー、advisor、Codex の独立レビュー（P1 が3件、P2 が7件）を統合済み
 - 根拠の区別:
   - **[公式]** 公開一次情報
@@ -38,6 +38,53 @@
 
 ---
 
+## 追記（2026-11-12）: 2.1.284〜2.1.321 の alias・effort・価格の変化
+
+本文と「追記（2026-10-26）」は書き換えずに残す。その後、alias の指す先、既定の effort、単価、subagent の effort の決まり方が変わった。ここにまとめる。本文の該当箇所には「→ 追記4」のように番号を付けた。
+
+4. **`sonnet` が Sonnet 5.5 を指すようになった（2.1.284）**
+   - Anthropic API では、`sonnet` は Sonnet 5 ではなく Sonnet 5.5（`claude-sonnet-5-5`）を指す。
+   - 単価は $2/$10 で、Opus 5.5 の 1/2。cache read は $0.10 で、Opus 5.5（$0.20）の半分になった。2.1.284 の CHANGELOG は $0.20 と書き、2.1.296 で $0.10 に直した。
+   - Claude Code での既定 effort は medium（追記7）。
+   - 他のプロバイダの `sonnet` は、今も 4.x 系を指す。Claude Platform on AWS は Sonnet 4.6、Bedrock・Google Cloud の Agent Platform・Foundry は Sonnet 4.5。
+5. **`haiku` が Haiku 5.5 を指すようになった（2.1.293）**
+   - Anthropic API では、`haiku` は Haiku 4.5 ではなく Haiku 5.5（`claude-haiku-5-5`）を指す。
+   - Haiku 5.5 は effort に対応する（low〜max）。Claude Code での既定は medium。
+   - 単価は、100K トークン以下のプロンプトで $0.10/$0.50（Opus 5.5 の 1/40）、100K を超えると $0.50/$2.50（1/8）。
+   - 他のプロバイダの `haiku` は、今も Haiku 4.5 を指す。
+   - §3.2 の「Haiku 4.5 は effort に対応していません」は、Anthropic API の `haiku` には当てはまらなくなった。§3.2 のモデルの段階分けを見直すかは、Phase C で測ってから決める。ここでは結論を出さない。
+6. **`fable` が Fable 5.2 を、`best` が `opus` と同じモデルを指すようになった（2.1.321）**
+   - `fable` は Fable 5.2（`claude-fable-5-2`）を指す。Claude apps gateway のセッションだけは Fable 5 のまま。
+   - Fable 5.2 の単価は $8/$40 で、Opus 5.5 の 2 倍。§4.2 の「2.5倍」は Fable 5.1（$10/$50）の値。
+   - Fable 5.2 の Claude Code での既定 effort は medium。§4.2 の「Fable 5.1 は既定が high なので、実装は medium に下がる」は、Fable 5.2 には当てはまらない。完全 ID で Fable 5.1 を選んだときに限る。
+   - `best` は、それまで「`fable` と同じモデル（Fable が使える場合）」を指していた。2.1.321 から `opus` と同じモデルを指す。この変更は CHANGELOG には無く、model-config の Version history にだけある。
+7. **Claude Code での既定 effort（2026-11-12 確認）**
+   - Fable 5.2・Opus 5.5・Sonnet 5.5・Haiku 5.5 は medium。Opus 4.7 は xhigh。effort に対応する他のモデルは high。
+   - Messages API の既定は、モデルによって Claude Code と違う（Fable 5.2 と Sonnet 5.5 は high）。この文書が扱うのは Claude Code の値。
+8. **subagent の effort の決まり方が変わった（2.1.316、2.1.317）**
+   - 2.1.317 から、メインと別のモデルで動く subagent と teammate は、セッションの effort ではなく、そのモデルに保存した effort か、そのモデルの既定で動く。セッションの effort に従うのは、メインと同じモデルの子だけになった。
+   - 2.1.316 で `CLAUDE_CODE_SUBAGENT_EFFORT` が入った。ほかに effort の指定が無い subagent に、セッションの effort の代わりに使う値を決める。2026-11-12 時点では CHANGELOG にだけあり、docs には無い。frontmatter で effort を固定した agent には、効かないと読める。
+   - 本文の §1-3「effort を指定しない agent はセッションの effort に従う」と F7 は、メインと同じモデルの子に限った話になる。
+9. **F9 と F6 の「Skill ツール経由では effort が効かない」は、再測定するまで未確認として扱う（2.1.295）**
+   - 2.1.295 で、「Skill ツールが応答のストリームより先に終わると、skill の `allowed-tools` と `effort` が落ちる」不具合が直った。CHANGELOG は、`-p` の実行で起きた例を挙げている。
+   - F9 は、2.1.280 の `-p` の単発ターンで測った。この不具合と条件が重なるので、F9 の結果が仕様によるものか、不具合によるものかを区別できない。
+   - 今の skills の docs は、skill の `effort` を「現在のターンの残りに効く」と書き、スラッシュ起動に限っていない。
+   - そのため、F9 と、それに基づく F6 の「スラッシュ起動した skill」という限定は、2.1.295 以降では再測定するまで未確認として扱う。§1-4 の判断（execute の frontmatter に effort を置かない）は、ユーザーが選んだ effort を下げないためのもので、この点には依存しない。
+10. **F13 の `ultrathink` について（2026-11-12 確認）**
+    - skills の docs は、skill の本文に `ultrathink` を書けば、skill の実行時に深い推論を求められるとしている。model-config の docs によると、`ultrathink` はターンに指示を足す仕組みで、セッションの effort は変えない。
+    - docs が「そのターンを xhigh に上げられる」と書いているのは、端末のプロンプトに打った場合だけ（2.1.311 以降。Opus 5.5・Sonnet 5.5・Haiku 5.5・Fable 5.1・Fable 5.2 で、Bedrock などでは上がらない）。
+    - agent の本文に書いた場合は、docs に記述が無い。F13 は確かめられないまま残る。
+
+出典（2026-11-12 確認、Claude Code 2.1.322）
+- Claude Code CHANGELOG の 2.1.284、2.1.293、2.1.295、2.1.296、2.1.316、2.1.317、2.1.321: https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md
+- model-config の Model aliases と Version history: https://code.claude.com/docs/en/model-config#model-aliases 、https://code.claude.com/docs/en/model-config#version-history
+- model-config の Adjust effort level と Effort level of subagents and teammates: https://code.claude.com/docs/en/model-config#adjust-effort-level 、https://code.claude.com/docs/en/model-config#effort-level-of-subagents-and-teammates
+- model-config の Use ultrathink for one-off deep reasoning: https://code.claude.com/docs/en/model-config#use-ultrathink-for-one-off-deep-reasoning
+- skills の Frontmatter reference: https://code.claude.com/docs/en/skills#frontmatter-reference
+- Messages API の既定 effort: https://platform.claude.com/docs/en/build-with-claude/effort
+
+---
+
 ## 1. 結論
 
 **「実装は Opus 5.5 medium で」には賛成です。ただし「サブエージェントで」を既定にはしません。**
@@ -58,7 +105,7 @@
      - codex-plugins も 5.4.0 以降、同じ結論です。
 3. **Claude 版の「実行プロファイル」は、agent frontmatter の `effort` で表します。** 次のことを確認済みです [実測・実装・公式]。
    - プラグイン同梱の agent でも `effort:` が効き、セッションの effort（`/effort` や ultracode）を上書きします。（→ 追記1: 2.1.284 以降の ultracode は effort ではない）
-   - effort を指定しない agent はセッションの effort に従います。ultracode なら全員が xhigh で動きます。（→ 追記1: 2.1.284 以降は `--effort ultracode` で起動したときだけ）
+   - effort を指定しない agent はセッションの effort に従います。ultracode なら全員が xhigh で動きます。（→ 追記1: 2.1.284 以降は `--effort ultracode` で起動したときだけ）（→ 追記8: 2.1.317 以降、メインと別のモデルの子は従わない）
    - Agent ツールには、呼び出しごとに effort を渡す引数がありません。（→ 追記2: 2.1.292 で入った）
 
    そこで役割ごとに固定します。
@@ -89,14 +136,14 @@
 | F3 | コスト最適化ガイドの結果: マルチモデル構成は、同じモデルを低い effort で回すより高くついた。オーケストレータが得をしたのは「ルーチン作業の裾野」と「1コンテキストに収まらない作業」の2つだけ。low で全件を回し、失敗した分だけ再実行すると、合格率を保ったまま費用は約半分（テストなどの失敗シグナルがあることが前提）。測定対象に Opus 5.5 は含まれない | [公式] optimizing-for-cost-and-intelligence |
 | F4 | Opus 5 ガイド（Opus 5.5 でも出発点とされる）は、「subagent で検証せよ」といった指示が過剰検証を招くので削除するよう勧めている。一方、ハーネス設計の記事は、作業者と評価者を分けることを強いレバーとしている | [公式] prompting-claude-opus-5、engineering blog |
 | F5 | Opus 5.5 は長いタスクの途中で、テキストだけの進捗報告で end_turn することがある。無人のループは完了条件で判定し、自動継続は2〜3回で止める | [公式] prompting-claude-opus-5-5 |
-| F6 | effort の優先順位: `CLAUDE_CODE_EFFORT_LEVEL` ＞ ターンの effort レイヤ（agent frontmatter、スラッシュ起動した skill）＞ セッションの effort（`--effort`、`/effort`、ultracode）＞ `modelSettings.<model>.effortLevel` ＞ モデルの既定値。`maxEffortLevel` が上限になる（→ 追記1・2: ultracode は effort から外れ、呼び出しごとの effort が frontmatter の上に入った） | [実測][実装][公式] sub-agents、model-config |
-| F7 | agent frontmatter の `effort` は、プラグイン agent でも有効。指定がない場合は、セッションの effort が明示されていればそれに従い、なければそのモデルの設定値か既定値を使う。user settings のトップレベルにある `effortLevel` は Opus 5.5 には効かない | [実測] transcript の実効 effort、[公式] changelog 2.1.280 |
+| F6 | effort の優先順位: `CLAUDE_CODE_EFFORT_LEVEL` ＞ ターンの effort レイヤ（agent frontmatter、スラッシュ起動した skill）＞ セッションの effort（`--effort`、`/effort`、ultracode）＞ `modelSettings.<model>.effortLevel` ＞ モデルの既定値。`maxEffortLevel` が上限になる（→ 追記1・2: ultracode は effort から外れ、呼び出しごとの effort が frontmatter の上に入った）（→ 追記9: skill の effort をスラッシュ起動に限る点は、2.1.295 以降は未確認） | [実測][実装][公式] sub-agents、model-config |
+| F7 | agent frontmatter の `effort` は、プラグイン agent でも有効。指定がない場合は、セッションの effort が明示されていればそれに従い、なければそのモデルの設定値か既定値を使う。user settings のトップレベルにある `effortLevel` は Opus 5.5 には効かない（→ 追記8: 2.1.317 以降、メインと別のモデルの子はセッションの effort に従わない） | [実測] transcript の実効 effort、[公式] changelog 2.1.280 |
 | F8 | Agent ツールには、呼び出しごとに effort を渡す引数がない（#72596 not planned）。プラグイン agent の model / effort を settings で上書きする機能もない（#79866 not planned）。呼び出しごとに model / effort を変えられるのは Workflow の `agent()` だけ（→ 追記2: 2.1.292 で Agent ツールに effort 引数が入った。#79866 は not planned のまま） | [公式] GitHub issues、workflows docs |
-| F9 | skill frontmatter の `effort` は、ユーザーがスラッシュで起動したときだけ、そのターン全体（親と、effort を指定していない子）に効く。モデルが Skill ツールで起動した場合は反映されなかった | [実測] `-p` の単発ターンで測定。複数ターンにわたって持続するかは未測定 |
-| F10 | Anthropic API では、alias の opus は Opus 5.5、sonnet は Sonnet 5 を指す。3P プロバイダでは異なる（sonnet は 4.5 系、Foundry の opus は 4.6）。model の解決順は、呼び出し時の model 引数 ＞ frontmatter ＞ `CLAUDE_CODE_SUBAGENT_MODEL` ＞ 親 | [公式] model-config、sub-agents |
+| F9 | skill frontmatter の `effort` は、ユーザーがスラッシュで起動したときだけ、そのターン全体（親と、effort を指定していない子）に効く。モデルが Skill ツールで起動した場合は反映されなかった（→ 追記9: 2.1.295 で直った不具合と条件が重なる。再測定するまで未確認） | [実測] `-p` の単発ターンで測定。複数ターンにわたって持続するかは未測定 |
+| F10 | Anthropic API では、alias の opus は Opus 5.5、sonnet は Sonnet 5 を指す（→ 追記4〜6: sonnet は Sonnet 5.5、haiku は Haiku 5.5、fable は Fable 5.2 になった）。3P プロバイダでは異なる（sonnet は 4.5 系、Foundry の opus は 4.6）。model の解決順は、呼び出し時の model 引数 ＞ frontmatter ＞ `CLAUDE_CODE_SUBAGENT_MODEL` ＞ 親 | [公式] model-config、sub-agents |
 | F11 | プラグイン agent では hooks・mcpServers・permissionMode が無視される | [公式] sub-agents |
 | F12 | プラグインは Workflow スクリプト（.js）を配布できる。既定の置き場所は `workflows/` で、直下の .js だけを読む。manifest の `workflows` で場所を変えられる。起動にはユーザーの opt-in が必要 | [公式] workflows、plugins-reference。[実装] ローダ |
-| F13 | Agent ツールには、description に "proactive" とある agent を、頼まれなくても使うよう指示されている。`ultrathink` はユーザー入力のキーワードとして検出されるので、agent 本文に書いても効かない可能性が高い | [実装] |
+| F13 | Agent ツールには、description に "proactive" とある agent を、頼まれなくても使うよう指示されている。`ultrathink` はユーザー入力のキーワードとして検出されるので、agent 本文に書いても効かない可能性が高い（→ 追記10） | [実装] |
 | F14 | Agent Teams の「delegate mode」にあたる文字列が 2.1.280 に見つからない（廃止の可能性、確度は中〜低）。teammate はリーダーのセッション effort を継承する | [実装] |
 | F15 | 2026-03 に Claude Code は Opus 4.6 の既定 effort を medium に下げたが、04-07 に「wrong tradeoff」として元に戻した。Opus 5.5 は較正が別物だが、UX 上の前例になる | [公式] april-23-postmortem |
 
@@ -129,8 +176,8 @@
 
 - Codex では Luna が Sol の 1/20 の単価なので、モデルを段階分けする preset には大きな節約効果があります。
 - Claude では事情が違います。
-  - Sonnet 5 は Opus 5.5 の 1/2 の単価で、cache read は同額（$0.20）です。
-  - Haiku 4.5 は effort に対応していません。
+  - Sonnet 5 は Opus 5.5 の 1/2 の単価で、cache read は同額（$0.20）です。（→ 追記4: `sonnet` は Sonnet 5.5 になり、cache read は $0.10）
+  - Haiku 4.5 は effort に対応していません。（→ 追記5: Anthropic API の `haiku` は Haiku 5.5 になり、effort に対応する）
   - Anthropic は「カスケードを組む前に、同じモデルで effort を sweep せよ」としています（F3）。
 - そこで Claude 版は、**Opus 5.5 1つを effort で段階分けする**形で表します。
 - 選ぶ順序は Codex と同じです。
@@ -231,9 +278,9 @@ Agent ツールでは effort を指定できないので、段階は agent フ�
 - 既定の Opus 5.5 medium のセッションでは、medium の固定は何も変えません。レビュアーだけが high に上がります。
 - 固定が効くのは、次の2つの場合です。
   - 親を high / xhigh / ultracode に上げたとき。このとき「親は高く、実装は medium」になり、ユーザーが想定する構成そのものになります。（→ 追記1: 2.1.284 以降、ultracode で xhigh になるのは `--effort ultracode` で起動したときだけ）
-  - 親が Fable 5.1 や Sonnet 5 のとき。どちらも既定が high なので、実装は medium に下がります。
+  - 親が Fable 5.1 や Sonnet 5 のとき。どちらも既定が high なので、実装は medium に下がります。（→ 追記4・6: alias の `fable` と `sonnet` が指す Fable 5.2 と Sonnet 5.5 は、既定が medium）
 - 逆に、親が xhigh 以上（ultracode を含む）のときは、レビュアーが xhigh から high に**下がります**。これは意図した上限です。公式は xhigh と max を「測定できた作業に限る」としているためです。レビューも xhigh で行いたい場合は、`CLAUDE_CODE_EFFORT_LEVEL` を使います（全体に効きます）。（→ 追記1・2: ultracode が xhigh を伴うのは `--effort ultracode` 起動のときだけ。2.1.292 以降は、そのレビューだけを xhigh で頼むこともできる）
-- 実行系は model を省略するので、親が Fable 5.1 なら、実装も Fable 5.1 の medium で動きます。単価は Opus 5.5 の2.5倍です。安くしたいときは `CLAUDE_CODE_SUBAGENT_MODEL=opus` を使います。
+- 実行系は model を省略するので、親が Fable 5.1 なら、実装も Fable 5.1 の medium で動きます。単価は Opus 5.5 の2.5倍です。安くしたいときは `CLAUDE_CODE_SUBAGENT_MODEL=opus` を使います。（→ 追記6: Fable 5.2 は既定が medium で、単価は 2 倍）
 - 判断系は `inherit` を明示しているので、この環境変数の影響を受けません。
 
 **設計の理由**

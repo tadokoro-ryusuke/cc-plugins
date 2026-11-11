@@ -5,6 +5,7 @@
 - 計測日: 2026-10-26
 - Claude Code: 2.1.310
 - モデル: `claude-opus-5-5`（`--model` で固定）。effort は指定していない（CLI の既定）
+- 注記（2026-11-12 追記）: effort は固定しておらず、実際に効いた値も記録していない。§1（plugin eval）は一時設定で動くので、Opus 5.5 の既定（medium）だったとみられる。ただし plugin eval は `CLAUDE_CODE_*` の環境変数の大半を子に渡し、managed settings も効くので、`CLAUDE_CODE_EFFORT_LEVEL` などがあればそれに従う。§2 は、利用者の環境変数と、モデルごとに保存した effort に従う。次に測るときは effort を明示し、その値を記録する（`measure-skill-firing.mjs` の `--effort`。plugin eval の場合は `scripts/gen-plugin-evals.mjs` の冒頭を見る）
 - 回数: 各ケース1回。**1回ずつなので誤差が大きい**。ここから言えるのは傾向だけで、発火率の推定ではない
 
 ## 1. 隔離した環境での自動発火（`claude plugin eval`）
