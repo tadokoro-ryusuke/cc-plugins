@@ -68,9 +68,10 @@ jobs:
             echo "expected exit 1 (violations), got $status"
             exit 1
           fi
+          # キーごと・モデルごとの判定と、発火しない組み合わせは scripts/check-plugin-agents.test.mjs が確かめる。
           for code in frontmatter-missing name-mismatch description-missing description-proactive \
-            effort-invalid effort-unpinned effort-pin-mismatch model-invalid haiku-effort \
-            ignored-key when-to-use pin-stale ref-missing; do
+            effort-invalid effort-unpinned effort-pin-mismatch model-invalid effort-unsupported-model \
+            ignored-key when-to-use agent-subfolder pin-stale ref-missing; do
             if ! grep -qF "[$code]" <<<"$output"; then
               echo "expected fixture violation [$code] was not reported"
               exit 1
@@ -80,8 +81,8 @@ jobs:
         run: node scripts/validate-skill-evals.mjs
       - name: Validate indie-product-marketing behavior eval cases
         run: node scripts/validate-skill-evals.mjs --plugin indie-product-marketing
-      - name: Test eval validator and plugin eval generator
-        run: node --test scripts/validate-skill-evals.test.mjs scripts/gen-plugin-evals.test.mjs scripts/measure-skill-firing.test.mjs
+      - name: Test eval validator, plugin eval generator and plugin agent checker
+        run: node --test scripts/validate-skill-evals.test.mjs scripts/gen-plugin-evals.test.mjs scripts/measure-skill-firing.test.mjs scripts/check-plugin-agents.test.mjs
       - name: Validate Claude hook event compatibility
         run: |
           node scripts/validate-claude-hooks.mjs
@@ -102,9 +103,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # Claude Code CLI の engines は node >=22（2026-11-12 確認、2.1.310〜2.1.322）。
+      # drift ジョブは Node 標準のスクリプトだけなので 20 のままでよい。
       - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "22"
+      # CLI は版を固定せず最新を入れる（validate の規則の変化を早く拾うため）。
+      # PR と関係なく validate の結果が変わったら、先に Claude Code の CHANGELOG を確かめる。
       - name: Install Claude Code CLI
         run: npm install -g @anthropic-ai/claude-code
       - name: Validate marketplace manifest (strict)

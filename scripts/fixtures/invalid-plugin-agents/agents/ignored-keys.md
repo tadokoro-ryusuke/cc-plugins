@@ -7,6 +7,7 @@ mcpServers:
   - example
 hooks:
   PreToolUse: []
+initialPrompt: hi
 tools: Read
 ---
 

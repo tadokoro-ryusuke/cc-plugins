@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "description": "負例 fixture 用の allowlist。check-plugin-agents.mjs に --pins で渡す。",
   "pins": {
-    "invalid-plugin-agents:haiku-effort": {
+    "invalid-plugin-agents:effort-unsupported-model": {
       "effort": "low",
-      "reason": "fixture: 固定値は一致させ、haiku-effort だけを発火させる"
+      "reason": "fixture: 固定値は一致させ、effort-unsupported-model だけを発火させる"
     },
     "invalid-plugin-agents:pinned-mismatch": {
       "effort": "high",
