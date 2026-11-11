@@ -42,7 +42,8 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
       - 使える level はモデルで違う。対応しない level を指定すると、Claude Code はそれ以下で最も高い level で動かす。
         effort に対応しないモデル(Haiku 4.5 など)では効かない
       - Claude Code は、モデル ID を既知のパターンと照らして、effort と thinking への対応を判定する。アプリケーション
-        推論プロファイルの ARN のような ID では判定できず、これらの機能が無効になる(`--effort` も効かない)。
+        推論プロファイルの ARN のような ID は判定できないことが多く、そのときはこれらの機能が無効になる
+        (`--effort` も効かない)。
         能力を宣言する `ANTHROPIC_DEFAULT_*_MODEL_SUPPORTED_CAPABILITIES` は pin したモデル向けの変数で、
         claude-code-action が Claude Code に渡す env の一覧に無い。`--model` に渡した ARN に効くかは確かめていない
       - `--effort` は、Claude Code 2.1.72 の changelog に修正の記載があり、遅くともその版から使える。`xhigh` は
@@ -120,6 +121,8 @@ assets/ のテンプレートは pnpm + Next.js/TS + Azure Container Apps + AWS 
         fallback 先は、元のモデル以上のコンテキストウィンドウ(Bedrock では既定で 1M)を持つ必要がある。拒否した
         モデル自身や、別の系列のモデルを入れると、拒否のまま終わる
       - Sonnet 5.5 は、Opus の pin に加えて Sonnet の pin(か、モデル一覧の Sonnet 5)が要る
+      - fallback が起きると、その後のレビューと判定ファイルは fallback 先のモデルが書く。監査証跡には、変数に設定した
+        モデルではなく、実際に動いたモデル(実行ログ(execution file)の result メッセージの `modelUsage`)を残す
       - 拒否で終わると判定ファイルが書かれず、validator は不完全な証拠として扱う(Phase 2 ではマージが止まる)。
         観測期間に拒否の件数を記録する。拒否が続くなら、PoC の指示を「攻撃が成立する根拠(到達経路と前提条件)を
         示す」に弱めることも検討する
