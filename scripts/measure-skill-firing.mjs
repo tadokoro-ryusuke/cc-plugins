@@ -4,7 +4,18 @@
 // 他のプラグインや組み込みのスキルとの取り合いはこのスクリプトで見る。CI では使わない（手で回す）。
 //
 // 使い方:
-//   node scripts/measure-skill-firing.mjs --plugin dev-core --model <固定> [--case id1,id2] [--dry-run] [--with-hooks]
+//   node scripts/measure-skill-firing.mjs --plugin dev-core --model <完全なモデル ID> --effort <low|medium|high|xhigh|max>
+//     [--max-budget-usd <1 件あたりの上限>] [--case id1,id2] [--dry-run] [--with-hooks]
+//
+// 再現と費用のため:
+//   - --model と --effort を固定する。--effort を指定すると、子の環境変数 CLAUDE_CODE_EFFORT_LEVEL も同じ値で
+//     上書きする（この環境変数は --effort より優先されるため）。指定しないと、利用者の環境変数か、モデルごとに
+//     保存した effort が効く。この場合は始める前に警告する
+//   - 合計の行に出す effort は、指定した値。settings の env、maxEffortLevel、組織の上限があると、
+//     それと違う値で動くことがある
+//   - --max-budget-usd は、子の claude -p にそのまま渡す。1 件（1 回の claude -p）あたりの上限で、全体の上限ではない
+//   - --model が fable か claude-fable- で始まるときは、始める前に警告する。-p では、プランによって Fable の利用が
+//     usage credits に確認なしで課金される
 //
 // 安全のため:
 //   - 空の一時ディレクトリで、使えるツールを Skill と読み取り系（Read・Glob・Grep）だけにし、MCP を
@@ -28,6 +39,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SAFE_TOOLS = new Set(["Read", "Glob", "Grep", "Skill"]);
+export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"];
 const INIT_TIMEOUT_MS = 60_000;
 const RUN_TIMEOUT_MS = 300_000;
 const STDERR_LIMIT = 8_192;
@@ -88,6 +100,8 @@ export function runCase(prompt, options) {
     const args = ["-p", "--output-format", "stream-json", "--verbose",
       "--tools", [...SAFE_TOOLS].join(","), "--strict-mcp-config", "--max-turns", String(options.maxTurns),
       "--model", options.model];
+    if (options.effort) args.push("--effort", options.effort);
+    if (options.maxBudgetUsd !== undefined) args.push("--max-budget-usd", String(options.maxBudgetUsd));
     if (!options.withHooks) args.push("--settings", JSON.stringify({ disableAllHooks: true }));
     args.push(prompt);
     const state = { fired: [], result: null, status: null, detail: "", stderr: "", initSeen: false, cwd };
@@ -130,7 +144,10 @@ export function runCase(prompt, options) {
     };
 
     try {
-      child = spawn(command, args, { cwd, stdio: ["ignore", "pipe", "pipe"], detached: true });
+      // 環境変数 CLAUDE_CODE_EFFORT_LEVEL は --effort より優先されるので、指定したときは子の環境変数も揃える。
+      // 指定しないときは、利用者の環境変数をそのまま渡す（警告で知らせる）
+      const env = options.effort ? { ...process.env, CLAUDE_CODE_EFFORT_LEVEL: options.effort } : process.env;
+      child = spawn(command, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"], detached: true });
       state.pid = child.pid;
     } catch (error) {
       setStatus("abort", `${command} を起動できなかった: ${error.message}`);
@@ -189,9 +206,9 @@ export function runCase(prompt, options) {
   });
 }
 
-async function main() {
+// コマンドラインの引数を読む。値の誤りは、claude を起動する前に例外にする
+export function parseArgs(argv) {
   const options = { maxTurns: 2, dryRun: false, withHooks: false };
-  const argv = process.argv.slice(2);
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--dry-run") options.dryRun = true;
@@ -200,9 +217,51 @@ async function main() {
     else if (arg === "--model") options.model = argv[++index];
     else if (arg === "--case") options.cases = new Set(argv[++index].split(","));
     else if (arg === "--max-turns") options.maxTurns = Number(argv[++index]);
-    else throw new Error(`未知の引数: ${arg}`);
+    else if (arg === "--effort") {
+      const level = argv[++index];
+      if (!EFFORT_LEVELS.includes(level)) {
+        throw new Error(`--effort は ${EFFORT_LEVELS.join("・")} のどれかにする: ${level ?? "（値が無い）"}`);
+      }
+      options.effort = level;
+    } else if (arg === "--max-budget-usd") {
+      const value = argv[++index];
+      const amount = Number(value);
+      if (value === undefined || !Number.isFinite(amount) || amount <= 0) {
+        throw new Error(`--max-budget-usd は正の金額（USD）にする: ${value ?? "（値が無い）"}`);
+      }
+      options.maxBudgetUsd = amount;
+    } else throw new Error(`未知の引数: ${arg}`);
   }
   if (!options.plugin || !options.model) throw new Error("--plugin と --model を指定する");
+  return options;
+}
+
+// 始める前に出す警告。effort を固定していない計測と、usage credits に課金されうる Fable の計測を知らせる
+export function preflightWarnings(options, env = process.env) {
+  const warnings = [];
+  if (!options.effort) {
+    const current = env.CLAUDE_CODE_EFFORT_LEVEL ? `（今は CLAUDE_CODE_EFFORT_LEVEL=${env.CLAUDE_CODE_EFFORT_LEVEL}）` : "";
+    warnings.push("警告: --effort を指定していない。利用者の環境変数 CLAUDE_CODE_EFFORT_LEVEL か、"
+      + `モデルごとに保存した effort が効くので、別の環境では同じ条件にならない${current}`);
+  }
+  if (/^(fable|claude-fable-)/i.test(options.model)) {
+    warnings.push(`警告: --model ${options.model} は Fable のモデル。-p では、プランによって Fable の利用が`
+      + " usage credits に確認なしで課金される");
+  }
+  return warnings;
+}
+
+// 合計の行。effort は指定した値を出す（実際に効いた値は確かめていない）
+export function summaryLine(total, count, options) {
+  const effort = options.effort ? `--effort ${options.effort}` : "--effort 未指定（環境変数か保存した effort が効く）";
+  const budget = options.maxBudgetUsd !== undefined
+    ? `--max-budget-usd ${options.maxBudgetUsd}（1 件あたり）` : "--max-budget-usd なし";
+  return `合計の費用: ${total.toFixed(4)} USD（${count} 件、--max-turns ${options.maxTurns}、--model ${options.model}、`
+    + `${effort}、${budget}）`;
+}
+
+async function main() {
+  const options = parseArgs(process.argv.slice(2));
   const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
   const marketplace = JSON.parse(readFileSync(join(root, ".claude-plugin/marketplace.json"), "utf8"));
   const entry = marketplace.plugins.find((item) => item.name === options.plugin);
@@ -214,6 +273,7 @@ async function main() {
     .some((path) => /^disable-model-invocation:\s*true\s*$/m.test(readFileSync(path, "utf8").split(/^---$/m)[1] ?? ""));
   const cases = suite.cases.filter((testCase) => !testCase.prompt.startsWith(`/${options.plugin}:`)
     && !manualOnly(testCase.skill) && (!options.cases || options.cases.has(testCase.id)));
+  for (const warning of preflightWarnings(options)) console.error(warning);
   let total = 0;
   console.log(`hooks: ${options.withHooks ? "有効" : "無効（disableAllHooks）"}`);
   console.log("| id | 期待 | 発火したスキル | 判定 | 費用(USD) |\n|---|---|---|---|---|");
@@ -234,7 +294,7 @@ async function main() {
     const judged = state.status === "ok" ? verdict(testCase, state.fired, options.plugin) : `error（${state.detail}）`;
     console.log(`| ${testCase.id} | ${expected} | ${state.fired.join(", ") || "-"} | ${judged} | ${cost ?? "?"} |`);
   }
-  console.log(`\n合計の費用: ${total.toFixed(4)} USD（${cases.length} 件、--max-turns ${options.maxTurns}、--model ${options.model}）`);
+  console.log(`\n${summaryLine(total, cases.length, options)}`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

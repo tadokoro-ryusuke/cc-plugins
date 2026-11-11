@@ -5,7 +5,9 @@ import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { inspectEvent, observation, runCase, verdict } from "./measure-skill-firing.mjs";
+import {
+  inspectEvent, observation, parseArgs, preflightWarnings, runCase, summaryLine, verdict,
+} from "./measure-skill-firing.mjs";
 
 const init = (tools) => JSON.stringify({ type: "system", subtype: "init", tools });
 const skillUse = (skill) => JSON.stringify({
@@ -153,4 +155,110 @@ test("claude を起動できなければ、中止として返す", async () => {
   const state = await runCase("p", { ...fast, command: join(tmpdir(), "no-such-claude-binary") });
   assert.equal(state.status, "abort");
   assert.ok(!existsSync(state.cwd));
+});
+
+// effort と費用の上限（Fable 5.2 の追加と、alias・effort の変化を受けた変更）
+
+test("--effort と --max-budget-usd を読み、範囲外の値は始める前に止める", () => {
+  const base = ["--plugin", "dev-core", "--model", "claude-opus-5-5"];
+  const options = parseArgs([...base, "--effort", "high", "--max-budget-usd", "0.5"]);
+  assert.equal(options.effort, "high");
+  assert.equal(options.maxBudgetUsd, 0.5);
+  assert.equal(parseArgs(base).effort, undefined);
+  assert.equal(parseArgs(base).maxBudgetUsd, undefined);
+  for (const level of ["low", "medium", "high", "xhigh", "max"]) {
+    assert.equal(parseArgs([...base, "--effort", level]).effort, level);
+  }
+  assert.throws(() => parseArgs([...base, "--effort", "ultra"]));
+  assert.throws(() => parseArgs([...base, "--effort", "ultracode"]));
+  assert.throws(() => parseArgs([...base, "--effort"]));
+  for (const value of ["0", "-1", "abc", "Infinity"]) {
+    assert.throws(() => parseArgs([...base, "--max-budget-usd", value]), undefined, value);
+  }
+  assert.throws(() => parseArgs([...base, "--max-budget-usd"]));
+  assert.throws(() => parseArgs(["--plugin", "dev-core"]));
+  assert.throws(() => parseArgs([...base, "--unknown"]));
+});
+
+test("effort を指定しないときは、利用者の環境変数か保存した effort が効くと警告する", () => {
+  const unset = preflightWarnings({ model: "claude-opus-5-5" }, {});
+  assert.equal(unset.length, 1);
+  assert.match(unset[0], /CLAUDE_CODE_EFFORT_LEVEL/);
+  assert.match(unset[0], /保存した effort/);
+  assert.deepEqual(preflightWarnings({ model: "claude-opus-5-5", effort: "medium" }, {}), []);
+});
+
+test("--model が fable か claude-fable- で始まるときは、usage credits への課金を警告する", () => {
+  for (const model of ["fable", "claude-fable-5-2", "fable[1m]", "Claude-Fable-5-2"]) {
+    const warnings = preflightWarnings({ model, effort: "high" }, {});
+    assert.equal(warnings.length, 1, model);
+    assert.match(warnings[0], /usage credits/);
+    assert.match(warnings[0], /-p/);
+  }
+  for (const model of ["claude-opus-5-5", "opus", "best", "sonnet"]) {
+    assert.deepEqual(preflightWarnings({ model, effort: "high" }, {}), [], model);
+  }
+});
+
+test("合計の行に、指定した effort と 1 件あたりの費用の上限を出す", () => {
+  const pinned = summaryLine(0.1234, 3, { maxTurns: 2, model: "claude-opus-5-5", effort: "high", maxBudgetUsd: 0.5 });
+  assert.match(pinned, /0\.1234 USD/);
+  assert.match(pinned, /3 件/);
+  assert.match(pinned, /--model claude-opus-5-5/);
+  assert.match(pinned, /--effort high/);
+  assert.match(pinned, /--max-budget-usd 0\.5（1 件あたり）/);
+  const unpinned = summaryLine(0, 1, { maxTurns: 2, model: "claude-opus-5-5" });
+  assert.match(unpinned, /--effort 未指定/);
+  assert.doesNotMatch(unpinned, /--effort (low|medium|high|xhigh|max)/);
+  assert.match(unpinned, /--max-budget-usd なし/);
+});
+
+// 偽の claude は、受け取った引数と CLAUDE_CODE_EFFORT_LEVEL を result に入れて返す
+const echoArgs = `${safeInit}
+out({ type: "result", subtype: "success", is_error: false,
+  argv: process.argv.slice(2), effortEnv: process.env.CLAUDE_CODE_EFFORT_LEVEL ?? null });`;
+
+async function withEffortEnv(value, run) {
+  const saved = process.env.CLAUDE_CODE_EFFORT_LEVEL;
+  if (value === undefined) delete process.env.CLAUDE_CODE_EFFORT_LEVEL;
+  else process.env.CLAUDE_CODE_EFFORT_LEVEL = value;
+  try {
+    return await run();
+  } finally {
+    if (saved === undefined) delete process.env.CLAUDE_CODE_EFFORT_LEVEL;
+    else process.env.CLAUDE_CODE_EFFORT_LEVEL = saved;
+  }
+}
+
+test("--effort を子に渡し、子の CLAUDE_CODE_EFFORT_LEVEL を指定した値で上書きする", async () => {
+  const fake = fakeClaude(echoArgs);
+  try {
+    // 利用者の環境変数（low）が --effort（high）より優先されるので、子の環境変数も上書きする
+    const state = await withEffortEnv("low", () => runCase("プロンプト",
+      { ...fast, command: fake.path, model: "claude-opus-5-5", effort: "high", maxBudgetUsd: 0.5 }));
+    assert.equal(state.status, "ok");
+    const { argv, effortEnv } = state.result;
+    assert.equal(effortEnv, "high");
+    assert.deepEqual(argv.slice(argv.indexOf("--model"), argv.indexOf("--model") + 4),
+      ["--model", "claude-opus-5-5", "--effort", "high"]);
+    assert.deepEqual(argv.slice(argv.indexOf("--max-budget-usd"), argv.indexOf("--max-budget-usd") + 2),
+      ["--max-budget-usd", "0.5"]);
+    assert.equal(argv.at(-1), "プロンプト");
+  } finally {
+    rmSync(fake.dir, { recursive: true, force: true });
+  }
+});
+
+test("effort を指定しないときは、--effort を渡さず、利用者の環境変数をそのまま子に渡す", async () => {
+  const fake = fakeClaude(echoArgs);
+  try {
+    const state = await withEffortEnv("low", () => runCase("p", { ...fast, command: fake.path }));
+    assert.equal(state.status, "ok");
+    assert.ok(!state.result.argv.includes("--effort"));
+    assert.ok(!state.result.argv.includes("--max-budget-usd"));
+    assert.equal(state.result.effortEnv, "low");
+    assert.equal(state.result.argv.at(-1), "p");
+  } finally {
+    rmSync(fake.dir, { recursive: true, force: true });
+  }
 });
