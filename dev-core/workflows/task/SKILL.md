@@ -67,7 +67,7 @@ Completion Contract は次の形式にし、全行を `pending` で開始する�
 
 commit、push、Issue、PR は、現在の依頼で明示されていなければ Delivery Strategy に `not requested` と記載する。
 
-設計の選択肢が複数あり、計画そのものを独立に批評させたいときは、計画を保存した後に新しい文脈で1回レビューする（例: `dev-core:codex-collab` の敵対的レビュー）。指摘は実ファイルで確かめてから計画に反映する。
+設計の選択肢が複数あり、計画そのものを独立に批評させたいときは、計画を保存した後に新しい文脈で1回レビューする（例: `dev-core:codex-collab` の敵対的レビュー）。指摘は実ファイルで確かめてから計画に反映する。 Herdr の中で、別のモデルの独立案と突き合わせるところから始めたいときは、この workflow の代わりに `/dev-core:herdr-design` を案内する。
 
 ## Phase 5: Optional Issue
 

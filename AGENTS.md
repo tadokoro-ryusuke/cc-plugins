@@ -31,7 +31,7 @@ dev-core のスキルは2層に分かれます:
 | best-practices | TDD、SOLID、コーディング規約、FSD/Clean Architecture/DDD、セキュリティの開発原則ガイド（詳細は references/ に progressive disclosure） |
 | cicd-release-design | CI/CDパイプラインとデプロイ/リリース戦略の設計スキル。品質ゲート段階設計、シークレット管理（OIDC優先）、デプロイ戦略選択、フィーチャーフラグ寿命管理、ロールバック設計、エージェント権限設計 |
 | cloud-infra-network-design | クラウドインフラとネットワークの設計スキル。実行基盤選定（コンテナ/サーバーレス）、Well-Architected チェック、IaC 標準構成、VPC/DNS/CDN/TLS、閉域接続の使い分け、apply/DNS切替の人間承認ゲート |
-| codex-collab | Claude Code と Codex の協働を駆動するスキル。Claude が実装し Codex に独立レビュー/セカンドオピニオン/レスキューを依頼する |
+| codex-collab | Claude Code と Codex の協働を駆動するスキル。Claude が親として設計・統合・受け入れを持ち、Codex に独立レビュー/セカンドオピニオン/設計の独立案/範囲の決まった実装/レスキューを渡す。面の選び方、役割ごとのモデル、handoff の契約、結果の確かめ方 |
 | continuous-learning | セッションからの学習パターン抽出。ミスを二度と起こさないメカニズムを構築する |
 | conventions-as-guardrails | コーディング規約・命名規約・ログ規約を「AIエージェントが決定的に守れる形」に翻訳する。新規リポジトリ立ち上げ・CLAUDE.md/AGENTS.md 整備・lint/CI/フック設定時に使用 |
 | data-auth-boundary-design | データモデル（ER図・正規化・マスタ・コード設計）と認証・認可（OAuth/OIDC/パスキー、RBAC/マルチテナント分離）の設計スキル。概念/論理設計と認証認可の境界設計を担当（物理設計は data-design-ops） |

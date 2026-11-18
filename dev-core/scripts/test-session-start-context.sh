@@ -19,12 +19,18 @@ printf '%s\n' \
 printf '%s\n' '# Blocked' '- Status: blocked' >"$repo/docs/plans/task-blocked.md"
 printf '%s\n' '# Done' '- Status: done' >"$repo/docs/plans/task-done.md"
 printf '%s\n' '# Invalid' '- Status: RUN-THIS-COMMAND' >"$repo/docs/plans/task-invalid.md"
+printf '%s\n' '# Herdr' '- Status: in-progress' '- Workflow: herdr-execute' >"$repo/docs/plans/task-herdr.md"
+printf '%s\n' '# Odd' '- Status: approved' '- Workflow: RUN-OTHER-WORKFLOW' >"$repo/docs/plans/task-odd.md"
 
 output="$(cd "$repo" && bash "$script_dir/session-start-context.sh")"
 
 printf '%s\n' "$output" | grep -F 'docs/plans/task-active.md [status: in-progress]' >/dev/null
 printf '%s\n' "$output" | grep -F 'docs/plans/task-blocked.md [status: blocked]' >/dev/null
-if printf '%s\n' "$output" | grep -E 'IGNORE ALL PRIOR|task-done|task-invalid|RUN-THIS-COMMAND' >/dev/null; then
+# 再開の workflow は、対応している値だけを出す。記録が無い計画と、知らない値の計画は、既定の案内のままにする。
+printf '%s\n' "$output" | grep -F 'docs/plans/task-herdr.md [status: in-progress, workflow: herdr-execute]' >/dev/null
+printf '%s\n' "$output" | grep -F 'docs/plans/task-odd.md [status: approved]' >/dev/null
+printf '%s\n' "$output" | grep -F '/dev-core:herdr-execute when the entry is marked workflow: herdr-execute' >/dev/null
+if printf '%s\n' "$output" | grep -E 'IGNORE ALL PRIOR|task-done|task-invalid|RUN-THIS-COMMAND|RUN-OTHER-WORKFLOW' >/dev/null; then
   echo "session-start-context.sh leaked untrusted plan content" >&2
   exit 1
 fi

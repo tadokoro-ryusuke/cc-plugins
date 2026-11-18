@@ -32,12 +32,18 @@ if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
           fi
           safe_plan="$(printf '%s' "$plan" | LC_ALL=C tr -cd 'A-Za-z0-9._/-' | cut -c1-160)"
           [ -n "$safe_plan" ] || continue
-          printf '    %s [status: %s]\n' "$safe_plan" "$status"
+          # 再開の workflow は、対応している値と完全に一致したときだけ出す（計画の本文をそのまま出さない）
+          workflow="$(sed -n 's/^- Workflow:[[:space:]]*//p' "$plan" | head -1)"
+          if [ "$workflow" = "herdr-execute" ]; then
+            printf '    %s [status: %s, workflow: herdr-execute]\n' "$safe_plan" "$status"
+          else
+            printf '    %s [status: %s]\n' "$safe_plan" "$status"
+          fi
         done \
       | head -10
   )"
   if [ -n "$plan_state" ]; then
-    echo "- resumable plans (open the plan before /dev-core:execute):"
+    echo "- resumable plans (open the plan first; resume with /dev-core:execute, or with /dev-core:herdr-execute when the entry is marked workflow: herdr-execute):"
     echo "$plan_state"
   fi
 fi

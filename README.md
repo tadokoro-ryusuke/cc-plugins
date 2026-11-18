@@ -89,6 +89,8 @@ Codex で使う場合は「[Codex で使う](#codex-で使う)」を見てくだ
 |---|---|---|
 | 新機能の計画を立てたい | `/dev-core:task [タスクの概要] [--issue]` | Issue は `--issue` のときだけ作る |
 | 計画を実装したい・再開したい | `/dev-core:execute <計画書のパス> [--commit] [--pr]` | `--pr` だけで commit・push・PR 作成まで行う |
+| 設計を別のモデルの案と突き合わせたい（Herdr） | `/dev-core:herdr-design [設計・計画したい内容]` | Herdr の中で動かす。Codex が読み取り専用で独立案と敵対的レビューを返す。実装はしない |
+| 計画の実装を Codex に任せたい（Herdr） | `/dev-core:herdr-execute <計画書のパス> [--commit] [--pr]` | Herdr の中で動かす。親が判断・検証・受け入れを持ち、範囲の決まった実装を Codex に渡す |
 | 1つの振る舞いをテストファーストで作りたい | `/dev-core:tdd [機能名/テスト名] [--red] [--green] [--commit]` | `--red` はテストだけ、`--green` は実装だけ |
 | 振る舞いを変えずにコードを整理したい | `/dev-core:refactor [コミット/#PR番号/ブランチ/ファイル] [--commit] [--push]` | 引数なしは未コミットの変更が対象。見つけたバグは直さず報告する |
 | 大事な方針を厳しく検討したい | `/dev-core:grill [計画・意思決定・アイデア]` | 1問ずつ聞く。実装も Issue 作成もしない |
@@ -103,7 +105,7 @@ Codex で使う場合は「[Codex で使う](#codex-で使う)」を見てくだ
 | 仮説が複数ある難しいバグを調べたい | `/dev-core:debug-team [症状/Issue番号/エラーメッセージ] [--comment]` | Agent Teams が要る |
 | PR や差分のバグを広く探したい | 組み込みの `/code-review [PR番号]` | Claude Code に組み込みのコマンド |
 | dev-core の規約で見てほしい | `/dev-core:code-review [PR番号] [ファイルパス] [--strict]` | 引数なしは直近の1コミットと未コミットの変更。`--strict` は確度の低い指摘も個別に出す |
-| Codex にも見てほしい | `/dev-core:codex-collab` | 別のプラグイン codex-plugin-cc が要る |
+| Codex にも見てほしい | `/dev-core:codex-collab` | Codex CLI が要る。`/codex:*` を使うなら別のプラグイン codex-plugin-cc も要る |
 | 同じミスを繰り返さない仕組みを作りたい | `/dev-core:continuous-learning` | 今のセッションから学びを抜き出す |
 
 #### PR とドキュメント（github-tools）
@@ -236,7 +238,7 @@ hotl-engineering と dev-core の振り分けの詳細は、[hotl-engineering/do
 - **execute が止まった**: 判断待ちか、先に進めない状態です。どちらなのかと次にすることは、計画書の Current Next Action にあります。判断待ちなら、聞かれたことに会話で答えます。先に進めない状態なら、その原因を先に取り除きます。新しいセッションで続けるときは、同じ計画書のパスと、最初に付けたフラグ（`--commit`・`--pr`）で `/dev-core:execute` を実行します。
 - **debug-team が使えない**: Agent Teams が使えない環境です（環境によっては設定で有効にします）。`/dev-core:debug` を使います。
 - **verify が検証コマンドを見つけられない**: `.claude/dev-core.local.md` にコマンドを書きます（[dev-core のプロジェクト設定](dev-core/README.md#プロジェクト設定)）。
-- **`/codex:*` が無い**: codex-collab に必要な codex-plugin-cc（OpenAI 公式）が入っていません。入れ方は [codex-collab の SKILL.md](dev-core/skills/codex-collab/SKILL.md) にあります。
+- **`/codex:*` が無い**: `/codex:*` を提供する codex-plugin-cc（OpenAI 公式）が入っていません。入れ方は [codex-collab の SKILL.md](dev-core/skills/codex-collab/SKILL.md) にあります。codex-collab のほかの経路（Herdr の端末、`codex exec` の直接実行）は、Codex CLI があれば使えます。
 
 ### Codex で使う
 
