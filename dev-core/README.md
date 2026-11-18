@@ -2,6 +2,8 @@
 
 TDD 開発フレームワーク。t-wada 式 TDD、FSD、Clean Architecture、DDD のベストプラクティスを、知識スキル・ワークフロー・専門エージェント・Hooks 自動化の4層で提供します。
 
+5.3.0 では、GPT-6.2 のリリースに合わせて Codex との協働を整理し直しました。`codex-collab` が「誰が何を持つか・どの面で渡すか・どう渡してどう確かめるか」の正本になり、Herdr の端末で Codex を動かす workflow を2つ足しました（[変更点](#530-の変更点)）。
+
 5.2.0 では、Fable 5.2 と alias の移動に合わせて effort の説明とモデルの使い分けを直し、途中で止まらない規律を長い作業すべてに広げ、規則の書き方（理由・適用範囲・例外の経路・棚卸し）を見直しました（[変更点](#520-の変更点)）。
 
 5.1.0 では、テストを弱めて通すことの禁止と検出、テストの書き方の正本（best-practices/references/testing.md）、危険コマンドのフックの作り直し、security-auditor と E2E の返却の統一を入れました（[変更点](#510-の変更点)）。
@@ -18,6 +20,13 @@ TDD 開発フレームワーク。t-wada 式 TDD、FSD、Clean Architecture、DD
 /dev-core:task ユーザー認証機能を追加 --issue # 明示時だけIssue作成
 /dev-core:execute docs/plans/task-*.md   # TDD 実装
 /dev-core:verify                         # 6段階検証
+```
+
+### 別のモデルと進める（Herdr の中で）
+
+```
+/dev-core:herdr-design 保存機能の持ち方を設計  # Codex の独立案と敵対的レビューを通した計画
+/dev-core:herdr-execute docs/plans/task-*.md  # 範囲の決まった実装を Codex に渡し、親が検証して統合
 ```
 
 ### バグ修正
@@ -49,7 +58,7 @@ TDD 開発フレームワーク。t-wada 式 TDD、FSD、Clean Architecture、DD
 | verify | 6段階検証フロー（build→type→lint→test→security→diff）。証拠ベース完了判定（Iron Law）の正本。検証コマンドはプロジェクトから自動検出 |
 | debug | 4フェーズ根本原因分析。Three Strikes Rule（3回失敗で STOP）の正本 |
 | continuous-learning | Mitchell Hashimoto 式の複利的改善ループ |
-| codex-collab | Claude Code ⟷ Codex 協働（セカンドオピニオン/レスキュー）の駆動 |
+| codex-collab | Claude Code ⟷ Codex 協働の正本。所有の分担、渡す面の選び方（codex-plugin-cc / Herdr の端末 / `codex exec`）、役割ごとのモデル、handoff の契約、結果の確かめ方 |
 
 ### ワークフロー（`workflows/` — Claude Code 専用）
 
@@ -60,6 +69,8 @@ TDD 開発フレームワーク。t-wada 式 TDD、FSD、Clean Architecture、DD
 | `/dev-core:grill` | 重要な計画・判断を一度に1問ずつ圧力テスト |
 | `/dev-core:task` | リポジトリ調査 → 証拠付き完了条件 → TDD計画を親が書く。Issueはopt-in |
 | `/dev-core:execute` | 永続計画に基づく自律実行。親が実装し、委譲とレビューは条件に当てはまるときだけ。commit/PRはopt-in |
+| `/dev-core:herdr-design` | Herdr の端末に Codex を読み取り専用で起動し、独立案と敵対的レビューを通した計画を作る。実装はしない |
+| `/dev-core:herdr-execute` | execute と同じ実行契約で、範囲の決まった実装単位を Herdr の端末の Codex に渡す。親が diff と再実行で確かめて統合する |
 | `/dev-core:tdd` | 単独TDDサイクル。単独で起動したときは親が実装する |
 | `/dev-core:refactor` | リファクタリング。検証は `dev-core:verify` |
 | `/dev-core:code-review` | 規約レンズ（FSD/CA/DDD の層・依存方向、セキュリティ規約、コーディング規約）でのレビュー。バグ探索全般は組み込みの `/code-review` |
@@ -161,6 +172,17 @@ ultracode は 2.1.284 から effort と切り離されました。`/effort` の�
 
 出典（2026-11-12 確認）: [sub-agents の Choose an effort level](https://code.claude.com/docs/en/sub-agents#choose-an-effort-level)、[sub-agents の Choose a model](https://code.claude.com/docs/en/sub-agents#choose-a-model)、[model-config の Adjust effort level](https://code.claude.com/docs/en/model-config#adjust-effort-level)、[model-config の alias 表](https://code.claude.com/docs/en/model-config#model-aliases)、[Claude Code CHANGELOG の 2.1.284・2.1.292・2.1.316・2.1.317・2.1.321](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md)、[Pricing](https://platform.claude.com/docs/en/about-claude/pricing)、[anthropics/claude-code#79866](https://github.com/anthropics/claude-code/issues/79866)
 
+## 5.3.0 の変更点
+
+- **codex-collab の組み直し**: Claude が親として設計・統合・受け入れを持ち、Codex に独立レビュー・設計の独立案・範囲の決まった実装・レスキューを渡す、という分担を正本にした。渡す面（codex-plugin-cc、Herdr の端末、`codex exec` の直接実行）の選び方を足した
+- **役割とモデル**: 役割ごとのモデルと effort を `skills/codex-collab/references/codex-roles.md` の1ファイルに置いた。モデル ID を書くのはこのファイルだけで、ほかは役割名で参照する。割り当ての効果は測定していない
+- **handoff の契約**: 渡す文面のテンプレートと、結果の受け取り方（渡す前の状態との比較、受け入れチェックの再実行、テストを弱めていないかの確認）を `references/codex-handoff.md` に置いた。handoff は単独で成立する（相手に dev-core が入っていなくてもよい）
+- **Herdr の workflow**: `/dev-core:herdr-design` と `/dev-core:herdr-execute` を足した。読み取り専用の役は一発実行にして結果をファイルで受け取り、実装役は対話で起動する。子の権限は起動時に決め、承認待ちの端末には親が答えない。端末を操るコマンドは `allowed-tools` に入れていないので、利用者の権限モードに従う
+- **対応している面**: Herdr のデスクトップ版（`hc`）は、端末の中から対話と一発実行を通しで確かめた。TUI 版（`herdr`）は、隔離したセッションで対話と一発実行を確かめたが、pane の中から自分を基準に操作する経路は未確認
+- **起動時の確認**: Codex が起動時に出す画面（更新の案内、フォルダの信頼、フックの承認）では、親は何も許可しない選択だけを行い、信頼・承認・更新はユーザーに委ねる
+- **SessionStart**: 再開の案内を、計画の metadata に記録された workflow を使う文面にした
+- 調査と出典: [docs/research/gpt-6-2-impact-2026-11.md](../docs/research/gpt-6-2-impact-2026-11.md)
+
 ## 5.2.0 の変更点
 
 - **effort とモデル**: 状況別の表を Claude Code での親の既定 effort（medium か high か）で分け直し、effort 表に無いモデルの行を足した。effort の指定が無い子の決まり方（2.1.317）を書き、`CLAUDE_CODE_SUBAGENT_MODEL=opus` の助言を Fable 一般に広げた（入出力の単価は 2 倍）。モデルの使い分けを足した
@@ -217,7 +239,7 @@ dev-core の知識スキル（`skills/`）は Agent Skills 標準準拠で、Cla
   - 経路A: `.codex-plugin/plugin.json` を持つ dev-core を Codex の plugin として install（bundled skills）
   - 経路B: `scripts/setup-shared-skills.sh` で利用者プロジェクトの `.agents/skills/<skill>` を SSoT（`dev-core/skills`）へ symlink
 - **Codex 権限設定**: Claude Code の `permissions.allow/deny` は、Codex では permission profiles（filesystem/network）と rules（command allow/prompt/forbidden）へ分けて移行。
-- **協働ワークフロー**: `codex-collab` スキルが Claude 実装 → Codex レビュー（`/codex:review`）/ レスキュー（`/codex:rescue`）を駆動。Three Strikes Rule・Zero Trust Review と統合。リスクゲートの必須レビューで code-reviewer を起動できないときの代替にもなる。前提に codex-plugin-cc（OpenAI 公式）。
+- **協働ワークフロー**: `codex-collab` スキルが、Codex へのレビュー・設計の独立案・範囲の決まった実装・レスキューの渡し方を定める。Three Strikes Rule・Zero Trust Review と統合。リスクゲートの必須レビューで code-reviewer を起動できないときの代替にもなる。前提は Codex CLI。`/codex:*` を使うなら codex-plugin-cc（OpenAI 公式）、端末で動かすなら Herdr も要る。
 - **構成検証**: `scripts/check-skills-drift.mjs` + `scripts/check-plugin-agents.mjs` + `scripts/validate-claude-hooks.mjs` + `claude plugin validate --strict`（CI: `.github/workflows/skills-drift-check.yml`）が frontmatter 標準準拠・マニフェスト整合・agent の effort 固定と参照先・hook互換性・インデックス整合を静的検証。
 
 詳細・移行手順:

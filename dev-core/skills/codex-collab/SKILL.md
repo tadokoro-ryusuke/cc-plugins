@@ -34,7 +34,7 @@ Claude Code と Codex の協働開発を駆動する運用スキル。片方の�
 | 面 | 向く場面 | 入口 |
 |---|---|---|
 | codex-plugin-cc | 単発のレビュー、レスキュー。Herdr の外 | `/codex:review` など（下の表） |
-| Herdr の端末 | 見える場所で動かしたい、途中で介入したい、実装を続けて任せたい、複数の役を並べたい | 親が Herdr の端末を起動する（[references/herdr-terminals.md](references/herdr-terminals.md)） |
+| Herdr の端末 | 見える場所で動かしたい、途中で介入したい、実装を続けて任せたい、複数の役を並べたい | `/dev-core:herdr-design`、`/dev-core:herdr-execute` |
 | `codex exec` を親が直接実行 | plugin も Herdr も使えないときの、読み取り専用の一発実行 | [references/codex-roles.md](references/codex-roles.md) の起動の引数 |
 
 - 文面を渡せる面（Herdr の端末、`codex exec`、`/codex:rescue`）では、渡す文面と結果の扱いを同じ契約に従わせる → [references/codex-handoff.md](references/codex-handoff.md)。`/codex:review` は文面を受け取らない組み込みのレビューなので、ジョブの ID とレビューした Git の範囲を証拠として記録する。返却の形式を指定したいレビューは `codex exec` で渡す
