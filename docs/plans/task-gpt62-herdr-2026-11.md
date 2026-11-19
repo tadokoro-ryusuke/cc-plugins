@@ -156,7 +156,7 @@ execute の §1〜§7 と Stop Rules を、引数と effort を束ね直した�
 | AC-7 | 計画と実装のそれぞれに、新しい文脈の独立レビューを1回ずつ通し、P0/P1 が残っていない | レビューの出力と、指摘ごとの確認の記録 | 計画のレビュー17件、実装のレビュー28件（P1 が6件）、P1 の修正に絞った再レビュー（解消3件、部分解消3件、新規 P1 4件・P2 2件）を、実ファイルと実機で確かめて反映した（下の3つの表）。再レビューの指摘を反映した最後の版は、親が読み直してゲートを実行し直しただけで、独立レビューには出していない | satisfied |
 | AC-8 | 新設の2 workflow と `codex-collab` の新しい振る舞いに eval ケースがあり、スキーマ検証を通る。行動の実行は未実施と明記する | `validate-skill-evals.mjs` の出力 | 13ケースを足し、検証は passed（dev-core 55 ケース）。行動を実行したのは、Herdr の外で起動するケースに当たる1回だけ（作業ツリー版のヘッドレス起動、Sonnet 5.5）で、ほかは未実行。端末と fixture が要るケースの判定方法を evaluatorNotes に書いた | satisfied |
 | AC-9 | 利用者が新しい経路を見つけられる。報告書がある。ルートと dev-core の README、AGENTS.md の索引、`codex-collab` の description と compatibility が今の内容と合う。SessionStart の再開の案内が、計画に記録された workflow を示す | 該当箇所の差分 | 該当箇所を更新した。SessionStart は、対応している値（`herdr-execute`）だけを出し、テストを3ケース足した | satisfied |
-| AC-10 | 新設の workflow を、インストールした状態でユーザーが slash command から起動して通す | ユーザーの実行結果 | 未実施（この作業の中では起動できない） | pending |
+| AC-10 | 新設の workflow を、インストールした状態でユーザーが slash command から起動して通す | ユーザーの実行結果 | merge 後に再インストールし（cc 5.3.0、codex 5.8.0。キャッシュは main と内容が一致）、ユーザーの依頼で、Herdr の端末に起動した新しい Claude Code のセッション（権限モードは利用者の既定のまま）から、2つの slash command を fixture で通した。起動したのはユーザー本人ではなく、依頼を受けた親のセッションである。`herdr-design`: 独立案1回と敵対的レビュー2回（どれも一発実行、終了コード 0、dispatch ID 一致、設定は起動時の出力で verified）、計画の保存、端末と作業ディレクトリの片付け。`herdr-execute`: 対話の実装役1つ（起動の引数で指示、起動時の確認は Esc で見送り）、8段の受け取りごとに渡す前の状態のハッシュを照合して差分を読み、親がテストを実行し直し（9件 OK）、commit・push なし、端末の片付け。通らなかった経路は Progress Log に書いた | satisfied |
 
 ## Delivery Strategy
 
@@ -185,6 +185,12 @@ execute の §1〜§7 と Stop Rules を、引数と effort を束ね直した�
 - 2026-11-18: P1 の修正に絞った再レビューを受け、9件を反映した（D21、D22）。
 - 2026-11-18: ユーザーの依頼で、2つの commit に分けて draft PR を作る（Delivery Strategy）。
 - 2026-11-18: 最後の反映後にゲートを実行し直した。cc: drift passed、agent 参照 passed、eval passed（dev-core 55、indie 16）、hook 検証 passed、`node --test scripts/*.test.mjs` 34 pass、hook テスト3本 passed、contrast 35 pass、`claude plugin validate --strict` はルートと dev-core とも passed。codex: AC-2 のとおり。
+- 2026-11-18: cc #24 と codex #15 が merge された。再インストールした（cc は marketplace の更新と plugin の更新で 5.2.0 から 5.3.0。codex は、このマシンではマーケットプレイスがローカルのパスなので、チェックアウトを main に進めてから入れ直した）。どちらのキャッシュも、main の内容と差分が無いことを比べて確かめた。
+- 2026-11-18: インストールした版で通し確認を行った（AC-10）。fixture は、信頼済みリポジトリの worktree に、履歴を共有しないブランチで置いた（この置き方では、Codex のフォルダの信頼の確認は出なかった。worktree であることと、信頼済みのパスの配下にあることの、どちらが効いたかは切り分けていない）。2つの workflow を、Herdr の端末に起動した別々の Claude Code のセッションから slash command で起動した。どちらの workflow でも、置換変数はインストール先のキャッシュのパスに解決され、`herdr-execute` の読み替えの表には引数と effort の実際の値が入った。Codex の設定ファイルは、再インストールのときに更新されたあと、端末へのキー入力や子のセッションでは変わっていない（更新時刻で確認）。
+  - 通った経路: 面の検出、読み取り専用の役の一発実行（3回）、親の案を先に書き出してからの突き合わせ、保存した版のレビューと改定範囲の再レビュー、対話の実装役の起動と受け取り、親による検証の再実行、片付け。計画に、端末の番地やローカルのパスは残らなかった。
+  - 通らなかった経路: `herdr-execute` のゲートの独立レビュー（変更がゲートに当たらず、起動されなかった）、blocked の端末、修正の往復、再開、SessionStart の再開の案内（計画が draft で始まり、metadata は実行中に足された）。
+  - 観察したこと: (1) Codex のフックが、プラグインの内容が変わったために承認待ちになる。対話の起動では確認の画面が出て、子の親は Esc で見送った。フックは動かない。承認はユーザーの判断。(2) 実行の workflow は、TDD の Red を親が観測するために、実装を段に分け、段ごとに「次の段へ」の一文を同じ端末へ送った。今の文面は、文面を送る場面を修正を返すときとして書いていて、子の親はこれを逸脱として記録した。段を進める送信の扱いを workflow に書くのが、次の改善の候補。(3) 対話の実装役では、sandbox の実効値を画面から読めず、requested のまま記録された。(4) Codex の実行環境と親のシェルで、`python3` の版が違った。
+- 2026-11-19: ユーザーの依頼で、通し確認の fixture（worktree とローカルのブランチ）を消し、この記録を commit して PR にする。fixture は push していない。
 
 ## Decision Log
 
@@ -280,8 +286,8 @@ execute の §1〜§7 と Stop Rules を、引数と effort を束ね直した�
 ## Blockers And Open Questions
 
 - AC-6 の残りは、TUI 版の Herdr の pane の中でしか確かめられない。
-- AC-10 はユーザーの実行が要る。
+- AC-10 は通した（2026-11-18）。Codex のフック2件の承認は、ユーザーの判断として残る。
 
 ## Current Next Action
 
-draft PR のレビューと merge はユーザーが行う。残りは、AC-10（インストールした状態で、ユーザーが2つの workflow を slash command から起動して通す）と、AC-6 の残り（TUI 版を pane の中から使う経路）。
+merge と再インストール、通し確認（AC-10）は済んだ。残りは、AC-6 の残り（TUI 版を pane の中から使う経路）と、通し確認で見つけた改善の候補（段を進める送信の扱いを `herdr-execute` に書く）。
