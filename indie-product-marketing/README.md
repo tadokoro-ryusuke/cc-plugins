@@ -130,7 +130,7 @@ Claude Code 固有の実行指示は、各スキルの `references/claude-code-r
 |---|---|
 | リポジトリ | [tadokoro-ryusuke/codex-plugins](https://github.com/tadokoro-ryusuke/codex-plugins) |
 | プラグインと版 | `plugins/indie-product-marketing` 0.4.0 |
-| コミット | `9615aac`（ブランチ `codex/indie-ai-search-visibility`。未マージの `codex/indie-generalize` を含む） |
+| コミット | `3d6e870`（ブランチ `codex/indie-ai-search-visibility`。未マージの `codex/indie-generalize` を含む） |
 
 ### 同期の確認
 
@@ -139,7 +139,7 @@ codex-plugins のチェックアウトを `CODEX` に指定し、cc-plugins の�
 ```bash
 CODEX=../codex-plugins
 tmp="$(mktemp -d)"
-git -C "$CODEX" archive 9615aac plugins/indie-product-marketing/skills | tar -x -C "$tmp"
+git -C "$CODEX" archive 3d6e870 plugins/indie-product-marketing/skills | tar -x -C "$tmp"
 diff -r -x SKILL.md -x agents -x claude-code-runtime.md \
   "$tmp/plugins/indie-product-marketing/skills" indie-product-marketing/skills
 ```

@@ -1,8 +1,9 @@
 # Task: AI 検索での見え方を扱うスキル `ai-search-visibility` の新設（2026-11）
 
-- Status: ローカルコミット済み（push・PR・マージはユーザーが行う）
+- Status: draft PR 作成（マージ待ち。マージはユーザーが行う）
 - Plan file: docs/plans/task-ai-search-visibility-2026-11.md
 - codex 側の記録: codex-plugins の `docs/plans/task-ai-search-visibility-skill.md`
+- 調査報告: [docs/research/ai-search-visibility-aeo-2026-11.md](../research/ai-search-visibility-aeo-2026-11.md)
 - Last updated: 2026-11-23
 
 ## 目標
@@ -17,9 +18,8 @@
 
 ## 非目標
 
-- push、PR の作成、マージ、インストール済みプラグインの更新（ユーザーが行う）。
+- マージ、インストール済みプラグインの更新（ユーザーが行う）。push と draft PR の作成は、ユーザーの指示で行った。
 - 行動ケースの実行（スキーマ検証だけを行った）。
-- 起点にした調査レポートのコミット（扱いが未決。「Blockers And Open Questions」を参照）。
 - 日本語のクエリでどのソースが引用されるかの調査。
 
 ## 判断
@@ -38,11 +38,11 @@
 
 | 条件 | 状態 | 証拠 |
 |---|---|---|
-| codex 側にスキル一式があり、検証とテストが通る | satisfied | codex `17e4e34`・`9615aac`・`424967d`（最後は manifest の説明と記録だけで、skills の中身は `9615aac` と同じ）。`validate-codex-plugins.mjs`、`validate-skill-evals.mjs`（68 件）、script のテスト 20 件、オフラインテスト 127 件 |
+| codex 側にスキル一式があり、検証とテストが通る | satisfied | codex `17e4e34`・`9615aac`・`424967d`・`3d6e870`。`validate-codex-plugins.mjs`、`validate-skill-evals.mjs`（68 件）、script のテスト 26 件、オフラインテスト 127 件 |
 | cc 側の references・assets・scripts が codex のコミットと一致する | satisfied | プラグインの README の「同期の確認」のコマンドで差分なし |
 | cc 側の検証コマンドがすべて通る | satisfied | 「検証」の節 |
 | 独立レビューを受け、指摘を一次情報で確かめてから反映した | satisfied | 「レビューの反映」の節 |
-| 最終形の script が独立レビューを受けている | pending（独立性は未充足） | 3 回のレビューは前の版に対するもの。最終形は、テストと手元の確認だけである |
+| 件数だけを出す形の script が独立レビューを受けている | satisfied（未決の指摘あり） | 4 回目のレビューが対象にした。小さな指摘は反映した。判断ルールについての P1 2 件は未決。4 回目のあとの修正は、テストだけで確かめた |
 | スキルがインストールした状態で意図どおりに発火し、振る舞う | pending | 行動ケースは未実行 |
 
 ## 検証（2026-11-23 に実行）
@@ -53,7 +53,7 @@
 - `node scripts/validate-skill-evals.mjs --plugin indie-product-marketing`: passed（27 件）。indie-idea-discovery に負例が無いという警告は、この変更の前からある
 - `node scripts/validate-claude-hooks.mjs`: passed
 - `node --test scripts/*.test.mjs`: 34 件 passed
-- `node --test indie-product-marketing/skills/ai-search-visibility/scripts/visibility-stats.test.mjs`: 20 件 passed
+- `node --test indie-product-marketing/skills/ai-search-visibility/scripts/visibility-stats.test.mjs`: 26 件 passed
 - `node --test design-core/skills/ui-visual-defaults/scripts/contrast.test.mjs`: 35 件 passed
 - dev-core の hook のテスト 3 本: passed
 - `claude plugin validate . --strict`、`claude plugin validate indie-product-marketing --strict`: passed
@@ -70,6 +70,7 @@
 | review-aisv-1 | codex `ed28ccd` と未コミットの候補の全体、リポジトリの規則、保存した出典の写し | completed。指摘 44 件（P1 7、P2 29、P3 8） |
 | review-aisv-2 | codex `17e4e34` の script・テスト・計測の文書 | completed。指摘 26 件（P1 5、P2 13、P3 8） |
 | review-aisv-3 | 作り直した script・テスト・計測の文書（未コミットの作業ツリー） | completed。指摘 29 件（P1 3、P2 14、P3 12） |
+| review-aisv-4 | codex `424967d` の、件数だけを出す形の script・テスト・計測の文書・プロンプトセットのテンプレート | completed。指摘 26 件（P1 2、P2 9、P3 15） |
 
 ## レビューの反映
 
@@ -90,17 +91,23 @@
 - 同じ部品を 3 回直して 3 回とも別の破綻が見つかったので、推測を直し続けるのをやめ、script から区間と判定を外した。script は、記録の検証、群の分離、件数と率、比較できる問いの突き合わせだけを行う。変化の判断は、事前に決めた 1 つの比較について、同日の繰り返しどうしの差と比べ、もう 1 回の snapshot で確かめる、と文書に書いた。
 - 検証・突き合わせ・回答なしの扱い・言い換えの重み・表示・コマンドラインについての指摘は、次の 2 件を除いて最終形に反映した。校正についての指摘は、区間を外したので当てはまらなくなった。
 - 反映していない 2 件: 同じキーが 2 回書かれた JSON を検出しない（後の値が使われる）。片方の snapshot にしか無い群で、問いが十数万件を超えると失敗する。
-- 最終形の script は、独立レビューを受けていない。
+
+**4 回目（件数だけを出す形の script）。** ユーザーの指示で、もう 1 回かけた。設計に関わる指摘は直す前に報告する、という条件である。
+
+- **反映した小さな指摘**: 未知の項目名と打ち間違いを拒否する（その他の情報は `notes` に入れる）。複数のプロンプトをまとめる問いは、各行に `question_id` を明示させる。表に「完全な問い / 記録された問い」を並べ、件数ごとに母数を書く。丸めると 0.0% や 100.0% に見える値は `<0.1%`・`>99.9%` と出す。JSON の項目名に、率・母数・前後を含める。言い換えを決まった順に足し、同じ記録なら差が厳密に 0 になるようにする。片方にしか無い群で問いが非常に多くても落ちない。群全体の件数を常に出す。文書に、script が知るのはファイルにあるプロンプトだけで、snapshot・エンジン・経路でしか分けないことを書いた。
+- **未決の P1 2 件（直さずに報告した）**: 文書の「変化を本物として扱う条件」について。(1) ヒットがごく少ないと、同日の 2 回が 0 件、後の 2 回が各 1 件、という並びが、実際の率が変わっていなくても「同日の差より大きく、続いている」を満たしてしまう。(2) 比較ごとに対象の問いが選ばれるので、基準→追跡と、基準→確認の 2 つの比較が、別の問いに基づくことがある。
+- **反映していない指摘**: 同じキーが 2 回書かれた JSON を検出しない。
+- 4 回目のあとの修正は、テストだけで確かめた。
 
 ## Blockers And Open Questions
 
 - **PR の順序**: codex-plugins の PR #7（`codex/indie-generalize`、0.3.1）が未マージである。今回の codex のブランチはそれを取り込んでいるので、PR #7 を先にマージするか、今回の PR に PR #7 の 2 コミットが含まれることを認める必要がある。取り込みのとき、README のリリースノートで競合が 1 か所あり、両方の項目を残して解消した。
-- **調査レポートの扱い**: `docs/research/ai-search-visibility-aeo-2026-11.md` は未コミットで、名指しの業者について不利な所見を含む。そのままコミットするか、社名を伏せるか、別の場所に置くかは未決。
+- **調査レポートの扱い（決定済み）**: ユーザーの判断で、本文の社名を伏せてコミットした。出典の URL はそのまま載せているので、URL からは特定できる。
 - **Reddit の規約**: 規約のページとヘルプは自動の取得を拒否された。`off-site-rules.md` の Reddit の行は、ニューヨーク州司法長官のサイトにある利用規約の写しと、検索結果の抜粋に基づく。
 - **行動ケース**: 11 件を足したが、実行していない。
-- **最終形の script の独立レビュー**: 未実施。もう 1 回かけるかどうかは、ユーザーの判断を待つ。
+- **判断ルールについての未決の指摘 2 件**: 上の「4 回目」を参照。レビューの提案は、変化を「本物」と呼ぶのをやめ、初めて観察されたヒットとその再現を報告し、事前に書いた事業上の閾値で判断し、関係するすべての snapshot に共通の問いの集合だけで続き具合を見る、というものである。採るかどうかはユーザーの判断を待つ。
 - **区間を戻すかどうか**: 校正された区間を足すなら、データが満たせる設計（問いごとにプロンプト 1 つ、回数を揃える、など）に限り、その設計での検証を別に行う必要がある。
 
 ## Current Next Action
 
-ユーザーが、(1) codex-plugins の PR #7 の扱いを決め、(2) 両リポジトリの push と PR の作成を指示し、(3) 調査レポートの扱いを決め、(4) 最終形の script をもう 1 回独立レビューにかけるかを決める。マージ後は、Codex 側で `codex plugin marketplace upgrade codex-plugins` と `codex plugin add indie-product-marketing@codex-plugins` を実行し、新しいスレッドを始める。Claude Code 側はプラグインを更新し、新しいセッションで `indie-product-marketing:ai-search-visibility` が一覧に出ることを確かめる。
+ユーザーが、(1) 判断ルールについての未決の指摘 2 件をどう直すかを決め、(2) draft PR を確認してマージする（codex-plugins の PR は、未マージの PR #7 の内容を含む）。マージ後は、Codex 側で `codex plugin marketplace upgrade codex-plugins` と `codex plugin add indie-product-marketing@codex-plugins` を実行し、新しいスレッドを始める。Claude Code 側はプラグインを更新し、新しいセッションで `indie-product-marketing:ai-search-visibility` が一覧に出ることを確かめる。
