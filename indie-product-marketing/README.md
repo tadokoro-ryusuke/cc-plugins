@@ -12,7 +12,7 @@ codex-plugins の `indie-product-marketing` を、Claude Code 向けに日本語
 | `indie-product-marketing:indie-idea-discovery` | 創業者自身の経験と市場の行動証拠から課題を掘り、独立した発散パスで案を出し、ハードゲートと証拠グレード付きで比較する | 検証やローンチも依頼に含まれていれば `indie-product-marketing` に続ける |
 | `indie-product-marketing:indie-product-marketing` | 選んだ機会の需要検証、ローンチ計画、グロース診断、チャネル実験、マーケティング監査。実験カード・計測・ユニットエコノミクス・コンプライアンスの確認を含む | LP の設計と実装は `global-landing-design` |
 | `indie-product-marketing:global-landing-design` | 海外・多言語向けのプロダクト LP を、参考サイトの調査、ページの論旨、ビジュアル文法、誠実なデモ、実装・ローカライズ、検証の順で作る | 広い集客・ローンチ計画は `indie-product-marketing` |
-| `indie-product-marketing:ai-search-visibility` | AI 検索（ChatGPT search、Perplexity、Google の AI Overviews / AI Mode、Gemini、Copilot、Claude）の回答での見え方を、クローラの適格性の確認、固定のプロンプトセットによる計測、ページと第三者ソースへの対応、業者の主張の監査で扱う | チャネルとして追うかの判断と定着の指標は `indie-product-marketing` |
+| `indie-product-marketing:ai-search-visibility` | AI 検索（ChatGPT search、Perplexity、Google の AI Overviews / AI Mode、Gemini、Copilot、Claude）の回答での見え方を、クローラの適格性の確認、固定のプロンプトセットを反復する計測、ページと第三者ソースへの対応、業者の主張の監査で扱う | チャネルとして追うかの判断と定着の指標は `indie-product-marketing` |
 
 スキルは依頼の内容から自動で読み込まれる。明示的な指定は要らない。
 
@@ -74,7 +74,7 @@ indie-product-marketing/
         ├── SKILL.md
         ├── references/                 # 運営者の文書、主張の監査、計測、オフサイト施策の可否
         ├── assets/                     # 問いの地図、プロンプトセット、ソース台帳、ページ別の行動表
-        └── scripts/                    # visibility-stats.mjs（言及率・引用率の区間と比較。英語原文の同一コピー）
+        └── scripts/                    # visibility-stats.mjs（言及・引用の件数と率の集計と比較。英語原文の同一コピー）
 ```
 
 references と assets は英語のまま同梱している。成果物は依頼の言語で書いてよい。
@@ -130,7 +130,7 @@ Claude Code 固有の実行指示は、各スキルの `references/claude-code-r
 |---|---|
 | リポジトリ | [tadokoro-ryusuke/codex-plugins](https://github.com/tadokoro-ryusuke/codex-plugins) |
 | プラグインと版 | `plugins/indie-product-marketing` 0.4.0 |
-| コミット | `17e4e34`（ブランチ `codex/indie-ai-search-visibility`。未マージの `codex/indie-generalize` を含む） |
+| コミット | `9615aac`（ブランチ `codex/indie-ai-search-visibility`。未マージの `codex/indie-generalize` を含む） |
 
 ### 同期の確認
 
@@ -139,7 +139,7 @@ codex-plugins のチェックアウトを `CODEX` に指定し、cc-plugins の�
 ```bash
 CODEX=../codex-plugins
 tmp="$(mktemp -d)"
-git -C "$CODEX" archive 17e4e34 plugins/indie-product-marketing/skills | tar -x -C "$tmp"
+git -C "$CODEX" archive 9615aac plugins/indie-product-marketing/skills | tar -x -C "$tmp"
 diff -r -x SKILL.md -x agents -x claude-code-runtime.md \
   "$tmp/plugins/indie-product-marketing/skills" indie-product-marketing/skills
 ```
