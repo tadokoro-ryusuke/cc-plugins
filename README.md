@@ -51,7 +51,7 @@ Codex で使う場合は「[Codex で使う](#codex-で使う)」を見てくだ
 | [ai-engineering](./ai-engineering/) | LLM / AI エージェントを含むシステムの設計。エージェント構成、ツール・コンテキスト設計、RAG、LLM の評価、人間の介在点設計 |
 | [compliance-core](./compliance-core/) | 受託開発の法規制コンプライアンス。個人情報保護法の実務、OSS ライセンス監査（SBOM）、生成 AI 利用の権利処理。法的助言ではなく実務の型 |
 | [design-core](./design-core/) | ノンデザイナー向けのデザイン品質。デザイン4原則による UI / 資料の審査と、提案書・スライド・図解の作成 |
-| [indie-product-marketing](./indie-product-marketing/) | 個人開発プロダクトの機会発見、需要検証、海外・多言語向け LP の設計、ローンチ、集客、定着、ユニットエコノミクス（codex-plugins が正本の日本語翻案） |
+| [indie-product-marketing](./indie-product-marketing/) | 個人開発プロダクトの機会発見、需要検証、海外・多言語向け LP の設計、AI 検索での見え方の計測、ローンチ、集客、定着、ユニットエコノミクス（codex-plugins が正本の日本語翻案） |
 
 ## 使い方ガイド
 
@@ -191,13 +191,14 @@ Codex で使う場合は「[Codex で使う](#codex-で使う)」を見てくだ
 
 #### 個人開発（indie-product-marketing）
 
-流れの目安: アイデアを出して絞り（indie-idea-discovery）、需要を確かめ（indie-product-marketing）、LP を作ります（global-landing-design）。
+流れの目安: アイデアを出して絞り（indie-idea-discovery）、需要を確かめ（indie-product-marketing）、LP を作ります（global-landing-design）。AI 検索の回答での見え方の確認と計測には ai-search-visibility を使います。
 
 | やりたいこと | 使うもの | 補足 |
 |---|---|---|
 | 個人開発のアイデアを出して絞りたい | `/indie-product-marketing:indie-idea-discovery` | 投稿・DM・送信は明示の指示があるときだけ |
 | 需要検証・ローンチ・集客・定着 | `/indie-product-marketing:indie-product-marketing` | 出稿・投稿・送信は明示の指示があるときだけ |
 | プロダクトの LP を作りたい（海外・多言語向けが得意） | `/indie-product-marketing:global-landing-design` | デプロイ・公開は明示の指示があるときだけ |
+| AI 検索（ChatGPT・Perplexity・AI Overviews など）での見え方を確かめて測りたい。AEO の業者の提案を評価したい | `/indie-product-marketing:ai-search-visibility` | 投稿・連絡・申請は明示の指示があるときだけ。掲載や引用は約束しない |
 
 ### 自動で動くもの（dev-core のフック）
 
@@ -308,9 +309,9 @@ ui-ux-pro-max は、マーケットプレイスの 6.0.0 でこのマーケッ�
 | ai-engineering | 約 0.7k |
 | compliance-core | 約 0.9k |
 | design-core | 約 1.1k |
-| indie-product-marketing | 約 1.3k |
+| indie-product-marketing | 約 1.8k |
 
-計測は 2026-10-26、Claude Code 2.1.310 です。方法と版ごとの内訳は [計測記録](docs/research/skill-reachability-2026-10.md) にあります。版を上げたら測り直します。
+計測は 2026-10-26、Claude Code 2.1.310 です。方法と版ごとの内訳は [計測記録](docs/research/skill-reachability-2026-10.md) にあります。版を上げたら測り直します。indie-product-marketing は、スキルを 1 つ足した 0.2.0 を 2026-11-23 に同じ方法で測り直しました（Claude Code 2.1.330）。
 
 他のプラグインのスキルへの参照（`dev-core:*` など）はポインタです。参照先を入れていなくても、各スキルは単体で使えます。
 

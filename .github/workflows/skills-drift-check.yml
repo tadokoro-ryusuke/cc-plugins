@@ -99,6 +99,9 @@ jobs:
       - name: Test contrast checker script
         run: node --test design-core/skills/ui-visual-defaults/scripts/contrast.test.mjs
 
+      - name: Test AI visibility statistics script
+        run: node --test indie-product-marketing/skills/ai-search-visibility/scripts/visibility-stats.test.mjs
+
   validate:
     runs-on: ubuntu-latest
     steps:

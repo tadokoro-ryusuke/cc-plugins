@@ -51,7 +51,7 @@
     },
     {
       "name": "indie-product-marketing",
-      "description": "個人開発プロダクトの機会発見、需要検証、海外・多言語向けLPの設計、ローンチ、集客、定着、ユニットエコノミクス。証拠台帳と事前に宣言した判定ルールで進める",
+      "description": "個人開発プロダクトの機会発見、需要検証、海外・多言語向けLPの設計、AI検索での見え方の計測、ローンチ、集客、定着、ユニットエコノミクス。証拠台帳と事前に宣言した判定ルールで進める",
       "source": "./indie-product-marketing",
       "category": "workflow"
     }

@@ -75,6 +75,7 @@ bash dev-core/scripts/test-session-start-context.sh      # dev-core の hook の
 bash dev-core/scripts/test-stop-quality-gate.sh
 bash dev-core/scripts/test-block-dangerous-commands.sh
 node --test design-core/skills/ui-visual-defaults/scripts/contrast.test.mjs   # コントラスト検査のテスト
+node --test indie-product-marketing/skills/ai-search-visibility/scripts/visibility-stats.test.mjs   # AI 検索の計測 script のテスト
 claude plugin validate . --strict          # マーケットプレイス全体の公式検証
 claude plugin validate <plugin> --strict   # 変更した各プラグインごとに実行する公式検証
 ```

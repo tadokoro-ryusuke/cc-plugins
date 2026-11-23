@@ -1,17 +1,18 @@
 # Indie Product Discovery & Marketing
 
-個人開発・小さなチームのプロダクトについて、課題の発見から需要検証、海外向け LP、ローンチ、集客、定着、ユニットエコノミクスまでを支援するスキル群。
+個人開発・小さなチームのプロダクトについて、課題の発見から需要検証、海外向け LP、AI 検索での見え方、ローンチ、集客、定着、ユニットエコノミクスまでを支援するスキル群。
 観察事実・報告・推論・仮説を区別した証拠台帳と、結果を見る前に宣言した判定ルールで進める。見た目の完成度や反応の数を、需要の証拠と取り違えないことを重視する。
 
 codex-plugins の `indie-product-marketing` を、Claude Code 向けに日本語で翻案したもの（正本と同期は後述）。
 
-## 3つのスキル
+## 4つのスキル
 
 | スキル | 担当 | 次に渡す先 |
 |---|---|---|
 | `indie-product-marketing:indie-idea-discovery` | 創業者自身の経験と市場の行動証拠から課題を掘り、独立した発散パスで案を出し、ハードゲートと証拠グレード付きで比較する | 検証やローンチも依頼に含まれていれば `indie-product-marketing` に続ける |
 | `indie-product-marketing:indie-product-marketing` | 選んだ機会の需要検証、ローンチ計画、グロース診断、チャネル実験、マーケティング監査。実験カード・計測・ユニットエコノミクス・コンプライアンスの確認を含む | LP の設計と実装は `global-landing-design` |
 | `indie-product-marketing:global-landing-design` | 海外・多言語向けのプロダクト LP を、参考サイトの調査、ページの論旨、ビジュアル文法、誠実なデモ、実装・ローカライズ、検証の順で作る | 広い集客・ローンチ計画は `indie-product-marketing` |
+| `indie-product-marketing:ai-search-visibility` | AI 検索（ChatGPT search、Perplexity、Google の AI Overviews / AI Mode、Gemini、Copilot、Claude）の回答での見え方を、クローラの適格性の確認、固定のプロンプトセットによる計測、ページと第三者ソースへの対応、業者の主張の監査で扱う | チャネルとして追うかの判断と定着の指標は `indie-product-marketing` |
 
 スキルは依頼の内容から自動で読み込まれる。明示的な指定は要らない。
 
@@ -41,6 +42,14 @@ global-landing-design:
 この LP の主張が証拠の範囲に収まっているかレビューして
 ```
 
+ai-search-visibility:
+
+```
+ChatGPT や Perplexity で自分のアプリが出てこない。クローラの設定から確かめて、何をすべきか整理して
+AI の回答に出る頻度を測りたい。プロンプトセットを作って、基準の取り方を決めて
+AEO の業者からこの提案が来た。数字と手法が妥当か見て
+```
+
 ## 構成
 
 ```
@@ -57,10 +66,15 @@ indie-product-marketing/
     │   ├── SKILL.md
     │   ├── references/
     │   └── assets/
-    └── global-landing-design/
+    ├── global-landing-design/
+    │   ├── SKILL.md
+    │   ├── references/                 # evaluation-cases.md に LP の評価ケース
+    │   └── assets/
+    └── ai-search-visibility/
         ├── SKILL.md
-        ├── references/                 # evaluation-cases.md に LP の評価ケース
-        └── assets/
+        ├── references/                 # 運営者の文書、主張の監査、計測、オフサイト施策の可否
+        ├── assets/                     # 問いの地図、プロンプトセット、ソース台帳、ページ別の行動表
+        └── scripts/                    # visibility-stats.mjs（言及率・引用率の区間と比較。英語原文の同一コピー）
 ```
 
 references と assets は英語のまま同梱している。成果物は依頼の言語で書いてよい。
@@ -74,10 +88,11 @@ references と assets は英語のまま同梱している。成果物は依頼�
 - Product Hunt やギャラリーなどへの掲載
 - ウェイトリストなどへのメール送信
 - 決済の設定と有効化
-- デプロイ、DNS の切り替え、検索エンジンへのインデックス公開
+- デプロイ、DNS の切り替え、検索エンジンへのインデックス公開（`robots.txt`・`noindex`・スニペットの制限の変更を含む）
+- レビュー依頼、記事の書き手や媒体への連絡、プロフィールの引き取り、掲載の申請、有料の掲載の合意
 - Artifact の公開リンク化
 
-一括・自動のエンゲージメント（自動いいね、一括 DM・リプライ、自動フォロー）は、指示があっても行わない。ブラウザ MCP や CLI から実際に実行できてしまう環境なので、この境界を明文化している。
+一括・自動のエンゲージメント（自動いいね、一括 DM・リプライ、自動フォロー）、関係を開示しない投稿やレビュー、本人のものではないアカウントからの投稿、AI アシスタントにブランドを記憶・優遇させる指示の埋め込みは、指示があっても行わない。ブラウザ MCP や CLI から実際に実行できてしまう環境なので、この境界を明文化している。
 
 あわせて、次の報告の仕方を守る。
 
@@ -104,7 +119,7 @@ Claude Code 固有の実行指示は、各スキルの `references/claude-code-r
 | ファイル | 正本 | cc 側の扱い |
 |---|---|---|
 | `skills/*/SKILL.md` | codex-plugins | 日本語へ一方向に翻案する。判断規則・完了条件・外部アクションの境界は変えない。`$<skill>` は `indie-product-marketing:<skill>` に置き換える |
-| `skills/*/references/**`、`skills/*/assets/**` | codex-plugins | 英語原文のバイト単位の同一コピー。cc 側では編集しない |
+| `skills/*/references/**`、`skills/*/assets/**`、`skills/*/scripts/**` | codex-plugins | 英語原文のバイト単位の同一コピー。cc 側では編集しない |
 | `skills/*/references/claude-code-runtime.md` | **cc-plugins** | Claude Code 固有の実行ノート。cc が所有し、cc だけで更新する |
 
 ドメイン知識の改善は codex-plugins で先に行い、そのあと cc に反映する。cc の版番号（0.1.0〜）は codex 側と独立に採番する。
@@ -114,8 +129,8 @@ Claude Code 固有の実行指示は、各スキルの `references/claude-code-r
 | 項目 | 値 |
 |---|---|
 | リポジトリ | [tadokoro-ryusuke/codex-plugins](https://github.com/tadokoro-ryusuke/codex-plugins) |
-| プラグインと版 | `plugins/indie-product-marketing` 0.3.1 |
-| コミット | `68322c9`（ブランチ `codex/indie-generalize`） |
+| プラグインと版 | `plugins/indie-product-marketing` 0.4.0 |
+| コミット | `17e4e34`（ブランチ `codex/indie-ai-search-visibility`。未マージの `codex/indie-generalize` を含む） |
 
 ### 同期の確認
 
@@ -124,7 +139,7 @@ codex-plugins のチェックアウトを `CODEX` に指定し、cc-plugins の�
 ```bash
 CODEX=../codex-plugins
 tmp="$(mktemp -d)"
-git -C "$CODEX" archive 68322c9 plugins/indie-product-marketing/skills | tar -x -C "$tmp"
+git -C "$CODEX" archive 17e4e34 plugins/indie-product-marketing/skills | tar -x -C "$tmp"
 diff -r -x SKILL.md -x agents -x claude-code-runtime.md \
   "$tmp/plugins/indie-product-marketing/skills" indie-product-marketing/skills
 ```
@@ -134,7 +149,7 @@ diff -r -x SKILL.md -x agents -x claude-code-runtime.md \
 ### 同期を更新するとき
 
 1. codex-plugins 側の変更がマージされたコミットを決める。
-2. references と assets を、そのコミットからそのままコピーする。
+2. references・assets・scripts を、そのコミットからそのままコピーする。
 3. SKILL.md の差分を日本語へ翻案する。Claude Code 固有の指示は SKILL.md に書かず、`references/claude-code-runtime.md` に置く。
 4. この README の「同期元」を更新し、`.claude-plugin/plugin.json` の version を上げる。
 5. 下の検証を通し、上の同期の確認で差分が無いことを確かめる。
@@ -144,6 +159,7 @@ diff -r -x SKILL.md -x agents -x claude-code-runtime.md \
 ```bash
 node scripts/check-skills-drift.mjs
 node scripts/validate-skill-evals.mjs --plugin indie-product-marketing
+node --test indie-product-marketing/skills/ai-search-visibility/scripts/visibility-stats.test.mjs
 claude plugin validate indie-product-marketing --strict
 ```
 
